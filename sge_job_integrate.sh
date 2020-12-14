@@ -14,11 +14,8 @@
 ### priority; 0 is highest priority
 #$ -p -500
 
-### send email for (b)eginning, (e)nd, (a)bort and (s)uspension ...
+### send email for (b)eginning, (e)nd, (a)bort and (s)uspension
 #$ -m beas
-
-### ... to the following address
-#$ -M wolfgang.esser-skala@sbg.ac.at
 
 ### run in current working directory
 #$ -cwd
