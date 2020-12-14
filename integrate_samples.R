@@ -15,19 +15,35 @@ library(sctransform)
 
 # Parameters --------------------------------------------------------------
 
-workflow <- "standard"
-# workflow <- "sctrans"
-
 data_dir <- "data_raw"
 
+# definition of parameters for different datasets
+# each definition requires the following variables:
+#   * workflow, either "sctrans" or "standard"
+#   * out_dir, stores the integrated dataset (nb_integrated.rds)
+#              and integration anchors (nb_anchors.rds)
+#   * use_samples, vector of input file names
 
-out_dir <- "data_generated/all_samples"
+# (A) integrate all datasets with SCTrans
+workflow <- "sctrans"
+out_dir <- "data_generated/all_datasets_sc"
 use_samples <- dir_ls(
   data_dir,
   recurse = TRUE,
   regexp = "filtered_feature_bc_matrix.h5"
 )
 
+# (B) integrate all datasets with the standard approach
+# workflow <- "standard"
+# out_dir <- "data_generated/all_datasets_lm"
+# use_samples <- dir_ls(
+#   data_dir,
+#   recurse = TRUE,
+#   regexp = "filtered_feature_bc_matrix.h5"
+# )
+
+# (C) test workflow on a small dataset
+# workflow <- "standard"
 # out_dir <- "data_generated/2_samples"
 # use_samples <- c(
 #   "R1_GNM_2020_1288_transcriptome/filtered_feature_bc_matrix.h5",
@@ -70,11 +86,17 @@ if (workflow == "sctrans") {
     use_samples,
     function(sample) {
       sample_name <- str_match(sample, "_(.*)_trans")[,2]
+      message("SCTransforming ", sample_name)
       sample %>% 
         Read10X_h5() %>% 
         CreateSeuratObject() %>% 
-        AddMetaData(sample_name, col.name = "sample") %>% 
-        SCTransform()
+        AddMetaData(sample_name, col.name = "sample") %>%
+        PercentageFeatureSet(pattern = "^MT-", col.name = "percent.mt") %>% 
+        SCTransform(
+          vars.to.regress = "percent.mt",
+          verbose = FALSE,
+          method = "qpoisson"
+        )
     }
   )
   
@@ -97,7 +119,7 @@ if (workflow == "sctrans") {
 
 
 
-# Integrated analysis -----------------------------------------------------
+# Dimensional reductions --------------------------------------------------
 
 nb_integrated <- 
   nb_integrated %>% 
@@ -105,10 +127,8 @@ nb_integrated <-
   RunUMAP(dims = 1:30) %>% 
   RunTSNE(dims = 1:30)
 
+
+
+# Save results ------------------------------------------------------------
+
 saveRDS(nb_integrated, path_join(c(out_dir, "nb_integrated.rds")))
-
-DimPlot(nb_integrated, group.by = "sample")
-ggsave(path_join(c(out_dir, "tsne.pdf")), width = 14, height = 7)
-
-DimPlot(nb_integrated, split.by = "sample") + NoLegend()
-ggsave(path_join(c(out_dir, "tsne_split.pdf")), width = 20, height = 7)
