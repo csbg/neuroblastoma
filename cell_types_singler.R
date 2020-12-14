@@ -13,16 +13,15 @@ library(tidyverse)
 
 
 # small test datasets
-infile <- "data_generated/5_datasets/nb_integrated.rds"
-outfile <- "data_generated/5_datasets/singler_results"
+infile <- "data_generated/3_datasets_sc/nb_integrated.rds"
+outfile <- "data_generated/3_datasets_sc/nb_singler"
 
 # large complete datasets
 # infile <- "data_generated/all_datasets_sc/nb_integrated.rds"
-# outfile <- "data_generated/all_datasets_sc/singler_results"
+# outfile <- "data_generated/all_datasets_sc/nb_singler"
 
 # whether to use broad or fine labels
 use_fine_labels <- TRUE
-# use_fine_labels <- FALSE
 
 
 
@@ -36,7 +35,7 @@ nb <-
   FindClusters(resolution = 0.5)  # or 0.8 for more clusters
 
 # for testing: choose only a few cells
-# nb <- subset(nb, cells = sample(ncol(nb), 2000))
+nb <- subset(nb, cells = sample(ncol(nb), 50))
 
 reference_cell_types <- HumanPrimaryCellAtlasData()
 
@@ -57,20 +56,14 @@ predicted_cell_types <- SingleR(
 
 # Save data ---------------------------------------------------------------
 
-list(
-  nb@meta.data,
-  if ("tsne" %in% names(nb@reductions)) Embeddings(nb, "tsne"),
-  if ("umap" %in% names(nb@reductions)) Embeddings(nb, "umap")
-) %>% 
-  compact() %>% 
-  map(as_tibble, rownames = "cell") %>%
-  reduce(inner_join, by = "cell") %>%
-  mutate(SingleR_cell_types = predicted_cell_types$labels) %>%
+nb@meta.data %>% 
+  select(sample) %>% 
+  as_tibble(rownames = "cell") %>% 
+  bind_cols(cell_type = predicted_cell_types$labels) %>% 
   write_csv(str_glue("{outfile}.csv"))
 
-predicted_cell_types %>% 
+nb@meta.data %>% 
+  select(sample) %>% 
   as_tibble(rownames = "cell") %>% 
+  bind_cols(as_tibble(predicted_cell_types)) %>% 
   write_csv(str_glue("{outfile}_details.csv"))
-
-predicted_cell_types %>% 
-  saveRDS(str_glue("{outfile}_details.rds"))
