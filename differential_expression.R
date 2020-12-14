@@ -3,37 +3,44 @@
 library(tidyverse)
 library(Seurat)
 
-nb <- readRDS("rds/nb_integrated_5.rds")
-nb@meta.data$sample <- str_match(nb@meta.data$sample, ".*/(.*)")[,2]
-nb <- subset(nb, subset = sample != "R1_GNB_2014_0102")
 
-nb@meta.data %>% head()
+nb <- readRDS("data_generated/all_datasets_sc/nb_integrated.rds")
+nb
+
+nb@meta.data <- 
+  nb@meta.data %>% 
+  rownames_to_column("rownames") %>% 
+  extract(sample, into = "sample", regex = "/[^_]*_(.*)") %>% 
+  left_join(read_csv("data_raw/sample_groups.csv"), by = "sample") %>% 
+  column_to_rownames("rownames")
 
 nb <- 
-  nb %>% 
+  nb %>%
   FindNeighbors() %>% 
-  FindClusters(resolution = .5)
+  FindClusters(resolution = 0.5)
 
-DimPlot(nb, group.by = "sample")
-DimPlot(nb, split.by = "sample", ncol = 2, label = TRUE)
-DimPlot(nb)
+# DimPlot(nb)
 
+Idents(nb) <- nb@meta.data$seurat_clusters
 
-cluster11_conserved_markers <- FindConservedMarkers(nb, ident.1 = 11, grouping.var = "sample")
-FindMarkers()
-
-FeaturePlot(nb, features = c("CDHR3", "VPREB3", "CD79B", "CD24"))
-
-
-
-nb_data <- inner_join(
-  nb@meta.data %>% as_tibble(rownames = "cell"),
-  nb$tsne@cell.embeddings %>% as_tibble(rownames = "cell"),
-  by = "cell"
-)
-
+save_conserved_markers <- function(cluster) {
+  message("Finding conserved markers in cluster ", cluster)
+  markers <-
+    FindConservedMarkers(
+      nb,
+      ident.1 = cluster,
+      grouping.var = "group",
+      test.use = "negbinom",
+      min.pct = 0.25
+    ) %>% 
+    as_tibble(rownames = "feature")
   
-nb_data %>% 
-  ggplot(aes(tSNE_1, tSNE_2)) +
-  geom_point() +
-  facet_wrap(vars(sample))
+  markers %>%
+    write_csv(str_glue("data_generated/all_datasets_sc/cmarkers_{cluster}.csv"))
+  
+  invisible(markers)
+}
+
+# save_conserved_markers("0")
+
+Idents(nb) %>% levels() %>% walk(save_conserved_markers)
