@@ -1,17 +1,32 @@
-# WORK IN PROGRESS
+# Find conserved markers.
 
 library(tidyverse)
 library(Seurat)
+library(log4r)
 
 
-nb <- readRDS("data_generated/all_datasets_sc/nb_integrated.rds")
-nb
 
-nb@meta.data <- 
+# Parameters --------------------------------------------------------------
+
+infile <- "data_generated/all_datasets_sc/nb_integrated.rds"
+outdir <- "data_generated/all_datasets_sc"
+
+# infile <- "data_generated/3_datasets_sc/nb_integrated.rds"
+# outdir <- "data_generated/3_datasets_sc"
+
+
+
+# Load data ---------------------------------------------------------------
+
+nb <- readRDS(infile)
+
+nb@meta.data <-
   nb@meta.data %>% 
   rownames_to_column("rownames") %>% 
-  extract(sample, into = "sample", regex = "/[^_]*_(.*)") %>% 
-  left_join(read_csv("data_raw/sample_groups.csv"), by = "sample") %>% 
+  left_join(
+    read_csv("data_raw/metadata/sample_groups.csv", comment = "#"),
+    by = "sample"
+  ) %>% 
   column_to_rownames("rownames")
 
 nb <- 
@@ -19,12 +34,16 @@ nb <-
   FindNeighbors() %>% 
   FindClusters(resolution = 0.5)
 
-# DimPlot(nb)
-
 Idents(nb) <- nb@meta.data$seurat_clusters
 
+
+
+# Find conserved markers --------------------------------------------------
+
+logger <- logger()
+
 save_conserved_markers <- function(cluster) {
-  message("Finding conserved markers in cluster ", cluster)
+  info(logger, str_glue("Finding conserved markers in cluster {cluster}"))
   markers <-
     FindConservedMarkers(
       nb,
@@ -36,11 +55,9 @@ save_conserved_markers <- function(cluster) {
     as_tibble(rownames = "feature")
   
   markers %>%
-    write_csv(str_glue("data_generated/all_datasets_sc/cmarkers_{cluster}.csv"))
-  
-  invisible(markers)
+    write_csv(str_glue("{outdir}/consmarkers_{cluster}.csv"))
 }
 
-# save_conserved_markers("0")
-
-Idents(nb) %>% levels() %>% walk(save_conserved_markers)
+Idents(nb) %>%
+  levels() %>%
+  walk(save_conserved_markers)
