@@ -21,17 +21,17 @@ data_dir <- "data_raw"
 #   * samples, data frame with two columns 'sample_name' and 'sample_file'
 
 # (A) integrate all datasets with SCTrans
-# workflow <- "sctrans"
-# out_dir <- "data_generated/all_datasets_sc"
-# samples <- tibble(
-#   sample_file = dir_ls(
-#     data_dir,
-#     recurse = TRUE,
-#     regexp = "filtered_feature_bc_matrix.h5"
-#   ),
-#   sample_name = str_match(sample_file, "/[^_]*_(.*)_trans")[, 2]
-# ) %>% 
-#   filter(sample_name != "16_4503_Re_DOWN")
+workflow <- "sctrans"
+out_dir <- "data_generated/all_datasets_sc"
+samples <- tibble(
+  sample_file = dir_ls(
+    data_dir,
+    recurse = TRUE,
+    regexp = "filtered_feature_bc_matrix.h5"
+  ),
+  sample_name = str_match(sample_file, "/[^_]*_(.*)_trans")[, 2]
+) %>%
+  filter(sample_name != "16_4503_Re_DOWN")
 
 # (B) integrate all datasets with the standard approach
 # workflow <- "standard"
@@ -47,15 +47,15 @@ data_dir <- "data_raw"
 #   filter(sample_name != "16_4503_Re_DOWN")
 
 # (C) test workflow on a small dataset
-workflow <- "sctrans"
-out_dir <- "data_generated/3_datasets_sc"
-samples <- c(
-  GNM_2020_1288 = "R1_GNM_2020_1288_transcriptome/filtered_feature_bc_matrix.h5",
-  NB_2018_6056 = "R2_NB_2018_6056_transcriptome/filtered_feature_bc_matrix.h5",
-  NB_BM_Patient1 = "MF220_NB_BM_Patient1_transcriptome/filtered_feature_bc_matrix.h5"
-) %>%
-  enframe("sample_name", "sample_file") %>% 
-  mutate(sample_file = str_glue("{data_dir}/{sample_file}"))
+# workflow <- "sctrans"
+# out_dir <- "data_generated/3_datasets_sc"
+# samples <- c(
+#   GNM_2020_1288 = "R1_GNM_2020_1288_transcriptome/filtered_feature_bc_matrix.h5",
+#   NB_2018_6056 = "R2_NB_2018_6056_transcriptome/filtered_feature_bc_matrix.h5",
+#   NB_BM_Patient1 = "MF220_NB_BM_Patient1_transcriptome/filtered_feature_bc_matrix.h5"
+# ) %>%
+#   enframe("sample_name", "sample_file") %>% 
+#   mutate(sample_file = str_glue("{data_dir}/{sample_file}"))
 
 
 

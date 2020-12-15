@@ -18,8 +18,8 @@ library(fs)
 
 # Parameters --------------------------------------------------------------
 
-infile <- "data_generated/3_datasets_sc/nb_integrated.rds"
-outdir <- "data_generated/3_datasets_sc"
+infile <- "data_generated/all_datasets_sc/nb_integrated.rds"
+outdir <- "data_generated/all_datasets_sc"
 
 
 

@@ -13,12 +13,12 @@ library(tidyverse)
 
 
 # small test datasets
-infile <- "data_generated/3_datasets_sc/nb_integrated.rds"
-outfile <- "data_generated/3_datasets_sc/nb_singler"
+# infile <- "data_generated/3_datasets_sc/nb_integrated.rds"
+# outfile <- "data_generated/3_datasets_sc/nb_singler"
 
 # large complete datasets
-# infile <- "data_generated/all_datasets_sc/nb_integrated.rds"
-# outfile <- "data_generated/all_datasets_sc/nb_singler"
+infile <- "data_generated/all_datasets_sc/nb_integrated.rds"
+outfile <- "data_generated/all_datasets_sc/nb_singler"
 
 # whether to use broad or fine labels
 use_fine_labels <- TRUE
@@ -35,7 +35,7 @@ nb <-
   FindClusters(resolution = 0.5)  # or 0.8 for more clusters
 
 # for testing: choose only a few cells
-nb <- subset(nb, cells = sample(ncol(nb), 50))
+# nb <- subset(nb, cells = sample(ncol(nb), 50))
 
 reference_cell_types <- HumanPrimaryCellAtlasData()
 
