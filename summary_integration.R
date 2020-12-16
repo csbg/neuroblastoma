@@ -4,26 +4,34 @@ library(ggpmisc)
 library(patchwork)
 library(tidyverse)
 library(ggalluvial)
+library(egg)
 library(fs)
 
 
-#' Save a plot with default settings
+#' Save a plot with default settings.
 #'
 #' @param filename output filename, stored as PNG in folder ./plots; any missing
 #'   folders are created. If NULL, do not create output.
 #' @param width figure width in mm (size is not limited)
 #' @param height figure height in mm
+#' @param crop If `TRUE`, crop the generated plot.
 #' @param ... additional arguments passed to ggsave().
 #'
-#' @return
-ggsave_default <- function(filename, width = 297, height = 210, ...) {
+#' @return The final file name, invisibly.
+ggsave_default <- function(filename, width = 297, height = 210,
+                           crop = TRUE, ...) {
   if (is.null(filename))
     return()
   
   filename <- str_glue("plots/{filename}.png")
   filename %>% path_dir() %>% dir_create()
+  
   ggsave(filename, dpi = 300, units = "mm", limitsize = FALSE,
          width = width, height = height, ...)
+  
+  if (crop) knitr::plot_crop(filename)
+  
+  invisible(filename)
 }
 
 
@@ -254,10 +262,21 @@ plot_clusters_highlight(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.5,
 #'
 #' @return `NULL`
 plot_clusters_selected <- function(data, x, y, clusters, folder = NULL) {
+  res <-
+    enquo(clusters) %>% 
+    rlang::as_name() %>%
+    str_sub(start = -3L)
+  
   walk(
     data %>% pull({{clusters}}) %>% levels(),
     function(cluster) {
       message("Plotting cluster ", cluster)
+      data_hl <-
+        data %>%
+        filter({{clusters}} == {{cluster}})
+      
+      n_cells <- nrow(data_hl)
+      
       p <- 
         data %>%
         ggplot(aes({{x}}, {{y}})) +
@@ -267,12 +286,13 @@ plot_clusters_selected <- function(data, x, y, clusters, folder = NULL) {
           shape = 20
         ) +
         geom_point(
-          data = data %>% filter({{clusters}} == {{cluster}}),
+          data = data_hl,
           size = .01,
           shape = 20
         ) +
         annotate(
-          "text_npc", npcx = 0.95, npcy = 0.95, size = 8, label = cluster
+          "text_npc", npcx = 0.05, npcy = 0.95, size = 6,
+          label = str_glue("cluster {cluster}, resolution {res}, n = {n_cells}")
         ) +
         coord_fixed() +
         theme_classic() +
@@ -288,6 +308,8 @@ plot_clusters_selected(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.5,
                        folder = "clusters_highlighted_UMAP_0.5")
 plot_clusters_selected(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.5,
                        folder = "clusters_highlighted_tSNE_0.5")
+plot_clusters_selected(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.8,
+                       folder = "clusters_highlighted_UMAP_0.8")
 
 
 
@@ -341,7 +363,7 @@ plot_cluster_changes <- function(data, clusters,
   p
 }
 
-plot_cluster_changes(nb_data, as.character(1:11), filename = "cluster_change_a")
+plot_cluster_changes(nb_data, as.character(0:11), filename = "cluster_change_a")
 plot_cluster_changes(nb_data, as.character(12:23), filename = "cluster_change_b")
 
 
@@ -497,7 +519,9 @@ plot_cvt_bar <- function(data, cell_types, clusters,
     )
   
   plot_single <- function(cluster) {
-    pdata %>% 
+    message("Plotting ", cluster)
+    ps <- 
+      pdata %>% 
       filter(cluster == {{cluster}}) %>%
       mutate(cell_type = fct_lump_n(cell_type, lump_n)) %>%
       count(cell_type) %>%
@@ -521,6 +545,11 @@ plot_cvt_bar <- function(data, cell_types, clusters,
         strip.text = element_text(face = "bold")
       ) +
       NULL
+    ggsave_default(
+      str_glue("{filename}/{cluster}"),
+      plot = set_panel_size(ps, width = unit(30, "mm"), height = unit(30, "mm"))
+    )
+    ps
   }
   
   p <-
@@ -534,6 +563,12 @@ plot_cvt_bar <- function(data, cell_types, clusters,
 }
 
 plot_cvt_bar(nb_data, cell_type_broad, integrated_snn_res.0.5,
-             lump_n = 5, filename = "cvt_bar_broad")
+             lump_n = 5, filename = "cvt_bar_broad_0.5")
 plot_cvt_bar(nb_data, cell_type, integrated_snn_res.0.5,
-             lump_n = 8, filename = "cvt_bar_fine", width = 420, height = 297)
+             lump_n = 8, filename = "cvt_bar_fine_0.5",
+             width = 420, height = 297)
+plot_cvt_bar(nb_data, cell_type_broad, integrated_snn_res.0.8,
+             lump_n = 5, filename = "cvt_bar_broad_0.8")
+plot_cvt_bar(nb_data, cell_type, integrated_snn_res.0.8,
+             lump_n = 8, filename = "cvt_bar_fine_0.8",
+             width = 600, height = 297)
