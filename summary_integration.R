@@ -86,6 +86,38 @@ nb_groups <-
   semi_join(nb_data, by = "sample")
 
 
+singler_data <- 
+  read_csv("data_generated/all_datasets_sc/nb_singler_details.csv") %>%
+  rowwise() %>% 
+  mutate(median_score = median(c_across(starts_with("scores.")))) %>% 
+  ungroup() %>% 
+  mutate(
+    diff_next = tuning.scores.first - tuning.scores.second,
+    label_name = str_glue("scores.{make.names(labels)}")
+  ) %>% 
+  pivot_longer(
+    starts_with("scores."),
+    names_to = "scores",
+    values_to = "label_score"
+  ) %>% 
+  filter(scores == label_name) %>% 
+  mutate(delta_score = label_score - median_score) %>% 
+  select(!c(label_name, scores))
+
+singler_data <- 
+  left_join(
+    singler_data,
+    singler_data %>% 
+      group_by(labels) %>% 
+      summarise(
+        median_delta_score = median(delta_score),
+        mad_delta_score = mad(delta_score)
+      ),
+    by = "labels"
+  ) %>% 
+  mutate(z_score = (delta_score - median_delta_score) / mad_delta_score)
+
+
 
 # Clusters ----------------------------------------------------------------
 
