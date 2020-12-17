@@ -191,10 +191,10 @@ plot_clusters_all <- function(data, x, y, clusters, label_direct = TRUE,
 
 plot_clusters_all(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.5,
                   filename = "clusters_all_UMAP_0.5")
-plot_clusters_all(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.5,
-                  filename = "clusters_all_tSNE_0.5")
-# plot_clusters_all(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.8,
-#                   filename = "clusters_all_UMAP_0.8")
+plot_clusters_all(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.8,
+                  filename = "clusters_all_UMAP_0.8")
+# plot_clusters_all(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.5,
+#                   filename = "clusters_all_tSNE_0.5")
 # plot_clusters_all(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.8,
 #                   filename = "clusters_all_tSNE_0.8")
 
@@ -242,12 +242,12 @@ plot_clusters_per_sample <- function(data, x, y, clusters, sample,
 plot_clusters_per_sample(nb_data, UMAP_1, UMAP_2,
                          integrated_snn_res.0.5, sample,
                          nrow = 3, filename = "clusters_sample_UMAP_0.5")
-plot_clusters_per_sample(nb_data, tSNE_1, tSNE_2,
-                         integrated_snn_res.0.5, sample,
-                         nrow = 3, filename = "clusters_sample_tSNE_0.5")
 # plot_clusters_per_sample(nb_data, UMAP_1, UMAP_2,
 #                          integrated_snn_res.0.8, sample,
 #                          nrow = 3, filename = "clusters_sample_UMAP_0.8")
+# plot_clusters_per_sample(nb_data, tSNE_1, tSNE_2,
+#                          integrated_snn_res.0.5, sample,
+#                          nrow = 3, filename = "clusters_sample_tSNE_0.5")
 # plot_clusters_per_sample(nb_data, tSNE_1, tSNE_2,
 #                          integrated_snn_res.0.8, sample,
 #                          nrow = 3, filename = "clusters_sample_tSNE_0.8")
@@ -296,10 +296,10 @@ plot_clusters_highlight <- function(data, x, y, clusters,
 
 plot_clusters_highlight(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.5,
                         nrow = 4, filename = "clusters_hl_UMAP_0.5")
-plot_clusters_highlight(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.5,
-                        nrow = 4, filename = "clusters_hl_tSNE_0.5")
-# plot_clusters_highlight(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.8,
-#                         nrow = 5, filename = "clusters_hl_UMAP_0.8")
+plot_clusters_highlight(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.8,
+                        nrow = 5, filename = "clusters_hl_UMAP_0.8")
+# plot_clusters_highlight(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.5,
+#                         nrow = 4, filename = "clusters_hl_tSNE_0.5")
 # plot_clusters_highlight(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.8,
 #                         nrow = 5, filename = "clusters_hl_tSNE_0.8")
 
@@ -360,10 +360,12 @@ plot_clusters_selected <- function(data, x, y, clusters, folder = NULL) {
 
 plot_clusters_selected(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.5,
                        folder = "clusters_highlighted_UMAP_0.5")
-plot_clusters_selected(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.5,
-                       folder = "clusters_highlighted_tSNE_0.5")
 plot_clusters_selected(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.8,
                        folder = "clusters_highlighted_UMAP_0.8")
+# plot_clusters_selected(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.5,
+#                        folder = "clusters_highlighted_tSNE_0.5")
+# plot_clusters_selected(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.8,
+#                        folder = "clusters_highlighted_tSNE_0.8")
 
 
 
@@ -417,8 +419,10 @@ plot_cluster_changes <- function(data, clusters,
   p
 }
 
-plot_cluster_changes(nb_data, as.character(0:11), filename = "cluster_change_a")
-plot_cluster_changes(nb_data, as.character(12:23), filename = "cluster_change_b")
+plot_cluster_changes(nb_data, as.character(0:11),
+                     filename = "cluster_change_a")
+plot_cluster_changes(nb_data, as.character(12:23),
+                     filename = "cluster_change_b")
 
 
 
@@ -431,25 +435,25 @@ nb_data_ctb <-
 
 plot_clusters_all(nb_data_ctb, UMAP_1, UMAP_2, cell_type_broad,
                   label_direct = FALSE, filename = "celltype_broad_all_UMAP")
-plot_clusters_all(nb_data_ctb, tSNE_1, tSNE_2, cell_type_broad,
-                  label_direct = FALSE, filename = "celltype_broad_all_tSNE")
+# plot_clusters_all(nb_data_ctb, tSNE_1, tSNE_2, cell_type_broad,
+#                   label_direct = FALSE, filename = "celltype_broad_all_tSNE")
 
 plot_clusters_per_sample(nb_data_ctb, UMAP_1, UMAP_2, cell_type_broad, sample,
                          nrow = 3, show_legend = TRUE,
                          filename = "celltype_broad_sample_UMAP")
-plot_clusters_per_sample(nb_data_ctb, tSNE_1, tSNE_2, cell_type_broad, sample,
-                         nrow = 3, show_legend = TRUE,
-                         filename = "celltype_broad_sample_tSNE")
+# plot_clusters_per_sample(nb_data_ctb, tSNE_1, tSNE_2, cell_type_broad, sample,
+#                          nrow = 3, show_legend = TRUE,
+#                          filename = "celltype_broad_sample_tSNE")
 
 plot_clusters_highlight(nb_data_ctb, UMAP_1, UMAP_2, cell_type_broad,
                         nrow = 3, filename = "celltype_broad_hl_UMAP")
-plot_clusters_highlight(nb_data_ctb, tSNE_1, tSNE_2, cell_type_broad,
-                        nrow = 3, filename = "celltype_broad_hl_tSNE")
+# plot_clusters_highlight(nb_data_ctb, tSNE_1, tSNE_2, cell_type_broad,
+#                         nrow = 3, filename = "celltype_broad_hl_tSNE")
 
-plot_clusters_selected(nb_data_ctb, UMAP_1, UMAP_2, cell_type_broad,
-                       folder = "cell_type_broad_highlighted_UMAP")
-plot_clusters_selected(nb_data_ctb, tSNE_1, tSNE_2, cell_type_broad,
-                       folder = "cell_type_broad_highlighted_tSNE")
+# plot_clusters_selected(nb_data_ctb, UMAP_1, UMAP_2, cell_type_broad,
+#                        folder = "cell_type_broad_highlighted_UMAP")
+# plot_clusters_selected(nb_data_ctb, tSNE_1, tSNE_2, cell_type_broad,
+#                        folder = "cell_type_broad_highlighted_tSNE")
 
 # fine cell types
 nb_data_ctf <- 
@@ -458,25 +462,25 @@ nb_data_ctf <-
 
 plot_clusters_all(nb_data_ctf, UMAP_1, UMAP_2, cell_type,
                   label_direct = FALSE, filename = "celltype_fine_all_UMAP")
-plot_clusters_all(nb_data_ctf, tSNE_1, tSNE_2, cell_type,
-                  label_direct = FALSE, filename = "celltype_fine_all_tSNE")
+# plot_clusters_all(nb_data_ctf, tSNE_1, tSNE_2, cell_type,
+#                   label_direct = FALSE, filename = "celltype_fine_all_tSNE")
 
 plot_clusters_per_sample(nb_data_ctf, UMAP_1, UMAP_2, cell_type, sample,
                          nrow = 3, show_legend = TRUE,
                          filename = "celltype_fine_sample_UMAP")
-plot_clusters_per_sample(nb_data_ctf, tSNE_1, tSNE_2, cell_type, sample,
-                         nrow = 3, show_legend = TRUE,
-                         filename = "celltype_fine_sample_tSNE")
+# plot_clusters_per_sample(nb_data_ctf, tSNE_1, tSNE_2, cell_type, sample,
+#                          nrow = 3, show_legend = TRUE,
+#                          filename = "celltype_fine_sample_tSNE")
 
 plot_clusters_highlight(nb_data_ctf, UMAP_1, UMAP_2, cell_type,
                         nrow = 4, filename = "celltype_fine_hl_UMAP")
-plot_clusters_highlight(nb_data_ctf, tSNE_1, tSNE_2, cell_type,
-                        nrow = 4, filename = "celltype_fine_hl_tSNE")
+# plot_clusters_highlight(nb_data_ctf, tSNE_1, tSNE_2, cell_type,
+#                         nrow = 4, filename = "celltype_fine_hl_tSNE")
 
-plot_clusters_selected(nb_data_ctf, UMAP_1, UMAP_2, cell_type,
-                       folder = "cell_type_fine_highlighted_UMAP")
-plot_clusters_selected(nb_data_ctf, tSNE_1, tSNE_2, cell_type,
-                       folder = "cell_type_fine_highlighted_tSNE")
+# plot_clusters_selected(nb_data_ctf, UMAP_1, UMAP_2, cell_type,
+#                        folder = "cell_type_fine_highlighted_UMAP")
+# plot_clusters_selected(nb_data_ctf, tSNE_1, tSNE_2, cell_type,
+#                        folder = "cell_type_fine_highlighted_tSNE")
 
 
 
@@ -534,9 +538,9 @@ plot_cvt_heatmap <- function(data, cell_types, clusters,
 
 
 plot_cvt_heatmap(nb_data, cell_type_broad, integrated_snn_res.0.5,
-                 filename = "cvt_heatmap_broad")
+                 filename = "cvt_heatmap_broad_0.5")
 plot_cvt_heatmap(nb_data, cell_type, integrated_snn_res.0.5,
-                 lump_n = 35, filename = "cvt_heatmap_fine")
+                 lump_n = 35, filename = "cvt_heatmap_fine_0.5")
 
 walk(
   levels(nb_data$sample),
