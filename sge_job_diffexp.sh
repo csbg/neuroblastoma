@@ -23,6 +23,12 @@
 ### clone your environment variables
 #$ -V
 
+### merge stdout and stderr
+#$ -j yes
+
+### set stdout filename
+#$ -o $JOB_ID_$JOB_NAME_out.txt
+
 ### jobname
 #$ -N neuroblastoma_diff_exp
 
