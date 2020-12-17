@@ -639,3 +639,73 @@ plot_cvt_bar(nb_data, cell_type_filtered, integrated_snn_res.0.8,
              lump_n = 8, filename = "cvt_bar_fine_0.8",
              width = 600, height = 297)
 
+
+
+
+# Cluster sizes -----------------------------------------------------------
+
+nb_data %>%
+  count(group, cluster = integrated_snn_res.0.5) %>% 
+  group_by(group) %>% 
+  mutate(n_rel = n / sum(n)) %>% 
+  ggplot(aes(cluster, n_rel)) +
+  geom_col(
+    data = nb_data %>% 
+      count(cluster = integrated_snn_res.0.5) %>% 
+      mutate(n_rel = n / sum(n)),
+    fill = "grey80"
+  ) +
+  geom_col(alpha = .25, fill = "red") +
+  scale_y_continuous("relative cluster size", expand = expansion()) +
+  facet_wrap(vars(group)) +
+  theme_classic() +
+  theme(
+    axis.line.x = element_blank(),
+    strip.background = element_blank()
+  ) +
+  ggtitle("Relative cluster sizes of groups (red) compared to average relative size (grey)") +
+  NULL
+ggsave_default("cluster_size_vs_average")
+
+nb_data %>%
+  count(group, cluster = integrated_snn_res.0.5) %>% 
+  group_by(group) %>%
+  mutate(n_rel = n / sum(n)) %>%
+  pivot_wider(names_from = "group", values_from = "n_rel", id_cols = "cluster") %>% 
+  mutate(across(I:IV, ~. - I)) %>%
+  pivot_longer(I:IV, names_to = "group", values_to = "delta_n_rel") %>% 
+  ggplot(aes(cluster, delta_n_rel)) +
+  geom_col(aes(fill = cluster), show.legend = FALSE) +
+  geom_hline(yintercept = 0) +
+  geom_vline(xintercept = c(5, 10, 15, 20) + .5, size = .25, color = "gray50") +
+  facet_wrap(vars(group)) +
+  ylab("change of relative abundance") +
+  ggtitle("Changes of relative cluster abundance relative to group I") +
+  theme_classic() +
+  theme(
+    axis.line.x = element_blank(),
+    strip.background = element_blank(),
+  ) +
+  NULL
+ggsave_default("cluster_size_vs_I")
+
+nb_data %>% 
+  count(sample, cluster = integrated_snn_res.0.5) %>% 
+  group_by(sample) %>%
+  mutate(n_rel = n / sum(n)) %>%
+  pivot_wider(names_from = "sample", values_from = "n_rel", id_cols = "cluster") %>% 
+  column_to_rownames("cluster") %>% 
+  as.matrix() %>% 
+  t() %>% 
+  pheatmap(
+    color = colorRampPalette(brewer.pal(9, "PuBuGn"))(100),
+    legend = FALSE,
+    border_color = "white",
+    angle_col = "0",
+    annotation_row = nb_data %>% 
+      distinct(group, sample) %>% 
+      column_to_rownames("sample"),
+    main = "Relative cluster sizes in samples"
+  ) %>% 
+  set_last_plot()
+ggsave_default("cluster_size_vs_samples")
