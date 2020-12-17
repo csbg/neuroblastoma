@@ -38,15 +38,37 @@ ggsave_default <- function(filename, width = 297, height = 210,
 
 # Load data ---------------------------------------------------------------
 
-nb_groups <-
-  read_csv(
-    "data_raw/metadata/sample_groups.csv",
-    col_types = "cf",
-    comment = "#"
-  ) %>%
-  mutate(group = fct_relevel(group, "I", "II", "III", "IV")) %>%
-  arrange(group, sample) %>%
-  mutate(sample = as_factor(sample), sample_id = as.integer(sample))
+load_singler_details <- function(folder) {
+  df <- 
+    read_csv(str_glue("{folder}/nb_singler_details.csv")) %>%
+    rowwise() %>% 
+    mutate(median_score = median(c_across(starts_with("scores.")))) %>% 
+    ungroup() %>% 
+    mutate(
+      diff_next = tuning.scores.first - tuning.scores.second,
+      label_name = str_glue("scores.{make.names(labels)}")
+    ) %>% 
+    pivot_longer(
+      starts_with("scores."),
+      names_to = "scores",
+      values_to = "label_score"
+    ) %>% 
+    filter(scores == label_name) %>% 
+    mutate(delta_score = label_score - median_score) %>% 
+    select(!c(label_name, scores))
+  
+  left_join(
+    df,
+    df %>% 
+      group_by(labels) %>% 
+      summarise(
+        median_delta_score = median(delta_score),
+        mad_delta_score = mad(delta_score)
+      ),
+    by = "labels"
+  ) %>% 
+  mutate(z_score = (delta_score - median_delta_score) / mad_delta_score)
+}
 
 load_data <- function(folder) {
   files <- c(
@@ -56,6 +78,16 @@ load_data <- function(folder) {
     "nb_umap.csv",
     "nb_singler.csv"
   )
+  
+  nb_groups <-
+    read_csv(
+      "data_raw/metadata/sample_groups.csv",
+      col_types = "cf",
+      comment = "#"
+    ) %>%
+    mutate(group = fct_relevel(group, "I", "II", "III", "IV")) %>%
+    arrange(group, sample) %>%
+    mutate(sample = as_factor(sample), sample_id = as.integer(sample))
   
   str_glue("{folder}/{files}") %>% 
     map(read_csv) %>% 
@@ -79,48 +111,44 @@ load_data <- function(folder) {
     select(!sample_id)
 }
 
-nb_data <- load_data("data_generated/all_datasets_sc")
+add_filtered_cell_types <- function(df_seurat,
+                                    df_singler,
+                                    min_z_score = -3,
+                                    min_delta_score = -Inf,
+                                    min_diff_next = 0) {
+  df_singler <- 
+    df_singler %>% 
+    mutate(
+      labels_pruned = case_when(
+        z_score >= min_z_score &
+          delta_score >= min_delta_score &
+          diff_next > min_diff_next
+          ~ labels,
+        TRUE
+          ~ NA_character_
+      )
+    ) %>% 
+    select(cell, sample, cell_type_filtered = labels_pruned)
+  
+  df_seurat %>% 
+    left_join(df_singler, by = c("cell", "sample")) %>% 
+    extract(
+      cell_type_filtered,
+      into = "cell_type_filtered_broad",
+      regex = "([^:]*)",
+      remove = FALSE
+    )
+}
 
-nb_groups <-
-  nb_groups %>%
-  semi_join(nb_data, by = "sample")
 
-
-singler_data <- 
-  read_csv("data_generated/all_datasets_sc/nb_singler_details.csv") %>%
-  rowwise() %>% 
-  mutate(median_score = median(c_across(starts_with("scores.")))) %>% 
-  ungroup() %>% 
-  mutate(
-    diff_next = tuning.scores.first - tuning.scores.second,
-    label_name = str_glue("scores.{make.names(labels)}")
-  ) %>% 
-  pivot_longer(
-    starts_with("scores."),
-    names_to = "scores",
-    values_to = "label_score"
-  ) %>% 
-  filter(scores == label_name) %>% 
-  mutate(delta_score = label_score - median_score) %>% 
-  select(!c(label_name, scores))
-
-singler_data <- 
-  left_join(
-    singler_data,
-    singler_data %>% 
-      group_by(labels) %>% 
-      summarise(
-        median_delta_score = median(delta_score),
-        mad_delta_score = mad(delta_score)
-      ),
-    by = "labels"
-  ) %>% 
-  mutate(z_score = (delta_score - median_delta_score) / mad_delta_score)
+singler_data <- load_singler_details("data_generated/all_datasets_sc")
+nb_data <-
+  load_data("data_generated/all_datasets_sc") %>% 
+  add_filtered_cell_types(singler_data)
 
 
 
 # Clusters ----------------------------------------------------------------
-
 
 #' Plot all clusters.
 #'
@@ -195,12 +223,6 @@ plot_clusters_per_sample <- function(data, x, y, clusters, sample,
       size = .01,
       shape = 20,
       show.legend = show_legend
-    ) +
-    geom_text_npc(
-      data = nb_groups,
-      aes(label = group),
-      npcx = .05,
-      npcy = .95
     ) +
     facet_wrap(vars({{sample}}), nrow = nrow) +
     scale_color_hue(guide = guide_legend(override.aes = list(size = 5))) +
