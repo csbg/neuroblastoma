@@ -140,6 +140,12 @@ add_filtered_cell_types <- function(df_seurat,
       into = "cell_type_filtered_broad",
       regex = "([^:]*)",
       remove = FALSE
+    ) %>% 
+    mutate(
+      cell_type_filtered = as_factor(cell_type_filtered) %>%
+        fct_infreq(),
+      cell_type_filtered_broad = as_factor(cell_type_filtered_broad) %>%
+        fct_infreq()
     )
 }
 
@@ -160,11 +166,13 @@ nb_data <-
 #' @param y Column with y-axis data.
 #' @param clusters Column with cluster IDs.
 #' @param label_direct If `TRUE`, print cluster labels at cluster mean
+#' @param show_resolution If `TRUE`, print clustering resolution, which is
+#'   derived from the cluster column name.
 #' @param filename Name of output file.
 #'
 #' @return A ggplot object.
 plot_clusters_all <- function(data, x, y, clusters, label_direct = TRUE,
-                              filename = NULL) {
+                              show_resolution = TRUE, filename = NULL) {
   cluster_labels <- 
     data %>% 
     group_by(label = {{clusters}}) %>% 
@@ -183,11 +191,17 @@ plot_clusters_all <- function(data, x, y, clusters, label_direct = TRUE,
       size = .1,
       show.legend = !label_direct
     ) +
-    {if (label_direct) geom_text(data = cluster_labels, aes(label = label))} +
-    annotate(
-      "text_npc", npcx = 0.05, npcy = 0.95, size = 6,
-      label = str_glue("resolution {res}")
-    ) +
+    {
+      if (label_direct)
+        geom_text(data = cluster_labels, aes(label = label))
+    } +
+    {
+      if (show_resolution)
+        annotate(
+          "text_npc", npcx = 0.05, npcy = 0.95, size = 6,
+          label = str_glue("resolution {res}")
+        )
+    } +
     scale_color_hue(guide = guide_legend(override.aes = list(size = 5))) +
     coord_fixed() +
     theme_classic() +
@@ -207,10 +221,6 @@ plot_clusters_all(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.5,
                   filename = "clusters_all_UMAP_0.5")
 plot_clusters_all(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.8,
                   filename = "clusters_all_UMAP_0.8")
-# plot_clusters_all(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.5,
-#                   filename = "clusters_all_tSNE_0.5")
-# plot_clusters_all(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.8,
-#                   filename = "clusters_all_tSNE_0.8")
 
 
 
@@ -256,15 +266,6 @@ plot_clusters_per_sample <- function(data, x, y, clusters, sample,
 plot_clusters_per_sample(nb_data, UMAP_1, UMAP_2,
                          integrated_snn_res.0.5, sample,
                          nrow = 3, filename = "clusters_sample_UMAP_0.5")
-# plot_clusters_per_sample(nb_data, UMAP_1, UMAP_2,
-#                          integrated_snn_res.0.8, sample,
-#                          nrow = 3, filename = "clusters_sample_UMAP_0.8")
-# plot_clusters_per_sample(nb_data, tSNE_1, tSNE_2,
-#                          integrated_snn_res.0.5, sample,
-#                          nrow = 3, filename = "clusters_sample_tSNE_0.5")
-# plot_clusters_per_sample(nb_data, tSNE_1, tSNE_2,
-#                          integrated_snn_res.0.8, sample,
-#                          nrow = 3, filename = "clusters_sample_tSNE_0.8")
 
 
 
@@ -314,10 +315,6 @@ plot_clusters_highlight(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.5,
                         nrow = 4, filename = "clusters_hl_UMAP_0.5")
 plot_clusters_highlight(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.8,
                         nrow = 5, filename = "clusters_hl_UMAP_0.8")
-# plot_clusters_highlight(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.5,
-#                         nrow = 4, filename = "clusters_hl_tSNE_0.5")
-# plot_clusters_highlight(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.8,
-#                         nrow = 5, filename = "clusters_hl_tSNE_0.8")
 
 
 
@@ -380,10 +377,6 @@ plot_clusters_selected(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.5,
                        folder = "clusters_highlighted_UMAP_0.5")
 plot_clusters_selected(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.8,
                        folder = "clusters_highlighted_UMAP_0.8")
-# plot_clusters_selected(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.5,
-#                        folder = "clusters_highlighted_tSNE_0.5")
-# plot_clusters_selected(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.8,
-#                        folder = "clusters_highlighted_tSNE_0.8")
 
 
 
@@ -449,56 +442,37 @@ plot_cluster_changes(nb_data, filename = "cluster_change")
 # broad cell types
 nb_data_ctb <- 
   nb_data %>% 
-  mutate(cell_type_broad = fct_lump_prop(cell_type_broad, 0.01))
+  mutate(
+    cell_type_filtered_broad = fct_lump_prop(cell_type_filtered_broad, 0.01)
+  )
 
-plot_clusters_all(nb_data_ctb, UMAP_1, UMAP_2, cell_type_broad,
-                  label_direct = FALSE, filename = "celltype_broad_all_UMAP")
-# plot_clusters_all(nb_data_ctb, tSNE_1, tSNE_2, cell_type_broad,
-#                   label_direct = FALSE, filename = "celltype_broad_all_tSNE")
+plot_clusters_all(nb_data_ctb, UMAP_1, UMAP_2, cell_type_filtered_broad,
+                  label_direct = FALSE, show_resolution = FALSE,
+                  filename = "celltype_broad_all_UMAP")
 
-plot_clusters_per_sample(nb_data_ctb, UMAP_1, UMAP_2, cell_type_broad, sample,
-                         nrow = 3, show_legend = TRUE,
+plot_clusters_per_sample(nb_data_ctb, UMAP_1, UMAP_2, cell_type_filtered_broad,
+                         sample, nrow = 3, show_legend = TRUE,
                          filename = "celltype_broad_sample_UMAP")
-# plot_clusters_per_sample(nb_data_ctb, tSNE_1, tSNE_2, cell_type_broad, sample,
-#                          nrow = 3, show_legend = TRUE,
-#                          filename = "celltype_broad_sample_tSNE")
 
-plot_clusters_highlight(nb_data_ctb, UMAP_1, UMAP_2, cell_type_broad,
+plot_clusters_highlight(nb_data_ctb, UMAP_1, UMAP_2, cell_type_filtered_broad,
                         nrow = 3, filename = "celltype_broad_hl_UMAP")
-# plot_clusters_highlight(nb_data_ctb, tSNE_1, tSNE_2, cell_type_broad,
-#                         nrow = 3, filename = "celltype_broad_hl_tSNE")
 
-# plot_clusters_selected(nb_data_ctb, UMAP_1, UMAP_2, cell_type_broad,
-#                        folder = "cell_type_broad_highlighted_UMAP")
-# plot_clusters_selected(nb_data_ctb, tSNE_1, tSNE_2, cell_type_broad,
-#                        folder = "cell_type_broad_highlighted_tSNE")
 
 # fine cell types
 nb_data_ctf <- 
   nb_data %>% 
-  mutate(cell_type = fct_lump_n(cell_type, 24))
+  mutate(cell_type_filtered = fct_lump_n(cell_type_filtered, 24))
 
-plot_clusters_all(nb_data_ctf, UMAP_1, UMAP_2, cell_type,
-                  label_direct = FALSE, filename = "celltype_fine_all_UMAP")
-# plot_clusters_all(nb_data_ctf, tSNE_1, tSNE_2, cell_type,
-#                   label_direct = FALSE, filename = "celltype_fine_all_tSNE")
+plot_clusters_all(nb_data_ctf, UMAP_1, UMAP_2, cell_type_filtered,
+                  label_direct = FALSE, show_resolution = FALSE,
+                  filename = "celltype_fine_all_UMAP")
 
-plot_clusters_per_sample(nb_data_ctf, UMAP_1, UMAP_2, cell_type, sample,
-                         nrow = 3, show_legend = TRUE,
+plot_clusters_per_sample(nb_data_ctf, UMAP_1, UMAP_2, cell_type_filtered,
+                         sample, nrow = 3, show_legend = TRUE,
                          filename = "celltype_fine_sample_UMAP")
-# plot_clusters_per_sample(nb_data_ctf, tSNE_1, tSNE_2, cell_type, sample,
-#                          nrow = 3, show_legend = TRUE,
-#                          filename = "celltype_fine_sample_tSNE")
 
-plot_clusters_highlight(nb_data_ctf, UMAP_1, UMAP_2, cell_type,
+plot_clusters_highlight(nb_data_ctf, UMAP_1, UMAP_2, cell_type_filtered,
                         nrow = 4, filename = "celltype_fine_hl_UMAP")
-# plot_clusters_highlight(nb_data_ctf, tSNE_1, tSNE_2, cell_type,
-#                         nrow = 4, filename = "celltype_fine_hl_tSNE")
-
-# plot_clusters_selected(nb_data_ctf, UMAP_1, UMAP_2, cell_type,
-#                        folder = "cell_type_fine_highlighted_UMAP")
-# plot_clusters_selected(nb_data_ctf, tSNE_1, tSNE_2, cell_type,
-#                        folder = "cell_type_fine_highlighted_tSNE")
 
 
 
@@ -512,11 +486,13 @@ plot_clusters_highlight(nb_data_ctf, UMAP_1, UMAP_2, cell_type,
 #' @param lump_n Preserve the `lump_n` most common cell types, lump the
 #'   remaining ones as "other".
 #' @param sample Only include this sample.
+#' @param cluster_cols If `TRUE`, cluster the columns (i.e., Seurat clusters).
 #' @param filename Name of output file.
 #'
 #' @return A ggplot object.
 plot_cvt_heatmap <- function(data, cell_types, clusters,
-                             lump_n = NULL, sample = NULL, filename = NULL) {
+                             lump_n = NULL, sample = NULL, cluster_cols = TRUE,
+                             filename = NULL) {
   if (is.null(sample))
     sample <- "."
   if (is.null(lump_n))
@@ -543,7 +519,7 @@ plot_cvt_heatmap <- function(data, cell_types, clusters,
       color = colorRampPalette(brewer.pal(9, "YlOrRd"))(100),
       legend = FALSE,
       border_color = "white",
-      cluster_cols = FALSE,
+      cluster_cols = cluster_cols,
       cluster_rows = FALSE,
       angle_col = "0"
     ) %>%
@@ -555,9 +531,9 @@ plot_cvt_heatmap <- function(data, cell_types, clusters,
 }
 
 
-plot_cvt_heatmap(nb_data, cell_type_broad, integrated_snn_res.0.5,
+plot_cvt_heatmap(nb_data, cell_type_filtered_broad, integrated_snn_res.0.5,
                  filename = "cvt_heatmap_broad_0.5")
-plot_cvt_heatmap(nb_data, cell_type, integrated_snn_res.0.5,
+plot_cvt_heatmap(nb_data, cell_type_filtered, integrated_snn_res.0.5,
                  lump_n = 35, filename = "cvt_heatmap_fine_0.5")
 
 walk(
@@ -612,7 +588,11 @@ plot_cvt_bar <- function(data, cell_types, clusters,
       annotate("text_npc", npcx = 0.5, npcy = 0.9, label = cluster) +
       xlab("") +
       ylab("") +
-      scale_fill_distiller(palette = "YlOrRd", direction = 1, limits = c(0, 100)) +
+      scale_fill_distiller(
+        palette = "YlOrRd",
+        direction = 1,
+        limits = c(0, 100)
+      ) +
       coord_flip() +
       theme_classic() +
       theme(
@@ -623,7 +603,11 @@ plot_cvt_bar <- function(data, cell_types, clusters,
       NULL
     ggsave_default(
       str_glue("{filename}/{cluster}"),
-      plot = set_panel_size(ps, width = unit(30, "mm"), height = unit(30, "mm"))
+      plot = set_panel_size(
+        ps,
+        width = unit(30, "mm"),
+        height = unit(30, "mm")
+      )
     )
     ps
   }
@@ -638,18 +622,20 @@ plot_cvt_bar <- function(data, cell_types, clusters,
   p
 }
 
-plot_cvt_bar(nb_data, cell_type_broad, integrated_snn_res.0.5,
+
+plot_cvt_bar(nb_data, cell_type_filtered_broad, integrated_snn_res.0.2,
+             lump_n = 5, filename = "cvt_bar_broad_0.2")
+plot_cvt_bar(nb_data, cell_type_filtered, integrated_snn_res.0.2,
+             lump_n = 8, filename = "cvt_bar_fine_0.2",
+             width = 420, height = 297)
+plot_cvt_bar(nb_data, cell_type_filtered_broad, integrated_snn_res.0.5,
              lump_n = 5, filename = "cvt_bar_broad_0.5")
-plot_cvt_bar(nb_data, cell_type, integrated_snn_res.0.5,
+plot_cvt_bar(nb_data, cell_type_filtered, integrated_snn_res.0.5,
              lump_n = 8, filename = "cvt_bar_fine_0.5",
              width = 420, height = 297)
-plot_cvt_bar(nb_data, cell_type_broad, integrated_snn_res.0.8,
+plot_cvt_bar(nb_data, cell_type_filtered_broad, integrated_snn_res.0.8,
              lump_n = 5, filename = "cvt_bar_broad_0.8")
-plot_cvt_bar(nb_data, cell_type, integrated_snn_res.0.8,
+plot_cvt_bar(nb_data, cell_type_filtered, integrated_snn_res.0.8,
              lump_n = 8, filename = "cvt_bar_fine_0.8",
              width = 600, height = 297)
-plot_cvt_bar(nb_data, cell_type_broad, integrated_snn_res.0.2,
-             lump_n = 5, filename = "cvt_bar_broad_0.2")
-plot_cvt_bar(nb_data, cell_type, integrated_snn_res.0.2,
-             lump_n = 8, filename = "cvt_bar_fine_0.2",
-             width = 600, height = 297)
+
