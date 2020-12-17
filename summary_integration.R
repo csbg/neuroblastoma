@@ -72,6 +72,7 @@ load_singler_details <- function(folder) {
 
 load_data <- function(folder) {
   files <- c(
+    "nb_clusters_0.2.csv",
     "nb_clusters_0.5.csv",
     "nb_clusters_0.8.csv",
     "nb_tsne.csv",
@@ -101,6 +102,8 @@ load_data <- function(folder) {
     ) %>%
     mutate(
       sample = as_factor(sample) %>% fct_reorder(sample_id),
+      integrated_snn_res.0.2 = as_factor(integrated_snn_res.0.2) %>%
+        fct_inseq(),
       integrated_snn_res.0.5 = as_factor(integrated_snn_res.0.5) %>%
         fct_inseq(),
       integrated_snn_res.0.8 = as_factor(integrated_snn_res.0.8) %>%
@@ -167,6 +170,11 @@ plot_clusters_all <- function(data, x, y, clusters, label_direct = TRUE,
     group_by(label = {{clusters}}) %>% 
     summarise({{x}} := mean({{x}}), {{y}} := mean({{y}}))
   
+  res <-
+    enquo(clusters) %>% 
+    rlang::as_name() %>%
+    str_sub(start = -3L)
+  
   p <- 
     data %>%
     ggplot(aes({{x}}, {{y}})) +
@@ -176,6 +184,10 @@ plot_clusters_all <- function(data, x, y, clusters, label_direct = TRUE,
       show.legend = !label_direct
     ) +
     {if (label_direct) geom_text(data = cluster_labels, aes(label = label))} +
+    annotate(
+      "text_npc", npcx = 0.05, npcy = 0.95, size = 6,
+      label = str_glue("resolution {res}")
+    ) +
     scale_color_hue(guide = guide_legend(override.aes = list(size = 5))) +
     coord_fixed() +
     theme_classic() +
@@ -189,6 +201,8 @@ plot_clusters_all <- function(data, x, y, clusters, label_direct = TRUE,
   p
 }
 
+plot_clusters_all(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.2,
+                  filename = "clusters_all_UMAP_0.2")
 plot_clusters_all(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.5,
                   filename = "clusters_all_UMAP_0.5")
 plot_clusters_all(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.8,
@@ -294,6 +308,8 @@ plot_clusters_highlight <- function(data, x, y, clusters,
   ggsave_default(filename, width = 420, height = 297)
 }
 
+plot_clusters_highlight(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.2,
+                        nrow = 3, filename = "clusters_hl_UMAP_0.2")
 plot_clusters_highlight(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.5,
                         nrow = 4, filename = "clusters_hl_UMAP_0.5")
 plot_clusters_highlight(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.8,
@@ -358,6 +374,8 @@ plot_clusters_selected <- function(data, x, y, clusters, folder = NULL) {
   )
 }
 
+plot_clusters_selected(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.2,
+                       folder = "clusters_highlighted_UMAP_0.2")
 plot_clusters_selected(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.5,
                        folder = "clusters_highlighted_UMAP_0.5")
 plot_clusters_selected(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.8,
@@ -371,58 +389,58 @@ plot_clusters_selected(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.8,
 
 # Clustering resolution ---------------------------------------------------
 
-#' Create alluvial plot that shows how clusters change upon increasing resolution.
+#' Create alluvial plot that shows how clusters change with resolution.
 #'
 #' @param data Data extracted from a Seurat object.
-#' @param clusters Selection of low-resolution clusters to plot.
 #' @param other_prop Fractions of low-res clusters that are smaller than this
 #'   value will flow to a high-res cluster "other".
 #' @param filename Name of output file.
 #'
 #' @return A ggplot object.
-plot_cluster_changes <- function(data, clusters,
-                                 other_prop = 0.1, filename = NULL) {
+plot_cluster_changes <- function(data, other_prop = 0.1, filename = NULL) {
   cluster_flow <- 
     data %>%
-    count(low = integrated_snn_res.0.5, high = integrated_snn_res.0.8) %>% 
-    mutate(high = as.character(high)) %>%
-    group_by(low) %>% 
+    count(
+      low = integrated_snn_res.0.2,
+      mid = integrated_snn_res.0.5,
+      high = integrated_snn_res.0.8
+    ) %>% 
     mutate(
-      prop = n / sum(n),
-      high = case_when(
-        prop >= other_prop ~ high,
-        TRUE ~ "other"
-      ) %>% as_factor()
+      low = fct_relabel(low, ~str_glue("L-{.}")),
+      mid = fct_relabel(mid, ~str_glue("M-{.}")),
+      high = fct_relabel(high, ~str_glue("H-{.}"))
     )
   
   p <- 
     cluster_flow %>% 
-    filter(low %in% clusters) %>% 
-    ggplot(aes(axis1 = low, axis2 = high, y = n)) +
-    stat_alluvium(aes(fill = low), show.legend = FALSE) +
-    stat_stratum() +
-    geom_text(stat = "stratum", aes(label = after_stat(stratum))) +
+    ggplot(aes(axis1 = low, axis2 = mid, axis3 = high,  y = n)) +
+    stat_alluvium(aes(fill = mid), show.legend = FALSE, reverse = FALSE) +
+    stat_stratum(reverse = FALSE) +
+    stat_stratum(
+      geom = "text",
+      aes(label = str_sub(after_stat(stratum), start = 3L)),
+      reverse = FALSE,
+      size = 3
+    ) +
     scale_x_discrete(
       "clustering resolution",
-      limits = c("low", "high"),
+      limits = c("low", "mid", "high"),
       expand = expansion(add = .2)
     ) +
     scale_y_continuous(
       "cumulative number of cells",
       expand = expansion()
     ) +
+    coord_flip() +
     theme_classic() +
     theme(axis.line.x = element_blank()) +
     NULL
   
-  ggsave_default(filename, width = 210, height = 297)
+  ggsave_default(filename, width = 400, height = 200)
   p
 }
 
-plot_cluster_changes(nb_data, as.character(0:11),
-                     filename = "cluster_change_a")
-plot_cluster_changes(nb_data, as.character(12:23),
-                     filename = "cluster_change_b")
+plot_cluster_changes(nb_data, filename = "cluster_change")
 
 
 
@@ -629,4 +647,9 @@ plot_cvt_bar(nb_data, cell_type_broad, integrated_snn_res.0.8,
              lump_n = 5, filename = "cvt_bar_broad_0.8")
 plot_cvt_bar(nb_data, cell_type, integrated_snn_res.0.8,
              lump_n = 8, filename = "cvt_bar_fine_0.8",
+             width = 600, height = 297)
+plot_cvt_bar(nb_data, cell_type_broad, integrated_snn_res.0.2,
+             lump_n = 5, filename = "cvt_bar_broad_0.2")
+plot_cvt_bar(nb_data, cell_type, integrated_snn_res.0.2,
+             lump_n = 8, filename = "cvt_bar_fine_0.2",
              width = 600, height = 297)

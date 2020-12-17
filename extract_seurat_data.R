@@ -35,6 +35,7 @@ nb <-
 nb <- 
   nb %>% 
   FindNeighbors() %>% 
+  FindClusters(resolution = 0.2) %>% 
   FindClusters(resolution = 0.5) %>% 
   FindClusters(resolution = 0.8)
 
@@ -63,6 +64,11 @@ Embeddings(nb, "tsne") %>%
 Embeddings(nb, "umap") %>%
   as_tibble(rownames = "cell") %>% 
   export_embedding("nb_umap.csv")
+
+nb@meta.data %>%
+  select(sample, integrated_snn_res.0.2) %>%
+  rownames_to_column("cell") %>% 
+  write_csv(path_join(c(outdir, "nb_clusters_0.2.csv")))
 
 nb@meta.data %>%
   select(sample, integrated_snn_res.0.5) %>%
