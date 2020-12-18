@@ -22,7 +22,7 @@ data_dir <- "data_raw"
 
 # (A) integrate all datasets with SCTrans
 workflow <- "sctrans"
-out_dir <- "data_generated/all_datasets_sc"
+out_dir <- "data_generated/all_datasets_current"
 samples <- tibble(
   sample_file = dir_ls(
     data_dir,
@@ -48,7 +48,7 @@ samples <- tibble(
 
 # (C) test workflow on a small dataset
 # workflow <- "sctrans"
-# out_dir <- "data_generated/3_datasets_sc"
+# out_dir <- "data_generated/3_datasets"
 # samples <- c(
 #   GNM_2020_1288 = "R1_GNM_2020_1288_transcriptome/filtered_feature_bc_matrix.h5",
 #   NB_2018_6056 = "R2_NB_2018_6056_transcriptome/filtered_feature_bc_matrix.h5",
@@ -67,7 +67,7 @@ if (workflow == "standard") {
     function(sample_file, sample_name) {
       sample_file %>% 
         Read10X_h5() %>% 
-        CreateSeuratObject() %>% 
+        CreateSeuratObject(sample_name) %>% 
         AddMetaData(sample_name, col.name = "sample") %>% 
         NormalizeData() %>% 
         FindVariableFeatures()
@@ -93,9 +93,10 @@ if (workflow == "sctrans") {
       message("SCTransforming ", sample_name)
       sample_file %>% 
         Read10X_h5() %>% 
-        CreateSeuratObject() %>% 
+        CreateSeuratObject(sample_name) %>% 
         AddMetaData(sample_name, col.name = "sample") %>%
         PercentageFeatureSet(pattern = "^MT-", col.name = "percent.mt") %>% 
+        subset(subset = nFeature_RNA > 200 & nFeature_RNA < 5000 & percent.mt < 10) %>% 
         SCTransform(
           vars.to.regress = "percent.mt",
           verbose = FALSE,
@@ -120,16 +121,6 @@ if (workflow == "sctrans") {
   )
   message("Integration finished")
 }
-
-
-
-# Dimensional reductions --------------------------------------------------
-
-nb_integrated <- 
-  nb_integrated %>% 
-  RunPCA(verbose = FALSE) %>% 
-  RunUMAP(dims = 1:30) %>% 
-  RunTSNE(dims = 1:30)
 
 
 
