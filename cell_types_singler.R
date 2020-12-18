@@ -1,9 +1,9 @@
 # Cell type assignment via SingleR for an integrated Seurat dataset
 #
-# Creates three results files:
-# (1) a CSV file with cell barcodes, tSNE/UMAP coordinates, and cell types
-# (2) a RDS file containing the dataframe returned by SingleR::SingleR()
-# (3) a CSV file containing all data in (2)
+# Creates three CSV files:
+# (1) nb_singler.csv – cell barcodes and unfiltered cell types
+# (2) nb_singler_details.csv – the dataframe returned by SingleR::SingleR()
+# (3) nb_singler_degenes.csv – @metadata$de.genes of SingleR results (wide form)
 
 
 library(Seurat)
@@ -13,12 +13,12 @@ library(tidyverse)
 
 
 # small test datasets
-# infile <- "data_generated/3_datasets_sc/nb_integrated.rds"
-# outfile <- "data_generated/3_datasets_sc/nb_singler"
-
+# infile <- "data_generated/3_datasets/nb_integrated.rds"
+# outfile <- "data_generated/3_datasets/nb_singler"
+# 
 # large complete datasets
-infile <- "data_generated/all_datasets_sc/nb_integrated.rds"
-outfile <- "data_generated/all_datasets_sc/nb_singler"
+infile <- "data_generated/all_datasets_current/nb_integrated.rds"
+outfile <- "data_generated/all_datasets_current/nb_singler"
 
 # whether to use broad or fine labels
 use_fine_labels <- TRUE
@@ -28,11 +28,6 @@ use_fine_labels <- TRUE
 # Load data ---------------------------------------------------------------
 
 nb <- readRDS(infile)
-
-nb <- 
-  nb %>% 
-  FindNeighbors() %>% 
-  FindClusters(resolution = 0.5)  # or 0.8 for more clusters
 
 # for testing: choose only a few cells
 # nb <- subset(nb, cells = sample(ncol(nb), 50))
@@ -67,3 +62,14 @@ nb@meta.data %>%
   as_tibble(rownames = "cell") %>% 
   bind_cols(as_tibble(predicted_cell_types)) %>% 
   write_csv(str_glue("{outfile}_details.csv"))
+
+tibble(
+  cell_type_1 = names(predicted_cell_types@metadata$de.genes),
+  lc = predicted_cell_types@metadata$de.genes
+) %>%
+  unnest_longer(lc, indices_to = "cell_type_2", values_to = "genes") %>% 
+  rowwise() %>% 
+  mutate(genes = str_c(genes, collapse = ", ")) %>% 
+  relocate(cell_type_2, .after = cell_type_1) %>% 
+  write_csv(str_glue("{outfile}_degenes.csv"))
+
