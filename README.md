@@ -23,6 +23,7 @@
 * [extract_seurat_data.R] - extract important data from (large) Seurat object to (smaller) CSV files
 * [conserved_markers.R] - find conserved markers; invoke via [sge_job_consmark.sh]
 * [summary_integration.R] - analysis of integrated data
+* [plot_markers.R] - misc plots of markers
 
 ## Other analyses
 
