@@ -653,9 +653,13 @@ plot_cvt_bar(nb_data, cell_type_filtered, integrated_snn_res.0.8,
 #' Columns are scaled separately within the top and bottom part.
 #'
 #' @param data Data extracted from a Seurat object.
+#' @param clusters Column with cluster IDs.
+#' @param angle_col Angle of pheatmap column labels.
+#' @param filename Name of output file.
 #'
 #' @return A ggplot object.
-plot_cluster_size <- function(data) {
+plot_cluster_size <- function(data, clusters,
+                              angle_col = "90", filename = NULL) {
   pivot_and_scale <- function(x) {
     x %>%
       mutate(n_rel = n / sum(n)) %>%
@@ -674,11 +678,11 @@ plot_cluster_size <- function(data) {
   size_mat <-
     rbind(
       data %>%
-        count(group, sample, cluster = integrated_snn_res.0.5) %>%
+        count(group, sample, cluster = {{clusters}}) %>%
         group_by(group, sample) %>%
         pivot_and_scale(),
       data %>%
-        count(group, cluster = integrated_snn_res.0.5) %>%
+        count(group, cluster = {{clusters}}) %>%
         group_by(group) %>%
         mutate(sample = group) %>%
         pivot_and_scale()
@@ -704,7 +708,7 @@ plot_cluster_size <- function(data) {
     color = colorRampPalette(brewer.pal(11, "RdYlBu"))(100),
     breaks = breaks,
     border_color = "white",
-    angle_col = "0",
+    angle_col = angle_col,
     annotation_row = annotation_row,
     gaps_row = gaps_row,
     cluster_rows = FALSE,
@@ -713,11 +717,20 @@ plot_cluster_size <- function(data) {
   ) %>%
   set_last_plot()
 
-  ggsave_default("cluster_size_vs_samples")
+  ggsave_default(filename)
 }
 
-plot_cluster_size(nb_data)
+plot_cluster_size(nb_data, integrated_snn_res.0.5, angle_col = "0",
+                  filename = "cluster_size_vs_samples")
 
+nb_data_ctb %>%
+  mutate(cell_type = fct_explicit_na(cell_type_filtered_broad)) %>% 
+  plot_cluster_size(cell_type, filename = "celltype_broad_count_vs_samples")
+
+nb_data_ctf %>%
+  mutate(cell_type = fct_explicit_na(cell_type_filtered)) %>% 
+  plot_cluster_size(cell_type, filename = "celltype_fine_count_vs_samples")
+  
 
 
 # Putative NB cells -------------------------------------------------------
