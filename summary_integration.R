@@ -648,68 +648,96 @@ plot_cvt_bar(nb_data, cell_type_filtered, integrated_snn_res.0.8,
 
 # Cluster sizes -----------------------------------------------------------
 
-nb_data %>%
-  count(group, cluster = integrated_snn_res.0.5) %>% 
-  group_by(group) %>% 
-  mutate(n_rel = n / sum(n)) %>% 
-  ggplot(aes(cluster, n_rel)) +
-  geom_col(
-    data = nb_data %>% 
-      count(cluster = integrated_snn_res.0.5) %>% 
-      mutate(n_rel = n / sum(n)),
-    fill = "grey80"
-  ) +
-  geom_col(alpha = .25, fill = "red") +
-  scale_y_continuous("relative cluster size", expand = expansion()) +
-  facet_wrap(vars(group)) +
-  theme_classic() +
-  theme(
-    axis.line.x = element_blank(),
-    strip.background = element_blank()
-  ) +
-  ggtitle("Relative cluster sizes of groups (red) compared to average relative size (grey)") +
-  NULL
-ggsave_default("cluster_size_vs_average")
+#' Plot a heatmap of cluster size vs sample (top) and group (bottom).
+#' 
+#' Columns are scaled separately within the top and bottom part.
+#'
+#' @param data Data extracted from a Seurat object.
+#'
+#' @return A ggplot object.
+plot_cluster_size <- function(data) {
+  pivot_and_scale <- function(x) {
+    x %>%
+      mutate(n_rel = n / sum(n)) %>%
+      pivot_wider(
+        names_from = "sample",
+        values_from = "n_rel",
+        id_cols = "cluster"
+      ) %>%
+      column_to_rownames("cluster") %>%
+      as.matrix() %>%
+      t() %>%
+      scale()
+  }
+  
+  # scale columnwise for samples and groups
+  size_mat <-
+    rbind(
+      data %>%
+        count(group, sample, cluster = integrated_snn_res.0.5) %>%
+        group_by(group, sample) %>%
+        pivot_and_scale(),
+      data %>%
+        count(group, cluster = integrated_snn_res.0.5) %>%
+        group_by(group) %>%
+        mutate(sample = group) %>%
+        pivot_and_scale()
+    )
+  
+  size_mat_max <- max(abs(range(size_mat, na.rm = TRUE)))
+  breaks <- seq(from = -size_mat_max, to = size_mat_max, length.out = 101)
+  
+  annotation_row <-
+    data %>%
+    distinct(group, sample) %>%
+    column_to_rownames("sample")
+  
+  gaps_row <- 
+    data %>%
+    group_by(group) %>%
+    summarise(n = n_distinct(sample)) %>% 
+    pull(n) %>% 
+    cumsum()
 
-nb_data %>%
-  count(group, cluster = integrated_snn_res.0.5) %>% 
-  group_by(group) %>%
-  mutate(n_rel = n / sum(n)) %>%
-  pivot_wider(names_from = "group", values_from = "n_rel", id_cols = "cluster") %>% 
-  mutate(across(I:IV, ~. - I)) %>%
-  pivot_longer(I:IV, names_to = "group", values_to = "delta_n_rel") %>% 
-  ggplot(aes(cluster, delta_n_rel)) +
-  geom_col(aes(fill = cluster), show.legend = FALSE) +
-  geom_hline(yintercept = 0) +
-  geom_vline(xintercept = c(5, 10, 15, 20) + .5, size = .25, color = "gray50") +
-  facet_wrap(vars(group)) +
-  ylab("change of relative abundance") +
-  ggtitle("Changes of relative cluster abundance relative to group I") +
-  theme_classic() +
-  theme(
-    axis.line.x = element_blank(),
-    strip.background = element_blank(),
-  ) +
-  NULL
-ggsave_default("cluster_size_vs_I")
-
-nb_data %>% 
-  count(sample, cluster = integrated_snn_res.0.5) %>% 
-  group_by(sample) %>%
-  mutate(n_rel = n / sum(n)) %>%
-  pivot_wider(names_from = "sample", values_from = "n_rel", id_cols = "cluster") %>% 
-  column_to_rownames("cluster") %>% 
-  as.matrix() %>% 
-  t() %>% 
   pheatmap(
-    color = colorRampPalette(brewer.pal(9, "PuBuGn"))(100),
-    legend = FALSE,
+    size_mat,
+    color = colorRampPalette(brewer.pal(11, "RdYlBu"))(100),
+    breaks = breaks,
     border_color = "white",
     angle_col = "0",
-    annotation_row = nb_data %>% 
-      distinct(group, sample) %>% 
-      column_to_rownames("sample"),
-    main = "Relative cluster sizes in samples"
-  ) %>% 
+    annotation_row = annotation_row,
+    gaps_row = gaps_row,
+    cluster_rows = FALSE,
+    cluster_cols = FALSE,
+    main = "Relative cluster sizes in samples and groups (scaled columnwise)"
+  ) %>%
   set_last_plot()
-ggsave_default("cluster_size_vs_samples")
+
+  ggsave_default("cluster_size_vs_samples")
+}
+
+plot_cluster_size(nb_data)
+
+
+
+# Putative NB cells -------------------------------------------------------
+
+nb_data %>%
+  ggplot(aes(UMAP_1, UMAP_2)) +
+  geom_point(
+    color = "gray90",
+    size = .01,
+    shape = 20
+  ) +
+  geom_point(
+    data = nb_data %>%
+      filter(cell_type_broad == "Neurons"),
+    size = .01,
+    shape = 20
+  ) +
+  coord_fixed() +
+  facet_wrap(vars(group)) +
+  theme_classic() +
+  theme(strip.background = element_blank()) +
+  NULL
+ggsave_default("neurons_in_groups", crop = FALSE)
