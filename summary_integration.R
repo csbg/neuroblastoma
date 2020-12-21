@@ -150,9 +150,9 @@ add_filtered_cell_types <- function(df_seurat,
 }
 
 
-singler_data <- load_singler_details("data_generated/all_datasets_sc")
+singler_data <- load_singler_details("data_generated/all_datasets_current")
 nb_data <-
-  load_data("data_generated/all_datasets_sc") %>% 
+  load_data("data_generated/all_datasets_current") %>% 
   add_filtered_cell_types(singler_data)
 
 
@@ -198,7 +198,7 @@ plot_clusters_all <- function(data, x, y, clusters, label_direct = TRUE,
     {
       if (show_resolution)
         annotate(
-          "text_npc", npcx = 0.05, npcy = 0.95, size = 6,
+          "text_npc", npcx = 0.05, npcy = 1, size = 6,
           label = str_glue("resolution {res}")
         )
     } +
@@ -248,7 +248,11 @@ plot_clusters_per_sample <- function(data, x, y, clusters, sample,
       shape = 20,
       show.legend = show_legend
     ) +
-    facet_wrap(vars({{sample}}), nrow = nrow) +
+    facet_wrap(
+      vars(group, {{sample}}),
+      nrow = nrow,
+      labeller = function(labels) label_value(labels, multi_line = FALSE)
+    ) +
     scale_color_hue(guide = guide_legend(override.aes = list(size = 5))) +
     coord_fixed() +
     theme_classic() +
