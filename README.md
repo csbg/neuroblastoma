@@ -29,7 +29,8 @@
 
 * [compare_reads.Rmd] - compare two samples that differ in read length (50 vs 75 bp)
 * [download_data.R] - download selected raw data
+* [plot_qc_metrics.R] - plot QC metrics for cell filtering (i.e., % of mitochondrial genes etc.)
 * [summary_cellranger_metrics.R] - generate summary plots of Cell Ranger QC metrics
 * [summary_cellranger_tsne.R] - generate overview of tSNEs calculated by Cell Ranger
-+ [test_workflow.R] - template of the overall Seurat workflow (can be eventually deleted!)
+* [test_workflow.R] - template of the overall Seurat workflow (can be eventually deleted!)
 * [tutorial_monocle] - misc experiments with monocle (can be eventually deleted!)
