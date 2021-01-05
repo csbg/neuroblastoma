@@ -441,6 +441,15 @@ plot_cluster_changes(nb_data, filename = "cluster_change")
 
 
 
+# Samples -----------------------------------------------------------------
+
+plot_clusters_all(nb_data, UMAP_1, UMAP_2, sample, label_direct = FALSE,
+                  show_resolution = FALSE, filename = "samples_all_UMAP")
+plot_clusters_all(nb_data, tSNE_1, tSNE_2, sample, label_direct = FALSE,
+                  show_resolution = FALSE, filename = "samples_all_tSNE")
+
+
+
 # Cell types (SingleR) ----------------------------------------------------
 
 # broad cell types
