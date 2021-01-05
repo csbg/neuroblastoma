@@ -534,7 +534,8 @@ plot_cvt_heatmap <- function(data, cell_types, clusters,
       border_color = "white",
       cluster_cols = cluster_cols,
       cluster_rows = FALSE,
-      angle_col = "0"
+      angle_col = "0",
+      fontsize = 15
     ) %>%
     {.}
   set_last_plot(p)
@@ -664,11 +665,15 @@ plot_cvt_bar(nb_data, cell_type_filtered, integrated_snn_res.0.8,
 #' @param data Data extracted from a Seurat object.
 #' @param clusters Column with cluster IDs.
 #' @param angle_col Angle of pheatmap column labels.
+#' @param center_color_scale If `TRUE`, center color scale at zero.
+#' @param color_palette Color palette to use.
 #' @param filename Name of output file.
 #'
 #' @return A ggplot object.
 plot_cluster_size <- function(data, clusters,
-                              angle_col = "90", filename = NULL) {
+                              angle_col = "90", center_color_scale = TRUE,
+                              color_palette = brewer.pal(11, "RdYlBu"),
+                              filename = NULL) {
   pivot_and_scale <- function(x) {
     x %>%
       mutate(n_rel = n / sum(n)) %>%
@@ -697,8 +702,12 @@ plot_cluster_size <- function(data, clusters,
         pivot_and_scale()
     )
   
-  size_mat_max <- max(abs(range(size_mat, na.rm = TRUE)))
-  breaks <- seq(from = -size_mat_max, to = size_mat_max, length.out = 101)
+  if (center_color_scale) {
+    size_mat_max <- max(abs(range(size_mat, na.rm = TRUE)))
+    breaks <- seq(from = -size_mat_max, to = size_mat_max, length.out = 101)  
+  } else {
+    breaks <- NA
+  }
   
   annotation_row <-
     data %>%
@@ -714,7 +723,7 @@ plot_cluster_size <- function(data, clusters,
 
   pheatmap(
     size_mat,
-    color = colorRampPalette(brewer.pal(11, "RdYlBu"))(100),
+    color = colorRampPalette(color_palette)(100),
     breaks = breaks,
     border_color = "white",
     angle_col = angle_col,
@@ -730,15 +739,21 @@ plot_cluster_size <- function(data, clusters,
 }
 
 plot_cluster_size(nb_data, integrated_snn_res.0.5, angle_col = "0",
+                  center_color_scale = FALSE,
+                  color_palette = brewer.pal(9, "Greens"),
                   filename = "cluster_size_vs_samples")
 
 nb_data_ctb %>%
   mutate(cell_type = fct_explicit_na(cell_type_filtered_broad)) %>% 
-  plot_cluster_size(cell_type, filename = "celltype_broad_count_vs_samples")
+  plot_cluster_size(cell_type, center_color_scale = FALSE,
+                    color_palette = brewer.pal(9, "Greens"),
+                    filename = "celltype_broad_count_vs_samples")
 
 nb_data_ctf %>%
   mutate(cell_type = fct_explicit_na(cell_type_filtered)) %>% 
-  plot_cluster_size(cell_type, filename = "celltype_fine_count_vs_samples")
+  plot_cluster_size(cell_type, center_color_scale = FALSE,
+                    color_palette = brewer.pal(9, "Greens"),
+                    filename = "celltype_fine_count_vs_samples")
   
 
 
@@ -762,4 +777,24 @@ nb_data %>%
   theme_classic() +
   theme(strip.background = element_blank()) +
   NULL
-ggsave_default("neurons_in_groups", crop = FALSE)
+ggsave_default("groupwise_abundance_neurons")
+
+nb_data %>%
+  ggplot(aes(UMAP_1, UMAP_2)) +
+  geom_point(
+    color = "gray90",
+    size = .01,
+    shape = 20
+  ) +
+  geom_point(
+    data = nb_data %>%
+      filter(integrated_snn_res.0.5 %in% c(4, 10)),
+    size = .01,
+    shape = 20
+  ) +
+  coord_fixed() +
+  facet_wrap(vars(group)) +
+  theme_classic() +
+  theme(strip.background = element_blank()) +
+  NULL
+ggsave_default("groupwise_abundance_cluster4_10")
