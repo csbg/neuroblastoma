@@ -8,7 +8,7 @@ library(XML)
 
 parent_url <- "https://biomedical-sequencing.at/projects/BSA_0407_STM_Neuroblastoma_2ba0210fb73d412397728e8a97a3e423/COUNT/"
 count_dir <- getURL(parent_url)
-data_dir <- "data"
+data_dir <- "data_raw"
 
 rna_files <- c(
   # "raw_feature_bc_matrix.h5",
@@ -17,7 +17,7 @@ rna_files <- c(
   "analysis/tsne/2_components/projection.csv",
   "analysis/clustering/graphclust/clusters.csv"
 )
-rna_folder_re <- "transcriptome/"
+rna_folder_re <- "[^L]_transcriptome/"  # exclude aggregated samples
 
 atac_files <- c(
   # "raw_peak_bc_matrix.h5",
