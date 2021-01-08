@@ -654,6 +654,77 @@ plot_cvt_bar(nb_data, cell_type_filtered, integrated_snn_res.0.8,
              width = 600, height = 297)
 
 
+#' For each group, plot a bar chart that counts the most frequent cell types.
+#' Only include selected clusters.
+#'
+#' @param data Data extracted from a Seurat object.
+#' @param cell_types Column with cell types.
+#' @param clusters Column with cluster IDs.
+#' @param selected_clusters Vector of selected cluster IDs.
+#' @param filename Name of output file.
+#'
+#' @return A ggplot object.
+plot_cvt_group <- function(data, cell_types, clusters, selected_clusters,
+                           filename = NULL) {
+  p <- 
+    map(
+      levels(data$group),
+      function(group) {
+        data_plot <- 
+          nb_data_ctb %>%
+          filter(
+            {{clusters}} %in% {{selected_clusters}},
+            group == {{group}}
+          ) %>%
+          count(cell_type = {{cell_types}}) %>%
+          mutate(
+            cell_type = fct_reorder(cell_type, n),
+            n_rel = n / sum(n) * 100
+          )
+        
+        ggplot(data_plot, aes(cell_type, n)) +
+          geom_col(aes(fill = n_rel), show.legend = FALSE) +
+          annotate(
+            "text_npc",
+            npcx = 0.5,
+            npcy = 0.9,
+            label = str_glue("group {group}\n{sum(data_plot$n)} cells")
+          ) +
+          xlab("") +
+          ylab("") +
+          scale_fill_distiller(
+            palette = "YlOrRd",
+            direction = 1,
+            limits = c(0, 100)
+          ) +
+          coord_flip() +
+          theme_classic() +
+          theme(
+            axis.text.x = element_text(angle = 270, vjust = 0.5),
+            strip.background = element_blank(),
+            strip.text = element_text(face = "bold")
+          ) +
+          NULL
+      }
+    ) %>% 
+    wrap_plots() +
+    plot_annotation(
+      str_glue("Cell types in cluster ",
+               "{str_c(selected_clusters, collapse = ', ')}, ",
+               "split by patient groups")
+    )
+  
+  ggsave_default(filename, width = 200, height = 150)
+  p
+}
+
+plot_cvt_group(nb_data_ctb, cell_type_broad, integrated_snn_res.0.5,
+               selected_clusters = 4,
+               filename = "cvt_bar_broad_0.5_groupwise_cluster_4")
+plot_cvt_group(nb_data_ctb, cell_type_broad, integrated_snn_res.0.5,
+               selected_clusters = 10,
+               filename = "cvt_bar_broad_0.5_groupwise_cluster_10")
+
 
 
 # Cluster sizes -----------------------------------------------------------
