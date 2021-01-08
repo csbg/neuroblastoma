@@ -42,7 +42,6 @@ df %>%
   scale_x_discrete(NULL) +
   scale_y_continuous(NULL) +
   facet_wrap(vars(measure), scales = "free") +
-  # coord_flip() +
   theme(strip.text = element_blank()) +
   ggtitle("Cellranger summary statistics for RNA-seq") +
   NULL
@@ -57,7 +56,7 @@ ggsave("plots/cellranger_summary/measures_rna.pdf",
 
 df <- 
   dir_ls("data_raw/", recurse = TRUE, regex = "/summary.csv$") %>% 
-  map_dfr(read_csv, .id = "file") %>%
+  map_dfr(read_csv, na = "None", .id = "file") %>%
   extract(file, into = "sample", regex = "/(.*)_ATAC") %>%
   {.}
 
@@ -87,7 +86,6 @@ df %>%
   scale_x_discrete(NULL) +
   scale_y_continuous(NULL) +
   facet_wrap(vars(measure), scales = "free") +
-  # coord_flip() +
   theme(strip.text = element_blank()) +
   ggtitle("Cellranger summary statistics for ATAC-seq") +
   NULL

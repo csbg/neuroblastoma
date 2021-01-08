@@ -43,7 +43,12 @@ df_cluster <-
 
 df <- 
   df_tsne %>% 
-  left_join(df_cluster, by = c("sample", "method", "barcode"))
+  left_join(df_cluster, by = c("sample", "method", "barcode")) %>% 
+  mutate(
+    method = recode(method,
+                    "ATAC" = "scATAC-seq",
+                    "transcriptome" = "scRNA-seq")
+  )
 
 
 
@@ -58,7 +63,7 @@ df %>%
   facet_grid(vars(method), vars(sample)) +
   NULL
 
-first_row_samples <- unique(df$sample)[1:7]
+first_row_samples <- unique(df$sample)[1:9]
 second_row_samples <- unique(df$sample) %>% setdiff(first_row_samples)
 
 plot_cells_rows <- function(row_samples) {
@@ -74,7 +79,7 @@ plot_cells_rows <- function(row_samples) {
     ylim(-60, 60) +
     coord_fixed() +
     facet_grid(vars(method), vars(sample)) +
-    theme_bw() +
+    theme_classic() +
     theme(
       strip.background = element_blank(),
       strip.text = element_text(face = "bold")
@@ -90,7 +95,7 @@ plot_cells_rows <- function(row_samples) {
   )
 
 ggsave("plots/cellranger_summary/tsne_cells.pdf",
-       units = "mm", width = 300, height = 210)
+       units = "mm", width = 400, height = 210)
 
 
 
@@ -118,7 +123,7 @@ plot_hexbin_rows <- function(row_samples) {
     scale_fill_viridis_c(option = "B", direction = 1, limits = c(0, 40)) +
     coord_fixed() +
     facet_grid(vars(method), vars(sample)) +
-    theme_bw() +
+    theme_classic() +
     theme(
       strip.background = element_blank(),
       strip.text = element_text(face = "bold")
@@ -134,5 +139,5 @@ plot_hexbin_rows <- function(row_samples) {
   )
 
 ggsave("plots/cellranger_summary/tsne_hexbin.pdf",
-       units = "mm", width = 300, height = 210)
+       units = "mm", width = 400, height = 210)
 
