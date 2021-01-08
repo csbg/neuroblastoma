@@ -1,7 +1,13 @@
+# Plot QC metrics (% mitochondrial genes, feature and molecule count)
+
 library(tidyverse)
 library(Seurat)
 library(fs)
 library(patchwork)
+
+
+
+# Load data ---------------------------------------------------------------
 
 data_dir <- "data_raw"
 
@@ -12,24 +18,35 @@ samples <-
       recurse = TRUE,
       regexp = "filtered_feature_bc_matrix.h5"
     ),
-    sample = str_match(file, "/[^_]*_(.*)_trans")[, 2]
+    bsf_id = str_match(file, "/(.*)_trans")[, 2]
   ) %>%
-  filter(sample != "16_4503_Re_DOWN") %>% 
   left_join(
     read_csv("data_raw/metadata/sample_groups.csv", comment = "#"),
-    by = "sample"
+    by = "bsf_id"
   ) %>%
+  drop_na() %>% 
   arrange(group, sample)
   
 nb_list <- pmap(
   samples,
-  function(file, sample, group) {
+  function(file, sample, group, ...) {
     message("Loading ", sample)
     file %>%
       Read10X_h5() %>%
       CreateSeuratObject(str_glue("{sample} ({group})")) %>%
       PercentageFeatureSet(pattern = "^MT-", col.name = "percent.mt")
   }
+)
+
+
+
+# Features, molecules, %MT genes ------------------------------------------
+
+cutoffs <- tribble(
+  ~name, ~value,
+  "% mt genes", 10,
+  "features",  200,
+  "features", 5000
 )
 
 p <-
@@ -47,6 +64,12 @@ p <-
       ggplot(aes("1", value)) + 
       geom_violin(aes(fill = name), scale = "width", show.legend = FALSE) +
       geom_jitter(alpha = .02, size = 1) +
+      geom_hline(
+        data = cutoffs,
+        aes(yintercept = value),
+        linetype = "dashed",
+        color = "red"
+      ) +
       facet_wrap(vars(name), scales = "free_y") +
       ylab("") +
       ggtitle(.x@project.name) +
@@ -58,5 +81,5 @@ p <-
       )
   )
 
-wrap_plots(p, nrow = 3)
-ggsave("plots/qc_plots.jpg", dpi = 300, units = "mm", width = 550, height = 297)
+wrap_plots(p, nrow = 4)
+ggsave("plots/qc_plots.jpg", dpi = 300, units = "mm", width = 400, height = 400)
