@@ -87,10 +87,13 @@ nb@meta.data %>%
 
 # Extract RNA and SCT assay -----------------------------------------------
 
-nb$RNA %>%
-  CreateSeuratObject(meta.data = nb@meta.data) %>% 
-  saveRDS(path_join(c(outdir, "nb_assay_RNA.rds")))
-
-nb$SCT %>%
-  CreateSeuratObject(meta.data = nb@meta.data) %>% 
-  saveRDS(path_join(c(outdir, "nb_assay_SCT.rds")))
+extract_assay <- function(assay) {
+  nb_assay <- 
+    Assays(nb, assay) %>% 
+    CreateSeuratObject(meta.data = nb@meta.data)
+  nb_assay@reductions$umap <- nb@reductions$umap
+  saveRDS(nb_assay, path_join(c(outdir, str_glue("nb_assay_{assay}.rds")))  )
+}
+ 
+extract_assay("RNA")
+extract_assay("SCT")
