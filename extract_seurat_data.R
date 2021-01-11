@@ -2,8 +2,8 @@
 # datasets when RAM is scarce
 #
 # Creates a series of CSV files with columns 'cell', 'sample', and various other
-# columns, depending on the exported data; as well as an RDS file with a Seurat
-# object that only contains the RNA assay
+# columns, depending on the exported data; as well as two RDS files with a
+# Seurat object that only contains the RNA and SCT assay, respectively
 #
 # Currently, the following files are generated:
 # * nb_tsne.csv
@@ -11,7 +11,8 @@
 # * nb_clusters_0.2.csv
 # * nb_clusters_0.5.csv
 # * nb_clusters_0.8.csv
-# * nb_only_RNA.rds
+# * nb_assay_RNA.rds
+# * nb_assay_SCT.rds
 
 library(Seurat)
 library(tidyverse)
@@ -84,9 +85,12 @@ nb@meta.data %>%
 
 
 
-# Extract raw counts ------------------------------------------------------
+# Extract RNA and SCT assay -----------------------------------------------
 
-DefaultAssay(nb) <- "RNA"
-nb$integrated <- NULL
-nb$SCT <- NULL
-nb %>% saveRDS(path_join(c(outdir, "nb_only_RNA.rds")))
+nb$RNA %>%
+  CreateSeuratObject(meta.data = nb@meta.data) %>% 
+  saveRDS(path_join(c(outdir, "nb_assay_RNA.rds")))
+
+nb$SCT %>%
+  CreateSeuratObject(meta.data = nb@meta.data) %>% 
+  saveRDS(path_join(c(outdir, "nb_assay_SCT.rds")))
