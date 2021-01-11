@@ -1,5 +1,5 @@
-# Integrate scRNAseq datasets vie one of the methods provided by Seurat
-# For large datasets, run this script in batch mode in the HPC cluster
+# Integrate scRNA-seq datasets via one of the methods provided by Seurat
+# For large datasets, run this script in batch mode on the HPC cluster
 # (via sge_job_integrate.sh)
 
 library(Seurat)
@@ -20,33 +20,27 @@ data_dir <- "data_raw"
 #              and integration anchors (nb_anchors.rds)
 #   * samples, data frame with two columns 'sample_name' and 'sample_file'
 
-# (A) integrate all datasets with SCTrans
+# (A) integrate all datasets
 workflow <- "sctrans"
 out_dir <- "data_generated/all_datasets_current"
-samples <- tibble(
-  sample_file = dir_ls(
-    data_dir,
-    recurse = TRUE,
-    regexp = "filtered_feature_bc_matrix.h5"
-  ),
-  sample_name = str_match(sample_file, "/[^_]*_(.*)_trans")[, 2]
-) %>%
-  filter(sample_name != "16_4503_Re_DOWN")
+samples <-
+  tibble(
+    sample_file = dir_ls(
+      data_dir,
+      recurse = TRUE,
+      regexp = "filtered_feature_bc_matrix.h5"
+    ),
+    bsf_id = str_match(sample_file, "/(.*)_trans")[, 2]
+  ) %>%
+  left_join(
+    read_csv("data_raw/metadata/sample_groups.csv", comment = "#"),
+    by = "bsf_id"
+  ) %>% 
+    select(sample_file, sample_name = sample) %>% 
+    drop_na()
 
-# (B) integrate all datasets with the standard approach
-# workflow <- "standard"
-# out_dir <- "data_generated/all_datasets_lm"
-# samples <- tibble(
-#   sample_file = dir_ls(
-#     data_dir,
-#     recurse = TRUE,
-#     regexp = "filtered_feature_bc_matrix.h5"
-#   ),
-#   sample_name = str_match(sample_file, "/[^_]*_(.*)_trans")[, 2]
-# ) %>% 
-#   filter(sample_name != "16_4503_Re_DOWN")
 
-# (C) test workflow on a small dataset
+# (B) test workflow on a small dataset
 # workflow <- "sctrans"
 # out_dir <- "data_generated/3_datasets"
 # samples <- c(
@@ -96,7 +90,11 @@ if (workflow == "sctrans") {
         CreateSeuratObject(sample_name) %>% 
         AddMetaData(sample_name, col.name = "sample") %>%
         PercentageFeatureSet(pattern = "^MT-", col.name = "percent.mt") %>% 
-        subset(subset = nFeature_RNA > 200 & nFeature_RNA < 5000 & percent.mt < 10) %>% 
+        subset(subset =
+                 nFeature_RNA > 200 &
+                 nFeature_RNA < 5000 &
+                 percent.mt < 10
+        ) %>% 
         SCTransform(
           vars.to.regress = "percent.mt",
           verbose = FALSE,
