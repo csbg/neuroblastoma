@@ -1,22 +1,24 @@
 # Extract various data from a Seurat object to facilitate analysis of large
-# datasets when RAM is scarce
+# datasets when RAM is scarce.
 #
-# Creates a series of CSV files with columns 'cell', 'sample', and various other
-# columns, depending on the exported data; as well as two RDS files with a
-# Seurat object that only contains the RNA and SCT assay, respectively
+# CSV files contain columns `cell` and `sample`:
+# * nb_tsne.csv - tSNE coordinates in columns `UMAP_1` and `UMAP_2`
+# * nb_umap.csv - UMAP coordinates in columns `tSNE_1` and `tSNE_2`
+# * nb_clusters_[res].csv - Cluster IDs in column `integrated_snn_res.[res]`,
+#                           where [res] is 0.2, 0.5, or 0.8
 #
-# Currently, the following files are generated:
-# * nb_tsne.csv
-# * nb_umap.csv
-# * nb_clusters_0.2.csv
-# * nb_clusters_0.5.csv
-# * nb_clusters_0.8.csv
-# * nb_assay_RNA.rds
-# * nb_assay_SCT.rds
+# TRE files contain dendrograms in Newick tree format, which describe cluster
+# similarities:
+# * nb_dendrogram_[res].tre - Dendrogram for clusters at resolution [res]
+#
+# RDS files contain a Seurat object with a single assay:
+# * nb_assay_RNA.rds - only the RNA assay
+# * nb_assay_SCT.rds - only the SCT assay
 
 library(Seurat)
 library(tidyverse)
 library(fs)
+library(ape)
 
 
 
@@ -43,45 +45,44 @@ nb <-
 
 
 
-# Extract data ------------------------------------------------------------
+# Extract dimensional reductions ------------------------------------------
 
-id_col <-
-  nb@meta.data %>% 
-  select(sample) %>%
-  as_tibble(rownames = "cell")
-
-export_embedding <- function(data, filename) {
+export_reduction <- function(reduction) {
   left_join(
-    id_col,
-    data,
+    nb@meta.data %>% 
+      select(sample) %>%
+      as_tibble(rownames = "cell"),
+    Embeddings(nb, reduction) %>%
+      as_tibble(rownames = "cell"),
     by = "cell"
   ) %>%
-    write_csv(path_join(c(outdir, filename)))
+    write_csv(path_join(c(outdir, str_glue("nb_{reduction}.csv"))))
 }
 
+export_reduction("tsne")
+export_reduction("umap")
 
-Embeddings(nb, "tsne") %>%
-  as_tibble(rownames = "cell") %>% 
-  export_embedding("nb_tsne.csv")
 
-Embeddings(nb, "umap") %>%
-  as_tibble(rownames = "cell") %>% 
-  export_embedding("nb_umap.csv")
 
-nb@meta.data %>%
-  select(sample, integrated_snn_res.0.2) %>%
-  rownames_to_column("cell") %>% 
-  write_csv(path_join(c(outdir, "nb_clusters_0.2.csv")))
+# Extract clusters and dendrograms ----------------------------------------
 
-nb@meta.data %>%
-  select(sample, integrated_snn_res.0.5) %>%
-  rownames_to_column("cell") %>% 
-  write_csv(path_join(c(outdir, "nb_clusters_0.5.csv")))
+extract_cluster <- function(res) {
+  cluster_col <- str_glue("integrated_snn_res.{res}")
+  
+  nb@meta.data %>%
+    select(sample, {{cluster_col}}) %>%
+    rownames_to_column("cell") %>% 
+    write_csv(path_join(c(outdir, str_glue("nb_clusters_{res}.csv"))))
+  
+  Idents(nb) <- cluster_col
+  nb <- BuildClusterTree(nb)
+  Tool(nb, "BuildClusterTree") %>%
+    write.tree(path_join(c(outdir, str_glue("nb_dendrogram_{res}.tre"))))
+}
 
-nb@meta.data %>%
-  select(sample, integrated_snn_res.0.8) %>%
-  rownames_to_column("cell") %>% 
-  write_csv(path_join(c(outdir, "nb_clusters_0.8.csv")))
+extract_cluster("0.2")
+extract_cluster("0.5")
+extract_cluster("0.8")
 
 
 

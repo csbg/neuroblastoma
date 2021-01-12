@@ -81,5 +81,5 @@ p <-
       )
   )
 
-wrap_plots(p, nrow = 4)
-ggsave("plots/qc_plots.jpg", dpi = 300, units = "mm", width = 400, height = 400)
+wrap_plots(p, ncol = 6)
+ggsave("plots/qc_plots.jpg", dpi = 300, units = "mm", width = 600, height = 300)
