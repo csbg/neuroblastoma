@@ -1,4 +1,4 @@
-# Analysis of scRNA-seq and ATAC-seq data from ultra-high-risk neuroblastoma
+# Analysis of scRNA-seq and scATAC-seq data from bone marrow cells of ultra-high-risk neuroblastoma patients
 
 ## Folders
 
@@ -7,11 +7,14 @@
   - `3_datasets`: Three datasets integrated with SCTransform; small datasets that can be used for testing purposes
   - `all_datasets_v1`: Initial attempt at integrating all datasets with SCTransform; one sample was duplicated (with different read lengths)
   - `all_datasets_v2`: All (13) datasets integrated with SCTransform, but no QC
-  - `all_datasets_current`: All datasets with QC based on feature count and mitochondrial genes
+  - `all_datasets_v3`: All (13) datasets with QC based on feature count and mitochondrial genes
+  - `all_datasets_current`: Adds four additional datasets (now 17)
 
 * `data_raw`: Cell Ranger output downloaded from [here](https://biomedical-sequencing.at/projects/BSA_0407_STM_Neuroblastoma_2ba0210fb73d412397728e8a97a3e423). Subfolders ending in `_transcriptome` and `_ATAC` contain scRNA-seq and ATAC-seq data, respectively. `metadata` contains various additional information (as provided by our collaborators). Notably, `sample_groups.csv` contains mappings from samples to neuroblastoma groups.
 
 * `doc`: project documentation
+
+* `literature`: relevant publications
 
 * `plots`: generated plots
 
@@ -20,10 +23,11 @@
 
 * [integrate_samples.R] - integrate selected scRNA-seq samples; invoke via [sge_job_integrate.sh]
 * [cell_types_singler.R] - perform cell type classification via singler; invoke via [sge_job_singler.sh]
-* [extract_seurat_data.R] - extract important data from (large) Seurat object to (smaller) CSV files
+* [extract_seurat_data.R] - extract important data from a singl (large) Seurat object to (smaller) CSV files and Seurat objects that only contain a single assay
 * [conserved_markers.R] - find conserved markers; invoke via [sge_job_consmark.sh]
-* [summary_integration.R] - analysis of integrated data
-* [plot_markers.R] - misc plots of markers
+* [analysis_integration.R] - analysis of integrated data
+* [plot_markers.R] - misc plots of markers (work in progress)
+* [diff_exp.R] - differential expression (work in progress)
 
 ## Other analyses
 
