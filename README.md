@@ -31,6 +31,7 @@
 
 ## Other analyses
 
+* [barcodes_seurat_cellranger.R] - create a table that maps cellranger and Seurat barcodes
 * [compare_reads.Rmd] - compare two samples that differ in read length (50 vs 75 bp)
 * [download_data.R] - download selected raw data
 * [plot_qc_metrics.R] - plot QC metrics for cell filtering (i.e., % of mitochondrial genes etc.)
