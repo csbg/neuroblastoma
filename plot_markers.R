@@ -2,6 +2,7 @@ library(Seurat)
 library(tidyverse)
 library(fs)
 library(patchwork)
+library(viridis)
 
 ggsave_default <- function(filename, width = 297, height = 210,
                            crop = TRUE, ...) {
@@ -23,7 +24,8 @@ ggsave_default <- function(filename, width = 297, height = 210,
 
 # Load data ---------------------------------------------------------------
 
-nb <- readRDS("data_generated/all_datasets_current/nb_only_RNA.rds")
+nb <- readRDS("data_generated/all_datasets_current/nb_assay_SCT.rds")
+Idents(nb) <- "integrated_snn_res.0.5"
 
 nb@meta.data <- 
   nb@meta.data %>% 
@@ -31,110 +33,110 @@ nb@meta.data <-
   left_join(
     read_csv(
       "data_raw/metadata/sample_groups.csv",
-      col_types = "cf",
+      col_types = "ccf",
       comment = "#"
     ) %>%
+      distinct(sample, group) %>% 
       mutate(group = fct_relevel(group, "I", "II", "III", "IV")),
     by = "sample"
   ) %>%
-  left_join(
-    read_csv("data_generated/all_datasets_current/nb_singler.csv"),
-    by = "cell"
-  ) %>% 
-  extract(
-    cell_type,
-    into = "cell_type_broad",
-    regex = "([^:]*)",
-    remove = FALSE
-  ) %>%
   column_to_rownames("cell")
-
-canonical_markers <-
-  read_csv("data_raw/metadata/cell_type_marker_combinations.csv")
 
 
 
 # Mitochondrial genes -----------------------------------------------------
 
-FeaturePlot(nb, "percent.mt")
+FeaturePlot(nb, "percent.mt", coord.fixed = TRUE) +
+  scale_color_viridis(option = "viridis")
+ggsave_default("qc_mtgene_umap", width = 200, height = 200)
 
 ggplot(nb@meta.data, aes(integrated_snn_res.0.5, percent.mt)) +
   geom_violin(aes(fill = integrated_snn_res.0.5), show.legend = FALSE) +
   geom_jitter(alpha = .1) +
-  xlab("Cluter") +
-  ylab("% mitochondrial genes")
-
-
-
-# NB markers --------------------------------------------------------------
-
-FeaturePlot(
-  nb,
-  c("L1CAM", "MYCN", "PHOX2B", "B4GALNT1", "NCAM1"),
-  min.cutoff = "q5",
-  max.cutoff = "q95",
-  coord.fixed = TRUE,
-  ncol = 3,
-  order = TRUE
-)
-ggsave_default("markers/nb_markers")
-
-
-Idents(nb) <- "integrated_snn_res.0.5"
-
-DotPlot(
-  nb,
-  features = c("L1CAM", "MYCN", "PHOX2B", "B4GALNT1", "NCAM1"),
-  split.by = "group",
-  cols = c("#1b9e77", "#d95f02", "#7570b3", "#e7298a")
-)
-ggsave_default("markers/nb_dotplot", height = 400, width = 210)
+  xlab("Cluster") +
+  ylab("% mitochondrial genes") +
+  theme_classic()
+ggsave_default("qc_mtgene_per_cluster", width = 200, height = 150)
 
 
 
 # Canonical cell type markers ---------------------------------------------
 
-plot_markers <- function(cell_type, genes) {
-  message("Plotting ", cell_type)
-  
-  genes <- str_split(genes, ",")[[1]]
-  
-  # p <-
-  #   FeaturePlot(
-  #   nb,
-  #   genes,
-  #   min.cutoff = "q5",
-  #   max.cutoff = "q95",
-  #   coord.fixed = TRUE,
-  #   order = TRUE,
-  #   combine = FALSE
-  # ) %>% 
-  #   wrap_plots() +
-  #   plot_annotation(caption = str_glue("Canonical markers for {cell_type}"))
-  # 
-  # ggsave_default(str_glue("markers/feature_{cell_type}"))
-  # p
-  
-  Idents(nb) <- "cell_type_broad"
-  RidgePlot(nb, genes)
-  ggsave_default(str_glue("markers/ridge_{cell_type}"))
-}
+markers <- read_csv("data_raw/metadata/cell_markers.csv", comment = "#")
 
-pwalk(
-  canonical_markers[1, ],
-  plot_markers
-)
+Idents(nb) <- 
+  fct_relevel(
+    Idents(nb),
+    "0", "14", "7", "21",               # T cells
+    "2", "8",                           # NK cells
+    "1", "6", "13", "20",               # B cells
+    "3", "11", "19", "10", "12", "18",  # myeloid
+    "15",                               # pDC
+    "5", "9",                           # NB
+    "17",                               # erythroblast
+    "16",                               # CMP
+    "4"                                 # other
+  )
 
-FindMarkers()
-RidgePlot(
+DotPlot(nb, features = rev(markers$gene)) +
+  coord_flip() +
+  scale_color_viridis(option = "inferno", direction = -1)
+ggsave_default("markers/canonical_markers")
+
+
+
+# NB markers --------------------------------------------------------------
+
+nb_markers <-
+  markers %>%
+  filter(cell_type == "neuroblastoma") %>%
+  pull(gene)
+
+FeaturePlot(
   nb,
-  c("IL7R", "CCR7")
+  nb_markers,
+  min.cutoff = "q5",
+  max.cutoff = "q95",
+  coord.fixed = TRUE,
+  ncol = 4,
+  order = TRUE
+) &
+  scale_color_viridis(option = "cividis")
+ggsave_default("markers/nb_markers", width = 420, height = 297)
+
+
+# this only works on the cluster
+walk(
+  levels(nb@meta.data$group),
+  function(g) {
+    message("Plotting dotplot for group ", g)
+    group_cells <-
+      nb@meta.data %>%
+      as_tibble(rownames = "cell") %>%
+      filter(group == g) %>%
+      pull(cell)
+    DotPlot(nb[, group_cells], features = nb_markers) +
+      coord_flip() +
+      scale_color_viridis(option = "inferno", direction = -1)
+    ggsave_default(str_glue("markers/nb_dotplot_{g}"),
+                   height = 100, width = 200)
+  }
 )
-ggsave_default("markers/ridge")
 
-
-# TODO
-# use SCtransformed data for plots?
-# make ridgeplot work
-# include other plots
-# unify data loading (with functions defined in summary_integration.R)
+map(
+  levels(nb@meta.data$group),
+  function(g) {
+    message("Plotting dotplot for group ", g)
+    group_cells <-
+      nb@meta.data %>%
+      as_tibble(rownames = "cell") %>%
+      filter(group == g) %>%
+      pull(cell)
+    DotPlot(nb[, group_cells], features = nb_markers) +
+      coord_flip() +
+      scale_color_viridis(option = "inferno", direction = -1)
+  }
+) %>% 
+  wrap_plots()
+ggsave_default(str_glue("markers/nb_dotplot"),
+               height = 200, width = 400)

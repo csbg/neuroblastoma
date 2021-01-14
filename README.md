@@ -26,7 +26,7 @@
 * [extract_seurat_data.R] - extract important data from a singl (large) Seurat object to (smaller) CSV files and Seurat objects that only contain a single assay
 * [conserved_markers.R] - find conserved markers; invoke via [sge_job_consmark.sh]
 * [analysis_integration.R] - analysis of integrated data
-* [plot_markers.R] - misc plots of markers (work in progress)
+* [plot_markers.R] - plot canonical cell type and NB markers
 * [diff_exp.R] - differential expression (work in progress)
 
 ## Other analyses
