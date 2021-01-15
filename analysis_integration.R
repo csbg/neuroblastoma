@@ -5,6 +5,8 @@ library(patchwork)
 library(tidyverse)
 library(ggalluvial)
 library(egg)
+library(ape)
+library(ggtree)
 library(fs)
 
 
@@ -242,6 +244,8 @@ plot_clusters_all(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.5,
                   filename = "clusters_all_UMAP_0.5")
 plot_clusters_all(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.8,
                   filename = "clusters_all_UMAP_0.8")
+plot_clusters_all(nb_data, tSNE_1, tSNE_2, integrated_snn_res.0.5,
+                  filename = "clusters_all_tSNE_0.5")
 
 
 
@@ -403,6 +407,24 @@ plot_clusters_selected(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.5,
                        folder = "clusters_highlighted_UMAP_0.5")
 plot_clusters_selected(nb_data, UMAP_1, UMAP_2, integrated_snn_res.0.8,
                        folder = "clusters_highlighted_UMAP_0.8")
+
+
+
+# Dendrograms -------------------------------------------------------------
+
+cluster_tree <-
+  read.tree("data_generated/all_datasets_current/nb_dendrogram_0.5.tre")
+
+cluster_tree %>% 
+  ggtree(ladderize = FALSE) +
+  geom_tiplab()
+ggsave_default("dendrogram_0.5", height = 100, width = 100)
+
+cluster_tree %>% 
+  drop.tip(c("15", "5", "20", "17")) %>%
+  ggtree(ladderize = FALSE) +
+  geom_tiplab()
+ggsave_default("dendrogram_0.5_zoom", height = 100, width = 100)
 
 
 
