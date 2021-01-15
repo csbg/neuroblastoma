@@ -913,3 +913,81 @@ nb_data %>%
   theme(strip.background = element_blank()) +
   NULL
 ggsave_default("groupwise_abundance_cluster5_9")
+
+
+
+# NB gene signatures ------------------------------------------------------
+
+# TODO: load module scores like other metadata
+nb_signatures <- 
+  read_csv("data_raw/metadata/nb_markers.csv", comment = "#") %>% 
+  group_by(cell_type) %>% 
+  summarise(x = list(gene)) %>% 
+  deframe()
+
+nb_data <-  
+  nb_data %>% 
+  left_join(
+    read_csv("data_generated/all_datasets_current/nb_programs.csv") %>% 
+      select(cell, starts_with("Cluster")) %>% 
+      rename_with(~names(nb_signatures), .cols = starts_with("Cluster")),
+    by = "cell"
+  )
+
+plot_gene_program <- function(data, x, y, clusters,
+                              ncol = 6, filename = NULL) {
+  p <- 
+    data %>% 
+    ggplot(aes({{x}}, {{y}})) +
+    geom_vline(xintercept = 0, size = .25) +
+    geom_hline(yintercept = 0, size = .25) +
+    geom_point(aes(color = factor({{clusters}})), size = .1, show.legend = FALSE) +
+    coord_fixed() +
+    facet_wrap(vars({{clusters}}), ncol = ncol) +
+    theme(panel.grid = element_blank()) +
+    NULL
+  ggsave_default(filename)
+  p
+}
+
+plot_gene_program(nb_data, adrenergic, mesenchymal, integrated_snn_res.0.5,
+                  filename = "gene_programs_am_clusters")
+plot_gene_program(nb_data, noradrenergic, ncc_like, integrated_snn_res.0.5,
+                  filename = "gene_programs_nn_clusters")
+plot_gene_program(nb_data_ctb, adrenergic, mesenchymal, cell_type_broad,
+                  ncol = 5, filename = "gene_programs_am_ctb")
+plot_gene_program(nb_data_ctb, noradrenergic, ncc_like, cell_type_broad,
+                  ncol = 5, filename = "gene_programs_nn_ctb")
+
+
+
+plot_gene_program_cvg <- function(data, x, y, clusters, selected_clusters,
+                                  filename = NULL) {
+  p <-
+    data %>% 
+    filter({{clusters}} %in% selected_clusters) %>% 
+    ggplot(aes({{x}}, {{y}})) +
+    geom_vline(xintercept = 0, size = .25) +
+    geom_hline(yintercept = 0, size = .25) +
+    geom_point(aes(color = group), size = .1, show.legend = FALSE) +
+    scale_color_brewer(palette = "Dark2") +
+    coord_fixed() +
+    facet_grid(vars({{clusters}}), vars(group)) +
+    theme(panel.grid = element_blank()) +
+    NULL
+  ggsave_default(filename)
+  p
+}
+
+plot_gene_program_cvg(nb_data, adrenergic, mesenchymal, integrated_snn_res.0.5,
+                      c(5, 9, 10, 17),
+                      filename = "gene_programs_am_clusters_vs_group")
+plot_gene_program_cvg(nb_data, noradrenergic, ncc_like, integrated_snn_res.0.5,
+                      c(5, 9, 10, 17),
+                      filename = "gene_programs_nn_clusters_vs_group")
+plot_gene_program_cvg(nb_data_ctb, adrenergic, mesenchymal, cell_type_broad,
+                      c("T_cell", "Neurons"),
+                      filename = "gene_programs_am_ctb_vs_groups")
+plot_gene_program_cvg(nb_data_ctb, noradrenergic, ncc_like, cell_type_broad,
+                      c("T_cell", "Neurons"),
+                      filename = "gene_programs_nn_ctb_vs_groups")

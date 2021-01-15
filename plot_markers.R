@@ -140,3 +140,22 @@ map(
   wrap_plots()
 ggsave_default(str_glue("markers/nb_dotplot"),
                height = 200, width = 400)
+
+
+
+# NB gene signatures ------------------------------------------------------
+
+# only works on the HPC cluster
+# TODO: transfer to extract_seurat_data.R
+nb_programs <- 
+  read_csv("data_raw/metadata/nb_markers.csv", comment = "#") %>% 
+  group_by(cell_type) %>% 
+  summarise(x = list(gene)) %>% 
+  deframe()
+
+nb <- AddModuleScore(nb, nb_programs)
+
+nb@meta.data %>% 
+  as_tibble(rownames = "cell") %>% 
+  write_csv("data_generated/all_datasets_current/nb_programs.csv")
+
