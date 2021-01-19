@@ -175,9 +175,15 @@ add_cell_types <- function(df_seurat,
 
 
 singler_data <- load_singler_data("data_generated/all_datasets_current")
+
 nb_data <-
   load_seurat_data("data_generated/all_datasets_current") %>% 
-  add_cell_types(singler_data)
+  add_cell_types(singler_data) %>% 
+  mutate(
+    cell_type_fine_lumped = fct_lump_n(cell_type_fine, 24),
+    cell_type_broad_lumped = fct_lump_prop(cell_type_broad, 0.01)
+  )
+
 
 
 # Clusters ----------------------------------------------------------------
@@ -191,11 +197,18 @@ nb_data <-
 #' @param label_direct If `TRUE`, print cluster labels at cluster mean
 #' @param show_resolution If `TRUE`, print clustering resolution, which is
 #'   derived from the cluster column name.
+#' @param color_scale A ggplot2 color scale used for coloring the points.
+#'   If `NULL`, use the default discrete color scale.
 #' @param filename Name of output file.
 #'
 #' @return A ggplot object.
 plot_clusters_all <- function(data, x, y, clusters, label_direct = TRUE,
-                              show_resolution = TRUE, filename = NULL) {
+                              show_resolution = TRUE, color_scale = NULL,
+                              filename = NULL) {
+  color_scale <-
+    color_scale %||%
+    scale_color_hue(guide = guide_legend(override.aes = list(size = 5)))
+  
   cluster_labels <- 
     data %>% 
     group_by(label = {{clusters}}) %>% 
@@ -225,7 +238,7 @@ plot_clusters_all <- function(data, x, y, clusters, label_direct = TRUE,
           label = str_glue("resolution {res}")
         )
     } +
-    scale_color_hue(guide = guide_legend(override.aes = list(size = 5))) +
+    color_scale +
     coord_fixed() +
     theme_classic() +
     theme(
@@ -496,39 +509,27 @@ plot_clusters_all(nb_data, tSNE_1, tSNE_2, sample, label_direct = FALSE,
 
 # Cell types (SingleR) ----------------------------------------------------
 
-# broad cell types
-nb_data_ctb <- 
-  nb_data %>% 
-  mutate(
-    cell_type_broad = fct_lump_prop(cell_type_broad, 0.01)
-  )
-
-plot_clusters_all(nb_data_ctb, UMAP_1, UMAP_2, cell_type_broad,
+plot_clusters_all(nb_data, UMAP_1, UMAP_2, cell_type_broad_lumped,
                   label_direct = FALSE, show_resolution = FALSE,
                   filename = "celltype_broad_all_UMAP")
 
-plot_clusters_per_sample(nb_data_ctb, UMAP_1, UMAP_2, cell_type_broad,
+plot_clusters_per_sample(nb_data, UMAP_1, UMAP_2, cell_type_broad_lumped,
                          sample, nrow = 3, show_legend = TRUE,
                          filename = "celltype_broad_sample_UMAP")
 
-plot_clusters_highlight(nb_data_ctb, UMAP_1, UMAP_2, cell_type_broad,
+plot_clusters_highlight(nb_data, UMAP_1, UMAP_2, cell_type_broad_lumped,
                         nrow = 3, filename = "celltype_broad_hl_UMAP")
 
 
-# fine cell types
-nb_data_ctf <- 
-  nb_data %>% 
-  mutate(cell_type_fine = fct_lump_n(cell_type_fine, 24))
-
-plot_clusters_all(nb_data_ctf, UMAP_1, UMAP_2, cell_type_fine,
+plot_clusters_all(nb_data, UMAP_1, UMAP_2, cell_type_fine_lumped,
                   label_direct = FALSE, show_resolution = FALSE,
                   filename = "celltype_fine_all_UMAP")
 
-plot_clusters_per_sample(nb_data_ctf, UMAP_1, UMAP_2, cell_type_fine,
+plot_clusters_per_sample(nb_data, UMAP_1, UMAP_2, cell_type_fine_lumped,
                          sample, nrow = 3, show_legend = TRUE,
                          filename = "celltype_fine_sample_UMAP")
 
-plot_clusters_highlight(nb_data_ctf, UMAP_1, UMAP_2, cell_type_fine,
+plot_clusters_highlight(nb_data, UMAP_1, UMAP_2, cell_type_fine_lumped,
                         nrow = 4, filename = "celltype_fine_hl_UMAP")
 
 
@@ -715,7 +716,7 @@ plot_cvt_group <- function(data, cell_types, clusters, selected_clusters,
       levels(data$group),
       function(group) {
         data_plot <- 
-          nb_data_ctb %>%
+          data %>%
           filter(
             {{clusters}} %in% {{selected_clusters}},
             group == {{group}}
@@ -762,10 +763,10 @@ plot_cvt_group <- function(data, cell_types, clusters, selected_clusters,
   p
 }
 
-plot_cvt_group(nb_data_ctb, cell_type_broad, integrated_snn_res.0.5,
+plot_cvt_group(nb_data, cell_type_broad_lumped, integrated_snn_res.0.5,
                selected_clusters = 5,
                filename = "cvt_bar_broad_0.5_groupwise_cluster_5")
-plot_cvt_group(nb_data_ctb, cell_type_broad, integrated_snn_res.0.5,
+plot_cvt_group(nb_data, cell_type_broad_lumped, integrated_snn_res.0.5,
                selected_clusters = 9,
                filename = "cvt_bar_broad_0.5_groupwise_cluster_9")
 
@@ -858,14 +859,14 @@ plot_cluster_size(nb_data, integrated_snn_res.0.5, angle_col = "0",
                   color_palette = brewer.pal(9, "Greens"),
                   filename = "cluster_size_vs_samples")
 
-nb_data_ctb %>%
-  mutate(cell_type = fct_explicit_na(cell_type_broad)) %>% 
+nb_data %>%
+  mutate(cell_type = fct_explicit_na(cell_type_broad_lumped)) %>% 
   plot_cluster_size(cell_type, center_color_scale = FALSE,
                     color_palette = brewer.pal(9, "Greens"),
                     filename = "celltype_broad_count_vs_samples")
 
-nb_data_ctf %>%
-  mutate(cell_type = fct_explicit_na(cell_type_fine)) %>% 
+nb_data %>%
+  mutate(cell_type = fct_explicit_na(cell_type_fine_lumped)) %>% 
   plot_cluster_size(cell_type, center_color_scale = FALSE,
                     color_palette = brewer.pal(9, "Greens"),
                     filename = "celltype_fine_count_vs_samples")
@@ -954,9 +955,9 @@ plot_gene_program(nb_data, adrenergic, mesenchymal, integrated_snn_res.0.5,
                   filename = "gene_programs_am_clusters")
 plot_gene_program(nb_data, noradrenergic, ncc_like, integrated_snn_res.0.5,
                   filename = "gene_programs_nn_clusters")
-plot_gene_program(nb_data_ctb, adrenergic, mesenchymal, cell_type_broad,
+plot_gene_program(nb_data, adrenergic, mesenchymal, cell_type_broad_lumped,
                   ncol = 5, filename = "gene_programs_am_ctb")
-plot_gene_program(nb_data_ctb, noradrenergic, ncc_like, cell_type_broad,
+plot_gene_program(nb_data, noradrenergic, ncc_like, cell_type_broad_lumped,
                   ncol = 5, filename = "gene_programs_nn_ctb")
 
 
@@ -985,9 +986,9 @@ plot_gene_program_cvg(nb_data, adrenergic, mesenchymal, integrated_snn_res.0.5,
 plot_gene_program_cvg(nb_data, noradrenergic, ncc_like, integrated_snn_res.0.5,
                       c(5, 9, 10, 17),
                       filename = "gene_programs_nn_clusters_vs_group")
-plot_gene_program_cvg(nb_data_ctb, adrenergic, mesenchymal, cell_type_broad,
+plot_gene_program_cvg(nb_data, adrenergic, mesenchymal, cell_type_broad_lumped,
                       c("T_cell", "Neurons"),
                       filename = "gene_programs_am_ctb_vs_groups")
-plot_gene_program_cvg(nb_data_ctb, noradrenergic, ncc_like, cell_type_broad,
+plot_gene_program_cvg(nb_data, noradrenergic, ncc_like, cell_type_broad_lumped,
                       c("T_cell", "Neurons"),
                       filename = "gene_programs_nn_ctb_vs_groups")
