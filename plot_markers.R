@@ -44,22 +44,6 @@ nb@meta.data <-
 
 
 
-# Mitochondrial genes -----------------------------------------------------
-
-FeaturePlot(nb, "percent.mt", coord.fixed = TRUE) +
-  scale_color_viridis(option = "viridis")
-ggsave_default("qc_mtgene_umap", width = 200, height = 200)
-
-ggplot(nb@meta.data, aes(integrated_snn_res.0.5, percent.mt)) +
-  geom_violin(aes(fill = integrated_snn_res.0.5), show.legend = FALSE) +
-  geom_jitter(alpha = .1) +
-  xlab("Cluster") +
-  ylab("% mitochondrial genes") +
-  theme_classic()
-ggsave_default("qc_mtgene_per_cluster", width = 200, height = 150)
-
-
-
 # Canonical cell type markers ---------------------------------------------
 
 markers <- read_csv("data_raw/metadata/cell_markers.csv", comment = "#")

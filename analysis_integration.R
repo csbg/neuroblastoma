@@ -98,6 +98,7 @@ load_singler_data <- function(folder) {
 #'   coordinates, cluster IDs, and patent groups.
 load_seurat_data <- function(folder) {
   files <- c(
+    "nb_general.csv",
     "nb_clusters_0.2.csv",
     "nb_clusters_0.5.csv",
     "nb_clusters_0.8.csv",
@@ -992,3 +993,20 @@ plot_gene_program_cvg(nb_data, adrenergic, mesenchymal, cell_type_broad_lumped,
 plot_gene_program_cvg(nb_data, noradrenergic, ncc_like, cell_type_broad_lumped,
                       c("T_cell", "Neurons"),
                       filename = "gene_programs_nn_ctb_vs_groups")
+
+
+
+# Quality control ---------------------------------------------------------
+
+plot_clusters_all(nb_data, UMAP_1, UMAP_2, percent.mt,
+                  label_direct = FALSE, show_resolution = FALSE,
+                  color_scale = scale_color_viridis_c(),
+                  filename = "qc_mtgene_umap")
+
+ggplot(nb_data, aes(integrated_snn_res.0.5, percent.mt)) +
+  geom_violin(aes(fill = integrated_snn_res.0.5), show.legend = FALSE) +
+  geom_jitter(alpha = .1) +
+  xlab("Cluster") +
+  ylab("% mitochondrial genes") +
+  theme_classic()
+ggsave_default("qc_mtgene_per_cluster", width = 200, height = 150)
