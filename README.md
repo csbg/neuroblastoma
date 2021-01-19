@@ -23,6 +23,7 @@
 
 * [integrate_samples.R] - integrate selected scRNA-seq samples; invoke via [sge_job_integrate.sh]
 * [cell_types_singler.R] - perform cell type classification via singler; invoke via [sge_job_singler.sh]
+* [make_subclusters.R] - perform subclustering
 * [extract_seurat_data.R] - extract important data from a singl (large) Seurat object to (smaller) CSV files and Seurat objects that only contain a single assay
 * [conserved_markers.R] - find conserved markers; invoke via [sge_job_consmark.sh]
 * [analysis_integration.R] - analysis of integrated data
