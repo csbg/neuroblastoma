@@ -25,9 +25,8 @@ ggsave_default <- function(filename, width = 297, height = 210,
 # Load data ---------------------------------------------------------------
 
 nb <- readRDS("data_generated/all_datasets_current/nb_assay_SCT.rds")
-Idents(nb) <- "integrated_snn_res.0.5"
 
-nb@meta.data <- 
+nb@meta.data <-
   nb@meta.data %>% 
   rownames_to_column("cell") %>% 
   left_join(
@@ -40,6 +39,10 @@ nb@meta.data <-
       mutate(group = fct_relevel(group, "I", "II", "III", "IV")),
     by = "sample"
   ) %>%
+  left_join(
+    read_csv("data_generated/all_datasets_current/nb_clusters_refined.csv"),
+    by = "cell"
+  ) %>% 
   column_to_rownames("cell")
 
 
@@ -50,7 +53,7 @@ markers <- read_csv("data_raw/metadata/cell_markers.csv", comment = "#")
 
 Idents(nb) <- 
   fct_relevel(
-    Idents(nb),
+    nb@meta.data$integrated_snn_res.0.5,
     "0", "14", "7", "21",               # T cells
     "2", "8",                           # NK cells
     "1", "6", "13", "20",               # B cells
@@ -67,6 +70,26 @@ DotPlot(nb, features = rev(markers$gene)) +
   scale_color_viridis(option = "inferno", direction = -1)
 ggsave_default("markers/canonical_markers")
 
+
+
+Idents(nb) <- 
+  fct_relevel(
+    nb@meta.data$refined_cluster,
+    "0", "14", "7a", "7b", "21a", "4b", "9b",  # T cells
+    "2", "8", "21b",                           # NK cells
+    "1a", "1b", "6a", "6b", "13", "20a", "5b", # B cells
+    "3", "11", "19", "10", "12", "18",         # myeloid
+    "15a", "15b",                              # pDC
+    "5a", "9a", "20b",                         # NB
+    "17",                                      # erythroblast
+    "16",                                      # CMP
+    "4a",                                      # other
+  )
+
+DotPlot(nb, features = rev(markers$gene)) +
+  coord_flip() +
+  scale_color_viridis(option = "inferno", direction = -1)
+ggsave_default("markers/canonical_markers_refined")
 
 
 # NB markers --------------------------------------------------------------
