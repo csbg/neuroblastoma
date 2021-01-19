@@ -2,6 +2,7 @@
 # datasets when RAM is scarce.
 #
 # CSV files contain columns `cell` and `sample`:
+# * nb_general.csv - molecule and feature counts, % mitochondrial genes
 # * nb_tsne.csv - tSNE coordinates in columns `UMAP_1` and `UMAP_2`
 # * nb_umap.csv - UMAP coordinates in columns `tSNE_1` and `tSNE_2`
 # * nb_clusters_[res].csv - Cluster IDs in column `integrated_snn_res.[res]`,
@@ -42,6 +43,20 @@ nb <-
   FindClusters(resolution = 0.2) %>% 
   FindClusters(resolution = 0.5) %>% 
   FindClusters(resolution = 0.8)
+
+
+
+# Extract general metadata ------------------------------------------------
+
+nb@meta.data %>% 
+  as_tibble(rownames = "cell") %>% 
+  select(
+    cell, sample,
+    nCount_RNA, nFeature_RNA,
+    nCount_SCT, nFeature_SCT,
+    percent.mt
+  ) %>% 
+  write_csv(path_join(c(outdir, str_glue("nb_general.csv"))))
 
 
 
