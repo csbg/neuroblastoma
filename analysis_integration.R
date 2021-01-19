@@ -103,7 +103,8 @@ load_seurat_data <- function(folder) {
     "nb_clusters_0.5.csv",
     "nb_clusters_0.8.csv",
     "nb_tsne.csv",
-    "nb_umap.csv"
+    "nb_umap.csv",
+    "nb_subclusters.csv"
   )
   
   nb_groups <-
@@ -123,12 +124,11 @@ load_seurat_data <- function(folder) {
     left_join(nb_groups, by = "sample") %>%
     mutate(
       sample = as_factor(sample) %>% fct_reorder(sample_id),
-      integrated_snn_res.0.2 = as_factor(integrated_snn_res.0.2) %>%
-        fct_inseq(),
-      integrated_snn_res.0.5 = as_factor(integrated_snn_res.0.5) %>%
-        fct_inseq(),
-      integrated_snn_res.0.8 = as_factor(integrated_snn_res.0.8) %>%
-        fct_inseq()
+      across(
+        c(integrated_snn_res.0.2, integrated_snn_res.0.5,
+          integrated_snn_res.0.8, subcluster_0.2, subcluster_0.5),
+        ~as_factor(.x) %>% fct_inseq()
+      )
     ) %>%
     select(!sample_id)
 }
@@ -1010,3 +1010,170 @@ ggplot(nb_data, aes(integrated_snn_res.0.5, percent.mt)) +
   ylab("% mitochondrial genes") +
   theme_classic()
 ggsave_default("qc_mtgene_per_cluster", width = 200, height = 150)
+
+
+
+# Subclustering -----------------------------------------------------------
+
+plot_subclusters <- function(data, x, y, superclusters, subclusters,
+                             label_direct = TRUE, color_scale = NULL,
+                             filename = NULL) {
+  cluster_labels <- 
+    data %>% 
+    group_by({{superclusters}}, label = {{subclusters}}) %>% 
+    summarise({{x}} := mean({{x}}), {{y}} := mean({{y}}))
+  
+  color_scale <-
+    color_scale %||%
+    scale_color_hue(guide = guide_legend(override.aes = list(size = 5)))
+  
+  p <- 
+    data %>% 
+    ggplot(aes({{x}}, {{y}})) +
+    geom_point(
+      aes(color = {{subclusters}}),
+      size = .01,
+      shape = 20,
+      show.legend = !label_direct
+    ) +
+    {
+      if (label_direct)
+        geom_text(data = cluster_labels, aes(label = label), size = 3)
+    } +
+    color_scale +
+    facet_wrap(vars({{superclusters}})) +
+    coord_fixed() +
+    theme_classic() +
+    theme(
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+    NULL
+  
+  ggsave_default(filename, width = 420, height = 297)
+  p
+}
+
+plot_subclusters(nb_data, subcluster_UMAP_1, subcluster_UMAP_2,
+                 integrated_snn_res.0.5, percent.mt,
+                 color_scale = scale_color_viridis_c(),
+                 label_direct = FALSE, filename = "subcluster_mtgenes")
+
+plot_subclusters(nb_data, subcluster_UMAP_1, subcluster_UMAP_2,
+                 integrated_snn_res.0.5, nFeature_SCT,
+                 color_scale = scale_color_viridis_c(),
+                 label_direct = FALSE, filename = "subcluster_nFeature")
+
+plot_subclusters(nb_data, subcluster_UMAP_1, subcluster_UMAP_2,
+                 integrated_snn_res.0.5, nCount_SCT,
+                 color_scale = scale_color_viridis_c(),
+                 label_direct = FALSE, filename = "subcluster_nCount")
+
+
+plot_subclusters(nb_data, subcluster_UMAP_1, subcluster_UMAP_2,
+                 integrated_snn_res.0.5, subcluster_0.2,
+                 filename = "subcluster_0.2")
+
+plot_subclusters(nb_data, subcluster_UMAP_1, subcluster_UMAP_2,
+                 integrated_snn_res.0.5, cell_type_broad_lumped,
+                 label_direct = FALSE, filename = "subcluster_ctb")
+
+
+
+plot_scvt_bar <- function(data, cell_types, superclusters, subclusters,
+                          lump_n = 10, filename = NULL, ...) {
+  pdata <- 
+    data %>% 
+    transmute(
+      cell_type = {{cell_types}},
+      supercluster = {{superclusters}},
+      subcluster = {{subclusters}}
+    )
+  
+  plot_single <- function(supercluster, subcluster) {
+    bar_data <- 
+      pdata %>% 
+      filter(supercluster == {{supercluster}}, subcluster == {{subcluster}})
+    
+    if (nrow(bar_data) == 0)
+      return(plot_spacer())
+    
+    bar_data %>%   
+      mutate(cell_type = fct_lump_n(cell_type, lump_n)) %>%
+      count(cell_type) %>%
+      mutate(
+        cell_type = cell_type %>% 
+          fct_reorder(n) %>%
+          fct_relevel("Other"),
+        n_rel = n / sum(n) * 100
+      ) %>% 
+      ggplot(aes(cell_type, n)) +
+      geom_col(aes(fill = n_rel), show.legend = FALSE) +
+      annotate("text_npc", npcx = 0.1, npcy = 0.9,
+               label = str_glue("{supercluster}-{subcluster}")) +
+      xlab("") +
+      ylab("") +
+      scale_fill_distiller(
+        palette = "YlOrRd",
+        direction = 1,
+        limits = c(0, 100)
+      ) +
+      coord_flip() +
+      theme_classic() +
+      theme(
+        axis.text.x = element_text(angle = 270, vjust = 0.5),
+        strip.background = element_blank(),
+        strip.text = element_text(face = "bold")
+      ) +
+      NULL
+  }
+  
+  p <- 
+    list(
+      supercluster = as.integer(levels(pdata$supercluster)),
+      subcluster = as.integer(levels(pdata$subcluster))
+    ) %>% 
+    cross_df() %>% 
+    arrange(supercluster) %>% 
+    pmap(plot_single) %>%
+    wrap_plots(nrow = nlevels(pdata$supercluster))
+  set_last_plot(p)
+  
+  ggsave_default(filename, width = 420, height = 840, crop = FALSE)
+  p
+}
+
+plot_scvt_bar(nb_data, cell_type_fine, integrated_snn_res.0.5, subcluster_0.2,
+              lump_n = 4, filename = "subcluster_bars")
+
+  
+
+nb_data_refined <- 
+  nb_data %>% 
+  mutate(
+    supercluster = as.character(integrated_snn_res.0.5),
+    subcluster = as.character(subcluster_0.2)
+  ) %>% 
+  left_join(
+    read_csv(
+      "data_generated/all_datasets_current/subcluster_mapping.csv",
+      col_types = "ccc"
+    ),
+    by = c("supercluster", "subcluster")
+  ) %>% 
+  select(!c(supercluster, subcluster)) %>% 
+  mutate(
+    refined_cluster =
+      refined_cluster %>% 
+      coalesce(integrated_snn_res.0.5) %>% 
+      as_factor() %>% 
+      fct_relevel(function(l) str_sort(l, numeric = TRUE))
+  )
+
+plot_clusters_all(nb_data_refined, UMAP_1, UMAP_2, refined_cluster,
+                  show_resolution = FALSE,
+                  filename = "clusters_all_UMAP_0.5_refined")
+
+nb_data_refined %>% 
+  select(cell, refined_cluster) %>% 
+  write_csv("data_generated/all_datasets_current/nb_clusters_refined.csv")
