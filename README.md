@@ -35,6 +35,7 @@
 * [barcodes_seurat_cellranger.R] - create a table that maps cellranger and Seurat barcodes
 * [compare_reads.Rmd] - compare two samples that differ in read length (50 vs 75 bp)
 * [download_data.R] - download selected raw data
+* [merge_samples.R] - merge selected samples without actually integrating them; invoke via [sge_job_merge.sh]
 * [plot_qc_metrics.R] - plot QC metrics for cell filtering (i.e., % of mitochondrial genes etc.)
 * [summary_cellranger_metrics.R] - generate summary plots of Cell Ranger QC metrics
 * [summary_cellranger_tsne.R] - generate overview of tSNEs calculated by Cell Ranger
