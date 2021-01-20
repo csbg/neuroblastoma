@@ -174,16 +174,40 @@ add_cell_types <- function(df_seurat,
   left_join(df_seurat, df_singler, by = c("cell", "sample"))
 }
 
+add_refined_clusters <- function(df_seurat, folder) {
+  refined_cluster_file <- str_glue("{folder}/manual/subcluster_mapping.csv")
+  
+  df_seurat %>% 
+    mutate(
+      supercluster = as.character(integrated_snn_res.0.5),
+      subcluster = as.character(subcluster_0.2)
+    ) %>% 
+    left_join(
+      read_csv(refined_cluster_file, col_types = "ccc"),
+      by = c("supercluster", "subcluster")
+    ) %>% 
+    select(!c(supercluster, subcluster)) %>% 
+    mutate(
+      refined_cluster =
+        refined_cluster %>% 
+        coalesce(integrated_snn_res.0.5) %>% 
+        as_factor() %>% 
+        fct_relevel(function(l) str_sort(l, numeric = TRUE))
+    )
+}
 
-singler_data <- load_singler_data("data_generated/all_datasets_current")
+infolder <- "data_generated/all_datasets_current"
+
+singler_data <- load_singler_data(infolder)
 
 nb_data <-
-  load_seurat_data("data_generated/all_datasets_current") %>% 
+  load_seurat_data(infolder) %>% 
   add_cell_types(singler_data) %>% 
   mutate(
     cell_type_fine_lumped = fct_lump_n(cell_type_fine, 24),
     cell_type_broad_lumped = fct_lump_prop(cell_type_broad, 0.01)
-  )
+  ) %>% 
+  add_refined_clusters(infolder)
 
 
 
@@ -1148,32 +1172,8 @@ plot_scvt_bar(nb_data, cell_type_fine, integrated_snn_res.0.5, subcluster_0.2,
 
   
 
-nb_data_refined <- 
-  nb_data %>% 
-  mutate(
-    supercluster = as.character(integrated_snn_res.0.5),
-    subcluster = as.character(subcluster_0.2)
-  ) %>% 
-  left_join(
-    read_csv(
-      "data_generated/all_datasets_current/subcluster_mapping.csv",
-      col_types = "ccc"
-    ),
-    by = c("supercluster", "subcluster")
-  ) %>% 
-  select(!c(supercluster, subcluster)) %>% 
-  mutate(
-    refined_cluster =
-      refined_cluster %>% 
-      coalesce(integrated_snn_res.0.5) %>% 
-      as_factor() %>% 
-      fct_relevel(function(l) str_sort(l, numeric = TRUE))
-  )
 
-plot_clusters_all(nb_data_refined, UMAP_1, UMAP_2, refined_cluster,
+
+plot_clusters_all(nb_data, UMAP_1, UMAP_2, refined_cluster,
                   show_resolution = FALSE,
                   filename = "clusters_all_UMAP_0.5_refined")
-
-nb_data_refined %>% 
-  select(cell, refined_cluster) %>% 
-  write_csv("data_generated/all_datasets_current/nb_clusters_refined.csv")
