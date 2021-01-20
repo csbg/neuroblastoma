@@ -1039,6 +1039,19 @@ ggsave_default("qc_mtgene_per_cluster", width = 200, height = 150)
 
 # Subclustering -----------------------------------------------------------
 
+#' Plot all sub clusters.
+#'
+#' @param data Data extracted from a Seurat object.
+#' @param x Column with x-axis data.
+#' @param y Column with y-axis data.
+#' @param superclusters Column with supercluster IDs.
+#' @param subclusters Column with subcluster IDs.
+#' @param label_direct If `TRUE`, print cluster labels at cluster mean.
+#' @param color_scale A ggplot2 color scale used for coloring the points.
+#'   If `NULL`, use the default discrete color scale.
+#' @param filename Name of output file.
+#'
+#' @return A ggplot object.
 plot_subclusters <- function(data, x, y, superclusters, subclusters,
                              label_direct = TRUE, color_scale = NULL,
                              filename = NULL) {
@@ -1104,8 +1117,21 @@ plot_subclusters(nb_data, subcluster_UMAP_1, subcluster_UMAP_2,
 
 
 
+#' For each subcluster, plot a bar chart that counts the most frequent cell
+#' types. All barch charts that belong to a single supercluster are printed in
+#' one row.
+#'
+#' @param data Data extracted from a Seurat object.
+#' @param cell_types Column with cell types.
+#' @param superclusters Column with supercluster IDs.
+#' @param subclusters Column with subcluster IDs.
+#' @param lump_n Preserve the `lump_n` most common cell types, lump the
+#'   remaining ones as "other".
+#' @param filename Name of output file.
+#'
+#' @return A ggplot object.
 plot_scvt_bar <- function(data, cell_types, superclusters, subclusters,
-                          lump_n = 10, filename = NULL, ...) {
+                          lump_n = 10, filename = NULL) {
   pdata <- 
     data %>% 
     transmute(
@@ -1171,9 +1197,6 @@ plot_scvt_bar(nb_data, cell_type_fine, integrated_snn_res.0.5, subcluster_0.2,
               lump_n = 4, filename = "subcluster_bars")
 
   
-
-
-
 plot_clusters_all(nb_data, UMAP_1, UMAP_2, refined_cluster,
                   show_resolution = FALSE,
                   filename = "clusters_all_UMAP_0.5_refined")
