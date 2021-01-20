@@ -928,8 +928,9 @@ nb_data %>%
     shape = 20
   ) +
   geom_point(
+    aes(color = refined_cluster),
     data = nb_data %>%
-      filter(integrated_snn_res.0.5 %in% c(5, 9)),
+      filter(refined_cluster %in% c("5a", "9a", "5b", "9b", "20b")),
     size = .01,
     shape = 20
   ) +
@@ -1196,7 +1197,13 @@ plot_scvt_bar <- function(data, cell_types, superclusters, subclusters,
 plot_scvt_bar(nb_data, cell_type_fine, integrated_snn_res.0.5, subcluster_0.2,
               lump_n = 4, filename = "subcluster_bars")
 
+
+
+# Refined clusters --------------------------------------------------------
   
 plot_clusters_all(nb_data, UMAP_1, UMAP_2, refined_cluster,
                   show_resolution = FALSE,
-                  filename = "clusters_all_UMAP_0.5_refined")
+                  filename = "clusters_all_UMAP_refined")
+
+plot_clusters_selected(nb_data, UMAP_1, UMAP_2, refined_cluster,
+                       folder = "clusters_highlighted_UMAP_refined")
