@@ -30,6 +30,6 @@
 #$ -o $JOB_ID_$JOB_NAME_out.txt
 
 ### jobname
-#$ -N neuroblastoma_diff_exp
+#$ -N diff_exp_seurat
 
-Rscript differential_expression.R
+Rscript diff_exp_seurat.R

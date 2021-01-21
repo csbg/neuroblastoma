@@ -28,7 +28,7 @@
 * [conserved_markers.R] - find conserved markers; invoke via [sge_job_consmark.sh]
 * [analysis_integration.R] - analysis of integrated data
 * [plot_markers.R] - plot canonical cell type and NB markers
-* [diff_exp.R] - differential expression (work in progress)
+* [diff_exp_seurat.R] - differential expression via Seurat; invoke via [sge_job_de_seurat.sh]
 
 ## Other analyses
 
