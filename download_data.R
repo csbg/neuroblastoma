@@ -6,56 +6,101 @@ library(fs)
 library(RCurl)
 library(XML)
 
-parent_url <- "https://biomedical-sequencing.at/projects/BSA_0407_STM_Neuroblastoma_2ba0210fb73d412397728e8a97a3e423/COUNT/"
-count_dir <- getURL(parent_url)
+
+
+# Parameters --------------------------------------------------------------
+
+# URL that points to the parent directory
+parent_url <- "https://biomedical-sequencing.at/projects/BSA_0407_STM_Neuroblastoma_2ba0210fb73d412397728e8a97a3e423/"
+
+# parent directory where files should be saved on the disk
 data_dir <- "data_raw"
 
-rna_files <- c(
-  # "raw_feature_bc_matrix.h5",
+# if TRUE, only download files in selected_files
+only_selected_files <- FALSE
+
+selected_files <- c(
+  # scRNA-seq
   "filtered_feature_bc_matrix.h5",
   "metrics_summary.csv",
   "analysis/tsne/2_components/projection.csv",
-  "analysis/clustering/graphclust/clusters.csv"
-)
-rna_folder_re <- "[^L]_transcriptome/"  # exclude aggregated samples
-
-atac_files <- c(
-  # "raw_peak_bc_matrix.h5",
-  # "filtered_peak_bc_matrix.h5",
-  # "filtered_tf_bc_matrix.h5",
+  "analysis/clustering/graphclust/clusters.csv",
+  
+  # scATAC-seq
   "summary.csv",
   "analysis/tsne/2_components/projection.csv",
   "analysis/clustering/graphclust/clusters.csv"
 )
-atac_folder_re <- "ATAC/"
 
-download_cellranger_files <- function(folder_re, files, overwrite = FALSE) {
-  folders <- 
-    readHTMLTable(count_dir)[[1]] %>% 
+
+
+# Crawl HTML files --------------------------------------------------------
+
+get_links <- function(url) {
+  message("In ", url)
+  links <- 
+    url %>% 
+    getURL() %>% 
+    readHTMLTable(skip.rows = 1:2) %>%
+    pluck(1) %>%
     as_tibble(.name_repair = "unique") %>%
-    filter(str_detect(Name, folder_re)) %>%
-    pull(Name)
+    filter(!is.na(Name)) %>%
+    pull(Name) %>% 
+    {str_glue("{url}{.}")}
   
-  walk(
-    folders,
-    function(folder) {
-      walk(
-        files,
-        function(file) {
-          url <- str_c(parent_url, folder, file)
-          dest <- path_join(c(data_dir, folder, file))
-          dir_create(path_dir(dest))
-          if (file_exists(dest) && !overwrite)
-            message("Skipping ", dest, " since it already exists")
-          else {
-            message("Downloading ", dest, " from ", url)
-            download.file(url, dest)
-          }
-        }
-      )
-    }
-  )
+  files <- str_subset(links, "/$", negate = TRUE)
+ 
+  subfiles <- map(
+    str_subset(links, "/$"),
+    get_links
+  ) %>% flatten_chr()
+  
+  c(files, subfiles)
 }
 
-download_cellranger_files(rna_folder_re, rna_files)
-download_cellranger_files(atac_folder_re, atac_files)
+all_files <- get_links(parent_url)
+
+download_data <-
+  all_files %>% 
+  enframe(value = "url") %>% 
+  select(!name) %>% 
+  mutate(
+    dest =
+      url %>%
+      str_sub(start = str_length(parent_url)) %>% 
+      {str_c(data_dir, .)}
+  )
+
+if (only_selected_files) {
+  download_data <- 
+    download_data %>% 
+    rowwise() %>%
+    mutate(is_selected = any(str_detect(url, coll(selected_files)))) %>% 
+    filter(is_selected)
+}
+
+download_data %>% 
+  write_delim("bsf_files.txt", col_names = FALSE)
+
+
+# Download files ----------------------------------------------------------
+
+# download.data() often fails for large files. Thus, it is recommended that you
+# use the following bash script:
+
+# while read -r url filename; do
+#   curl "$url" --create-dirs -C - -o "$filename"
+# done < bsf_files.txt
+
+# pwalk(
+#   download_data,
+#   function(url, dest, ...) {
+#     dir_create(path_dir(dest))
+#     if (file_exists(dest) && !overwrite) {
+#       message("Skipping ", dest, " since it already exists")
+#     } else {
+#       message("Downloading ", dest, " from ", url)
+#       download.file(url, dest)
+#     }
+#   }
+# )
