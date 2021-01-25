@@ -365,7 +365,7 @@ plot_clusters_all(nb_data, tSNE_1, tSNE_2, sample, label_direct = FALSE,
 
 
 
-# Cell types (SingleR) ----------------------------------------------------
+# Cell types --------------------------------------------------------------
 
 plot_clusters_all(nb_data, UMAP_1, UMAP_2, cell_type_broad_lumped,
                   label_direct = FALSE, show_resolution = FALSE,
@@ -778,22 +778,16 @@ ggsave_default("groupwise_abundance_cluster5_9")
 
 # NB gene signatures ------------------------------------------------------
 
-# TODO: load module scores like other metadata
-nb_signatures <- 
-  read_csv("data_raw/metadata/nb_markers.csv", comment = "#") %>% 
-  group_by(cell_type) %>% 
-  summarise(x = list(gene)) %>% 
-  deframe()
-
-nb_data <-  
-  nb_data %>% 
-  left_join(
-    read_csv("data_generated/all_datasets_current/nb_programs.csv") %>% 
-      select(cell, starts_with("Cluster")) %>% 
-      rename_with(~names(nb_signatures), .cols = starts_with("Cluster")),
-    by = "cell"
-  )
-
+#' Plot gene signature scores, facet by cluster or cell type.
+#'
+#' @param data Data extracted from a Seurat object.
+#' @param x Column with x-axis data.
+#' @param y Column with y-axis data.
+#' @param clusters Column with cluster IDs.
+#' @param ncol Number of columns in the plot.
+#' @param filename Name of output file.
+#'
+#' @return A ggplot object.
 plot_gene_program <- function(data, x, y, clusters,
                               ncol = 6, filename = NULL) {
   p <- 
@@ -821,6 +815,16 @@ plot_gene_program(nb_data, noradrenergic, ncc_like, cell_type_broad_lumped,
 
 
 
+#' Plot gene signature scores, facet by group and selected clusters/cell types.
+#'
+#' @param data Data extracted from a Seurat object.
+#' @param x Column with x-axis data.
+#' @param y Column with y-axis data.
+#' @param clusters Column with cluster IDs.
+#' @param selected_clusters IDs of clusters that should be plotted.
+#' @param filename Name of output file.
+#'
+#' @return A ggplot object.
 plot_gene_program_cvg <- function(data, x, y, clusters, selected_clusters,
                                   filename = NULL) {
   p <-
