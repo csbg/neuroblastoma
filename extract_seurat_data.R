@@ -7,6 +7,8 @@
 # * nb_umap.csv - UMAP coordinates in columns `tSNE_1` and `tSNE_2`
 # * nb_clusters_[res].csv - Cluster IDs in column `integrated_snn_res.[res]`,
 #                           where [res] is 0.2, 0.5, or 0.8
+# * nb_gene_signatures.csv - scores for NB gene signatures (see Table S2E from 
+#                            Dong et al., Cancer Cell 38, 716–733 (2020))
 #
 # TRE files contain dendrograms in Newick tree format, which describe cluster
 # similarities:
@@ -113,3 +115,21 @@ extract_assay <- function(assay) {
  
 extract_assay("RNA")
 extract_assay("SCT")
+
+
+
+# Extract gene signatures -------------------------------------------------
+
+nb_signatures <- 
+  read_csv("data_raw/metadata/nb_signatures.csv", comment = "#") %>% 
+  group_by(cell_type) %>% 
+  summarise(x = list(gene)) %>% 
+  deframe()
+
+nb <- AddModuleScore(nb, features = nb_signatures, assay = "SCT")
+
+nb@meta.data %>% 
+  select(sample, starts_with("Cluster")) %>%
+  rename_with(~names(nb_signatures), .cols = starts_with("Cluster")) %>% 
+  rownames_to_column("cell") %>% 
+  write_csv("data_generated/all_datasets_current/nb_gene_signatures.csv")

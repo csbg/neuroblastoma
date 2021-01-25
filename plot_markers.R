@@ -25,6 +25,7 @@ ggsave_default <- function(filename, width = 297, height = 210,
 # Load data ---------------------------------------------------------------
 
 nb <- readRDS("data_generated/all_datasets_current/nb_assay_SCT.rds")
+# nb <- readRDS("data_generated/all_datasets_current/nb_assay_RNA.rds")
 
 nb@meta.data <-
   nb@meta.data %>% 
@@ -40,10 +41,30 @@ nb@meta.data <-
     by = "sample"
   ) %>%
   left_join(
-    read_csv("data_generated/all_datasets_current/nb_clusters_refined.csv"),
-    by = "cell"
+    read_csv("data_generated/all_datasets_current/nb_subclusters.csv"),
+    by = c("cell", "sample")
+  ) %>%
+  mutate(
+    supercluster = as.character(integrated_snn_res.0.5),
+    subcluster = as.character(subcluster_0.2)
   ) %>% 
-  column_to_rownames("cell")
+  left_join(
+    read_csv(
+      "data_generated/all_datasets_current/manual/subcluster_mapping.csv",
+      col_types = "ccc"
+    ),
+    by = c("supercluster", "subcluster")
+  ) %>% 
+  select(!c(supercluster, subcluster)) %>% 
+  mutate(
+    refined_cluster =
+      refined_cluster %>% 
+      coalesce(integrated_snn_res.0.5) %>% 
+      as_factor() %>% 
+      fct_relevel(function(l) str_sort(l, numeric = TRUE))
+  ) %>% 
+  column_to_rownames("cell") %>%
+  {.}
 
 
 
@@ -90,6 +111,7 @@ DotPlot(nb, features = rev(markers$gene)) +
   coord_flip() +
   scale_color_viridis(option = "inferno", direction = -1)
 ggsave_default("markers/canonical_markers_refined")
+
 
 
 # NB markers --------------------------------------------------------------
@@ -147,22 +169,3 @@ map(
   wrap_plots()
 ggsave_default(str_glue("markers/nb_dotplot"),
                height = 200, width = 400)
-
-
-
-# NB gene signatures ------------------------------------------------------
-
-# only works on the HPC cluster
-# TODO: transfer to extract_seurat_data.R
-nb_programs <- 
-  read_csv("data_raw/metadata/nb_markers.csv", comment = "#") %>% 
-  group_by(cell_type) %>% 
-  summarise(x = list(gene)) %>% 
-  deframe()
-
-nb <- AddModuleScore(nb, nb_programs)
-
-nb@meta.data %>% 
-  as_tibble(rownames = "cell") %>% 
-  write_csv("data_generated/all_datasets_current/nb_programs.csv")
-
