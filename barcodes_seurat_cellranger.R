@@ -29,17 +29,14 @@ cellranger_order <-
   mutate(cr_order = row_number())
 cellranger_order
 
-sample_ids <-
-  read_csv("data_raw/metadata/sample_groups.csv", comment = "#") %>% 
-  {.}
+sample_ids <- read_csv("data_raw/metadata/sample_groups.csv", comment = "#")
 sample_ids[10, 2] <- "2018_1404b"
 sample_ids
 
 seurat_order <- 
   nb_data %>% 
   mutate(se_order = str_match(cell, "_(\\d+)")[,2]) %>% 
-  distinct(sample, se_order) %>%
-  {.}
+  distinct(sample, se_order)
 seurat_order[6, 1] <- "2018_1404b"
 seurat_order
 
@@ -47,8 +44,7 @@ order_map <-
   seurat_order %>% 
   left_join(sample_ids, by = "sample") %>% 
   left_join(cellranger_order, by = "bsf_id") %>% 
-  select(cr_order, se_order, group) %>%
-  {.}
+  select(cr_order, se_order, group)
 order_map
 
 
@@ -70,6 +66,5 @@ length(
 ) == nrow(nb_data) 
 
 nb_data_barcodes %>% 
-  select(cellranger_barcode = cell_cr, seurat_barcode = cell,
-         sample, group, cluster = integrated_snn_res.0.5) %>% 
+  select(cellranger_barcode = cell_cr, seurat_barcode = cell) %>% 
   write_csv("data_generated/all_datasets_current/nb_barcodes.csv")
