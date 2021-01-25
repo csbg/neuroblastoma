@@ -22,9 +22,10 @@
 ## Main workflow
 
 * [integrate_samples.R] - integrate selected scRNA-seq samples; invoke via [sge_job_integrate.sh]
-* [cell_types_singler.R] - perform cell type classification via singler; invoke via [sge_job_singler.sh]
+* [extract_seurat_data.R] - run basic analyses (dimensional reduction, clustering ...) and extract resulting data from a single (large) Seurat object to (smaller) CSV files and Seurat objects that only contain a single assay
+* [cell_types.R] - perform cell type classification via singler; invoke via [sge_job_singler.sh]
 * [make_subclusters.R] - perform subclustering
-* [extract_seurat_data.R] - extract important data from a singl (large) Seurat object to (smaller) CSV files and Seurat objects that only contain a single assay
+* [assemble_metadata.R] - generate one CSV and RDS file with all metadata
 * [conserved_markers.R] - find conserved markers; invoke via [sge_job_consmark.sh]
 * [analysis_integration.R] - analysis of integrated data
 * [plot_markers.R] - plot canonical cell type and NB markers
@@ -39,5 +40,3 @@
 * [plot_qc_metrics.R] - plot QC metrics for cell filtering (i.e., % of mitochondrial genes etc.)
 * [summary_cellranger_metrics.R] - generate summary plots of Cell Ranger QC metrics
 * [summary_cellranger_tsne.R] - generate overview of tSNEs calculated by Cell Ranger
-* [test_workflow.R] - template of the overall Seurat workflow (can be eventually deleted!)
-* [tutorial_monocle] - misc experiments with monocle (can be eventually deleted!)
