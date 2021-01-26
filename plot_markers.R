@@ -25,46 +25,11 @@ ggsave_default <- function(filename, width = 297, height = 210,
 # Load data ---------------------------------------------------------------
 
 nb <- readRDS("data_generated/all_datasets_current/nb_assay_SCT.rds")
-# nb <- readRDS("data_generated/all_datasets_current/nb_assay_RNA.rds")
+nb_data <- readRDS("data_generated/all_datasets_current/nb_metadata.rds")
 
 nb@meta.data <-
-  nb@meta.data %>% 
-  rownames_to_column("cell") %>% 
-  left_join(
-    read_csv(
-      "data_raw/metadata/sample_groups.csv",
-      col_types = "ccf",
-      comment = "#"
-    ) %>%
-      distinct(sample, group) %>% 
-      mutate(group = fct_relevel(group, "I", "II", "III", "IV")),
-    by = "sample"
-  ) %>%
-  left_join(
-    read_csv("data_generated/all_datasets_current/nb_subclusters.csv"),
-    by = c("cell", "sample")
-  ) %>%
-  mutate(
-    supercluster = as.character(integrated_snn_res.0.5),
-    subcluster = as.character(subcluster_0.2)
-  ) %>% 
-  left_join(
-    read_csv(
-      "data_generated/all_datasets_current/manual/subcluster_mapping.csv",
-      col_types = "ccc"
-    ),
-    by = c("supercluster", "subcluster")
-  ) %>% 
-  select(!c(supercluster, subcluster)) %>% 
-  mutate(
-    refined_cluster =
-      refined_cluster %>% 
-      coalesce(integrated_snn_res.0.5) %>% 
-      as_factor() %>% 
-      fct_relevel(function(l) str_sort(l, numeric = TRUE))
-  ) %>% 
-  column_to_rownames("cell") %>%
-  {.}
+  nb_data %>%
+  column_to_rownames("cell")
 
 
 
@@ -72,6 +37,7 @@ nb@meta.data <-
 
 markers <- read_csv("data_raw/metadata/cell_markers.csv", comment = "#")
 
+# original mid-res clusters
 Idents(nb) <- 
   fct_relevel(
     nb@meta.data$integrated_snn_res.0.5,
@@ -92,7 +58,7 @@ DotPlot(nb, features = rev(markers$gene)) +
 ggsave_default("markers/canonical_markers")
 
 
-
+# refined clusters
 Idents(nb) <- 
   fct_relevel(
     nb@meta.data$refined_cluster,
@@ -135,23 +101,6 @@ ggsave_default("markers/nb_markers", width = 420, height = 297)
 
 
 # this only works on the cluster
-walk(
-  levels(nb@meta.data$group),
-  function(g) {
-    message("Plotting dotplot for group ", g)
-    group_cells <-
-      nb@meta.data %>%
-      as_tibble(rownames = "cell") %>%
-      filter(group == g) %>%
-      pull(cell)
-    DotPlot(nb[, group_cells], features = nb_markers) +
-      coord_flip() +
-      scale_color_viridis(option = "inferno", direction = -1)
-    ggsave_default(str_glue("markers/nb_dotplot_{g}"),
-                   height = 100, width = 200)
-  }
-)
-
 map(
   levels(nb@meta.data$group),
   function(g) {
@@ -169,3 +118,16 @@ map(
   wrap_plots()
 ggsave_default(str_glue("markers/nb_dotplot"),
                height = 200, width = 400)
+
+
+
+# Cell lineage markers ----------------------------------------------------
+
+lineage_markers <-
+  read_csv("data_raw/metadata/nb_cell_lineage_markers.csv", comment = "#")
+
+Idents(nb) <- "refined_cluster"
+DotPlot(nb, features = rev(lineage_markers$gene)) +
+  coord_flip() +
+  scale_color_viridis(option = "inferno", direction = -1)
+ggsave_default("markers/nb_lineage_markers", height = 100)
