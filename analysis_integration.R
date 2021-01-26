@@ -929,31 +929,6 @@ plot_subclusters <- function(data, x, y, superclusters, subclusters,
   p
 }
 
-plot_subclusters(nb_data, subcluster_UMAP_1, subcluster_UMAP_2,
-                 integrated_snn_res.0.5, percent.mt,
-                 color_scale = scale_color_viridis_c(),
-                 label_direct = FALSE, filename = "subcluster_mtgenes")
-
-plot_subclusters(nb_data, subcluster_UMAP_1, subcluster_UMAP_2,
-                 integrated_snn_res.0.5, nFeature_SCT,
-                 color_scale = scale_color_viridis_c(),
-                 label_direct = FALSE, filename = "subcluster_nFeature")
-
-plot_subclusters(nb_data, subcluster_UMAP_1, subcluster_UMAP_2,
-                 integrated_snn_res.0.5, nCount_SCT,
-                 color_scale = scale_color_viridis_c(),
-                 label_direct = FALSE, filename = "subcluster_nCount")
-
-
-plot_subclusters(nb_data, subcluster_UMAP_1, subcluster_UMAP_2,
-                 integrated_snn_res.0.5, subcluster_0.2,
-                 filename = "subcluster_0.2")
-
-plot_subclusters(nb_data, subcluster_UMAP_1, subcluster_UMAP_2,
-                 integrated_snn_res.0.5, cell_type_broad_lumped,
-                 label_direct = FALSE, filename = "subcluster_ctb")
-
-
 
 #' For each subcluster, plot a bar chart that counts the most frequent cell
 #' types. All barch charts that belong to a single supercluster are printed in
@@ -1031,8 +1006,47 @@ plot_scvt_bar <- function(data, cell_types, superclusters, subclusters,
   p
 }
 
-plot_scvt_bar(nb_data, cell_type_fine, integrated_snn_res.0.5, subcluster_0.2,
-              lump_n = 4, filename = "subcluster_bars")
+
+## of clusters ------------------------------------------------------------
+
+plot_subclusters(nb_data, subcluster_mid_UMAP_1, subcluster_mid_UMAP_2,
+                 integrated_snn_res.0.5, subcluster_mid_0.2,
+                 filename = "subcluster_mid_0.2")
+
+plot_subclusters(nb_data, subcluster_mid_UMAP_1, subcluster_mid_UMAP_2,
+                 integrated_snn_res.0.5, cell_type_broad_lumped,
+                 label_direct = FALSE, filename = "subcluster_mid_ctb")
+
+plot_subclusters(nb_data, subcluster_mid_UMAP_1, subcluster_mid_UMAP_2,
+                 integrated_snn_res.0.5, percent.mt,
+                 color_scale = scale_color_viridis_c(),
+                 label_direct = FALSE, filename = "subcluster_mid_mtgenes")
+
+plot_subclusters(nb_data, subcluster_mid_UMAP_1, subcluster_mid_UMAP_2,
+                 integrated_snn_res.0.5, nFeature_SCT,
+                 color_scale = scale_color_viridis_c(),
+                 label_direct = FALSE, filename = "subcluster_mid_nFeature")
+
+plot_subclusters(nb_data, subcluster_mid_UMAP_1, subcluster_mid_UMAP_2,
+                 integrated_snn_res.0.5, nCount_SCT,
+                 color_scale = scale_color_viridis_c(),
+                 label_direct = FALSE, filename = "subcluster_mid_nCount")
+
+plot_scvt_bar(nb_data, cell_type_fine,
+              integrated_snn_res.0.5, subcluster_mid_0.2,
+              lump_n = 4, filename = "subcluster_mid_bars")
+
+
+
+## of cell types ----------------------------------------------------------
+
+plot_subclusters(nb_data, subcluster_ctb_UMAP_1, subcluster_ctb_UMAP_2,
+                 cell_type_broad, subcluster_ctb_0.2,
+                 filename = "subcluster_ctb_0.2")
+
+plot_subclusters(nb_data, subcluster_ctb_UMAP_1, subcluster_ctb_UMAP_2,
+                 cell_type_broad, integrated_snn_res.0.5,
+                 label_direct = FALSE, filename = "subcluster_ctb_mid")
 
 
 

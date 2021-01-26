@@ -13,24 +13,35 @@ library(Seurat)
 library(tidyverse)
 library(fs)
 
-rna_file <- "data_generated/all_datasets_current/nb_integrated.rds"
-cluster_file <- "data_generated/all_datasets_current/nb_clusters_0.5.csv"
-outdir <- "data_generated/all_datasets_current"
-
 
 
 # Load data ---------------------------------------------------------------
 
-nb <- readRDS(rna_file)
-nb_clusters <-
-  read_csv(cluster_file) %>%
-  rename(cluster = integrated_snn_res.0.5)
-
-nb@meta.data <- 
-  nb@meta.data %>%
-  as_tibble(rownames = "cell") %>% 
-  left_join(nb_clusters, by = c("cell", "sample")) %>% 
+metadata_superclusters <-
+  left_join(
+    read_csv("data_generated/all_datasets_current/nb_clusters_0.5.csv") %>% 
+      select(cell, mid = integrated_snn_res.0.5),
+    read_csv("data_generated/all_datasets_current/nb_singler.csv") %>% 
+      extract(
+        pruned.labels,
+        into = "ctb",
+        regex = "([^:]*)",
+        remove = FALSE
+      ) %>%
+      mutate(
+        ctb =
+          as_factor(ctb) %>%
+          fct_lump_prop(0.01) %>%
+          fct_explicit_na()
+      ) %>% 
+      select(cell, sample, ctb),
+    by = "cell"
+  ) %>% 
   column_to_rownames("cell")
+
+nb <- readRDS("data_generated/all_datasets_current/nb_integrated.rds")
+
+outdir <- "data_generated/all_datasets_current"
 
 
 
@@ -56,27 +67,32 @@ make_subcluster <- function(df, selected_cluster) {
   )
 }
 
-subclusters <-
-  map_dfr(
-    unique(nb_clusters$cluster),
-    ~make_subcluster(nb, .x)
-  )
+make_all_subclusters <- function(supercluster) {
+  nb@meta.data <- 
+    metadata_superclusters %>% 
+    select(sample, cluster = {{supercluster}})
+  
+  subclusters <-
+    map_dfr(
+      unique(nb@meta.data$cluster),
+      ~make_subcluster(nb, .x)
+    ) %>% 
+    rename_with(
+      ~c("subcluster_{s}_0.2",
+         "subcluster_{s}_0.5",
+         "subcluster_{s}_UMAP_1",
+         "subcluster_{s}_UMAP_2") %>%
+        map_chr(~str_glue_data(list(s = supercluster), .x)),
+      .cols = !c(cell, sample)
+    )
+}
 
-subclusters %>%
-  rename_with(
-    ~c("subcluster_0.2", "subcluster_0.5",
-       "subcluster_UMAP_1", "subcluster_UMAP_2"),
-    .cols = !c(cell, sample)
-  ) %>% 
+all_subclusters <- 
+  colnames(metadata_superclusters) %>% 
+  setdiff("sample") %>% 
+  map(make_all_subclusters) %>% 
+  reduce(left_join, by = c("cell", "sample"))
+
+all_subclusters %>%
   write_csv(path_join(c(outdir, str_glue("nb_subclusters.csv"))))
 
-
-
-# Misc --------------------------------------------------------------------
-
-nb_data %>% 
-  count(cluster = integrated_snn_res.0.5, cell_type_broad) %>% 
-  group_by(cluster) %>% 
-  mutate(n_rel = n / sum(n) * 100) %>% 
-  filter(n_rel >= 10) %>% 
-  View()
