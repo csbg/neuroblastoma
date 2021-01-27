@@ -67,4 +67,4 @@ all_markers <- map_dfr(levels(nb@meta.data$refined_cluster), find_markers)
 
 # Save data ---------------------------------------------------------------
 
-write_csv(all_markers, path_join(c(outdir, "all_markers.csv")))
+write_csv(all_markers, path_join(c(outdir, "dge_seurat_groups_clusterwise.csv")))
