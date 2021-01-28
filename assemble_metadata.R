@@ -139,6 +139,12 @@ add_cell_types <- function(df_seurat,
   left_join(df_seurat, df_singler, by = c("cell", "sample"))
 }
 
+#' Add clusters obtained by subclustering.
+#'
+#' @param df_seurat Dataframe returned by `load_seurat_data()`
+#' @param folder Dataset folder
+#'
+#' @return `df_seurat` with an additional column `refined_cluster`.
 add_refined_clusters <- function(df_seurat, folder) {
   refined_cluster_file <- str_glue("{folder}/manual/subcluster_mapping.csv")
   
@@ -161,6 +167,28 @@ add_refined_clusters <- function(df_seurat, folder) {
     )
 }
 
+#' Add clusters obtained by discarding rare cell types within each original
+#' cluster and splitting them by more common cell types.
+#'
+#' @param df_seurat Dataframe returned by `load_seurat_data()`
+#' @param folder Dataset folder
+#'
+#' @return `df_seurat` with an additional column `split_cluster`.
+add_split_clusters <- function(df_seurat, folder) {
+  split_cluster_file <- str_glue("{folder}/manual/splitcluster_mapping.csv")
+  df_seurat %>% 
+    left_join(
+      read_csv(split_cluster_file, col_types = "ccc"),
+      by = c("integrated_snn_res.0.5", "cell_type_broad_lumped")
+    ) %>% 
+    mutate(
+      split_cluster =
+        split_cluster %>%
+        as_factor() %>% 
+        fct_relevel(function(l) str_sort(l, numeric = TRUE))
+    )
+}
+
 
 
 # Load data ---------------------------------------------------------------
@@ -176,8 +204,9 @@ nb_data <-
     cell_type_fine_lumped = fct_lump_n(cell_type_fine, 24),
     cell_type_broad_lumped = fct_lump_prop(cell_type_broad, 0.01)
   ) %>% 
-  add_refined_clusters(folder) %>%
-  {.}
+  add_refined_clusters(folder) %>% 
+  add_split_clusters(folder)
+
 
 
 

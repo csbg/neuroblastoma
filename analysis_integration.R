@@ -1081,6 +1081,59 @@ plot_clusters_selected(nb_data, UMAP_1, UMAP_2, refined_cluster,
 
 
 
+# Cluster splitting -------------------------------------------------------
+
+plot_splitcluster_bar <- function(data, limit = 10, filename = NULL) {
+  plot_data <- 
+    data %>% 
+    group_by(integrated_snn_res.0.5, cell_type_broad_lumped) %>% 
+    summarise(count = n()) %>%
+    mutate(prop = count / sum(count) * 100, is_selected = prop > limit)
+  
+  p <-
+    ggplot(plot_data, aes(cell_type_broad_lumped, prop)) +
+    geom_hline(yintercept = limit, linetype = "dashed", size = 0.25) +
+    geom_col(aes(fill = is_selected), show.legend = FALSE) +
+    xlab(NULL) +
+    ylab("Relative abundance") +
+    scale_fill_manual(values = c("TRUE" = "#006d2c", "FALSE" = "#a1d99b")) +
+    coord_flip() +
+    facet_wrap(vars(integrated_snn_res.0.5), nrow = 4) +
+    labs(caption = str_glue("Split clusters by cell type ",
+                            "with abundance >{limit}% ",
+                            "→ {sum(plot_data$is_selected)} subclusters")) +
+    theme(panel.grid = element_blank()) +
+    NULL
+  ggsave_default(filename)
+  p
+}
+
+plot_splitcluster_bar(nb_data, limit = 10)
+plot_splitcluster_bar(nb_data, limit = 20, filename = "splitcluster_celltypes")
+
+
+nb_data %>% 
+  inner_join(
+    nb_data %>% 
+      group_by(integrated_snn_res.0.5, cell_type_broad_lumped) %>% 
+      summarise(count = n()) %>%
+      filter(count / sum(count) > 0.2) %>% 
+      mutate(
+        split_cluster = str_c(
+          integrated_snn_res.0.5,
+          case_when(
+            n() > 1 ~ letters[row_number()],
+            TRUE ~ ""
+          )
+        )
+      ) %>% 
+      select(!count)
+  ) %>% 
+  plot_clusters_all(UMAP_1, UMAP_2, integrated_snn_res.0.5,
+                    show_resolution = FALSE,
+                    filename = "clusters_all_UMAP_0.5_split")
+
+
 
 # Infiltration rate -------------------------------------------------------
 
