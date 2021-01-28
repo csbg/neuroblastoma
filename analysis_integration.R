@@ -1038,3 +1038,87 @@ plot_clusters_all(nb_data, UMAP_1, UMAP_2, refined_cluster,
 
 plot_clusters_selected(nb_data, UMAP_1, UMAP_2, refined_cluster,
                        folder = "clusters_highlighted_UMAP_refined")
+
+
+
+
+# Infiltration rate -------------------------------------------------------
+
+#' Plot tumor infiltration rate as determined by FACS or barcode counting.
+#'
+#' @param data Data extracted from a Seurat object.
+#' @param filter_col If this column contains ...
+#' @param filter_values ... any of these values, the respective barcode
+#'                      is regarded as tumor cell.
+#' @param filename Name of output file.
+#'
+#' @return A ggplot object.
+plot_infiltration_rate <- function(data, filter_col, filter_values,
+                                   filename = NULL) {
+  tif_facs <-
+    read_csv("data_raw/metadata/sample_groups.csv", comment = "#") %>%
+    filter(!is.na(facs_alive)) %>% 
+    mutate(tif_facs = facs_tumor / facs_alive) %>% 
+    select(group, sample, tif_facs)
+  
+  tif_data <-
+    data %>%
+    mutate(is_tumor = !is.na(match({{filter_col}}, {{filter_values}}))) %>%
+    group_by(group, sample) %>% 
+    summarise(tif_sc = sum(is_tumor) / n())
+  
+  infiltration_rates <-
+    left_join(
+      tif_facs,
+      tif_data,
+      by = c("group", "sample")
+    )
+
+  p <- 
+    infiltration_rates %>%
+    pivot_longer(
+      starts_with("tif"),
+      names_to = "method",
+      names_prefix = "tif_",
+      values_to = "tif"
+    ) %>%
+    ggplot(aes(method, tif, color = group)) +
+    geom_point(show.legend = FALSE) +
+    geom_line(aes(group = sample), show.legend = FALSE) +
+    geom_text(
+      data =
+        infiltration_rates %>%
+        group_by(group) %>%
+        summarise(across(starts_with("tif"), mean)) %>%
+        pivot_longer(
+          starts_with("tif"),
+          names_to = "method",
+          names_prefix = "tif_",
+          values_to = "tif"
+        ) %>%
+        mutate(label = sprintf("%.1f", tif * 100), tif = 0.6),
+      aes(label = label),
+      color = "black"
+    ) +
+    facet_wrap(vars(group)) +
+    ggtitle(
+      "Tumor infiltration rates",
+      str_glue("{quo_name(enquo(filter_col))} contains ",
+               "{{{str_c(filter_values, collapse = ',')}}}")
+    ) +
+    theme_bw() +
+    ylab("tumor infiltration rate") +
+    theme(
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+  NULL
+  
+  ggsave_default(filename, height = 160, width = 80)
+  p
+}
+
+plot_infiltration_rate(nb_data, cell_type_broad, "Neurons",
+                       filename = "tif_neurons")
+plot_infiltration_rate(nb_data, refined_cluster, c("5a", "9a", "20b"),
+                       filename = "tif_clusters")
