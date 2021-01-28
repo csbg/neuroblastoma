@@ -372,6 +372,46 @@ plot_clusters_highlight(nb_data, UMAP_1, UMAP_2, cell_type_fine_lumped,
 
 
 
+# Cell type scores --------------------------------------------------------
+
+singler_data <- readRDS("data_generated/all_datasets_current/nb_celltype_details.rds")
+
+ct_data <- left_join(nb_data, singler_data, by = c("cell", "sample"))
+
+ct_data %>% 
+  filter(
+    cell_type_broad_lumped %in% c("Neurons", "Pro-B_cell_CD34+"),
+    refined_cluster %in% c("5a", "9a")
+  ) %>% 
+  ggplot(aes(cell_type_broad_lumped, delta_score)) +
+  geom_violin(
+    aes(fill = cell_type_broad_lumped),
+    scale = "count",
+    show.legend = FALSE
+  ) +
+  geom_boxplot(outlier.shape = NA, width = 0.1, coef = 0) +
+  geom_text(
+    data = 
+      ct_data %>% 
+      filter(
+        cell_type_broad_lumped %in% c("Neurons", "Pro-B_cell_CD34+"),
+        refined_cluster %in% c("5a", "9a")
+      ) %>%
+      count(group, refined_cluster, cell_type_broad_lumped),
+    aes(label = n),
+    hjust = 1,
+    y = 0.025,
+    size = 3
+  ) +
+  scale_x_discrete(NULL) +
+  scale_y_continuous(limits = c(0, 0.3)) +
+  coord_flip() +
+  facet_grid(vars(group), vars(refined_cluster)) +
+  NULL
+ggsave_default("celltype_scores", width = 200, height = 100)
+
+
+
 # Cell types vs clusters --------------------------------------------------
 
 #' Plot a heatmap of cell type vs cluster.
