@@ -21,7 +21,7 @@
 
 ## Main workflow
 
-* [integrate_samples.R] - integrate selected scRNA-seq samples; invoke via [sge_job_integrate.sh]
+* (integrate_samples.R)[integrate_samples.R] - integrate selected scRNA-seq samples; invoke via (sge_job_integrate.sh)[sge_job_integrate.sh]
 * [extract_seurat_data.R] - run basic analyses (dimensional reduction, clustering ...) and extract resulting data from a single (large) Seurat object to (smaller) CSV files and Seurat objects that only contain a single assay
 * [cell_types.R] - perform cell type classification via singler; invoke via [sge_job_singler.sh]
 * [detect_doublets.R] - doublet detection via scds; invoke via [sge_job_doublet.sh]
