@@ -21,23 +21,25 @@
 
 ## Main workflow
 
-* [integrate_samples.R](integrate_samples.R) - integrate selected scRNA-seq samples; invoke via (sge_job_integrate.sh)[sge_job_integrate.sh]
-* [extract_seurat_data.R] - run basic analyses (dimensional reduction, clustering ...) and extract resulting data from a single (large) Seurat object to (smaller) CSV files and Seurat objects that only contain a single assay
-* [cell_types.R] - perform cell type classification via singler; invoke via [sge_job_singler.sh]
-* [detect_doublets.R] - doublet detection via scds; invoke via [sge_job_doublet.sh]
-* [make_subclusters.R] - perform subclustering
-* [assemble_metadata.R] - generate one CSV and RDS file with all metadata
-* [conserved_markers.R] - find conserved markers; invoke via [sge_job_consmark.sh]
-* [analysis_integration.R] - analysis of integrated data
-* [plot_markers.R] - plot canonical cell type and NB markers
-* [diff_exp_seurat.R] - differential expression via Seurat; invoke via [sge_job_de_seurat.sh]
+* [integrate_samples.R](integrate_samples.R) - integrate selected scRNA-seq samples; invoke via [sge_job_integrate.sh](sge_job_integrate.sh)
+* [extract_seurat_data.R](extract_seurat_data.R) - run basic analyses (dimensional reduction, clustering ...) and extract resulting data from a single (large) Seurat object to (smaller) CSV files and Seurat objects that only contain a single assay
+* [cell_types.R](cell_types.R) - perform cell type classification via SingleR; invoke via [sge_job_singler.sh](sge_job_singler.sh)
+* [detect_doublets.R](detect_doublets.R) - doublet detection via scds; invoke via [sge_job_doublet.sh](sge_job_doublet.sh)
+* [make_subclusters.R](make_subclusters.R) - perform subclustering
+* [assemble_metadata.R](assemble_metadata.R) - generate one CSV and RDS file with all metadata
+* [conserved_markers.R](conserved_markers.R) - find conserved markers
+* [analysis_integration.R](analysis_integration.R) - analysis of integrated data
+* [plot_markers.R](plot_markers.R) - plot canonical cell type and NB markers
+* [dge_seurat.R](dge_seurat.R) - differential expression via Seurat; invoke via [sge_job_dge_seurat.sh](sge_job_de_seurat.sh)
+* [plot_dge_seurat.R](plot_dge_seurat.R) - plot DGE results from Seurat
+
 
 ## Other analyses
 
-* [barcodes_seurat_cellranger.R] - create a table that maps cellranger and Seurat barcodes
-* [compare_reads.Rmd] - compare two samples that differ in read length (50 vs 75 bp)
-* [download_data.R] - download raw data from the BSF
-* [merge_samples.R] - merge selected samples without actually integrating them; invoke via [sge_job_merge.sh]
-* [plot_qc_metrics.R] - plot QC metrics for cell filtering (i.e., % of mitochondrial genes etc.)
-* [summary_cellranger_metrics.R] - generate summary plots of Cell Ranger QC metrics
-* [summary_cellranger_tsne.R] - generate overview of tSNEs calculated by Cell Ranger
+* [barcodes_seurat_cellranger.R](barcodes_seurat_cellranger.R) - create a table that maps cellranger and Seurat barcodes
+* [compare_reads.Rmd](compare_reads.Rmd) - compare two samples that differ in read length (50 vs 75 bp)
+* [download_data.R](download_data.R) - download raw data from the BSF
+* [merge_samples.R](merge_samples.R) - merge selected samples without actually integrating them; invoke via [sge_job_merge.sh]
+* [plot_qc_metrics.R](plot_qc_metrics.R) - plot QC metrics for cell filtering (i.e., % of mitochondrial genes etc.)
+* [summary_cellranger_metrics.R](summary_cellranger_metrics.R) - generate summary plots of Cell Ranger QC metrics
+* [summary_cellranger_tsne.R](summary_cellranger_tsne.R) - generate overview of tSNEs calculated by Cell Ranger

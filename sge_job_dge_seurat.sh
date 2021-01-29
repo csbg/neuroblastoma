@@ -32,4 +32,4 @@
 ### jobname
 #$ -N diff_exp_seurat
 
-Rscript diff_exp_seurat.R
+Rscript dge_seurat.R
