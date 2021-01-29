@@ -71,6 +71,7 @@ load_singler_data <- function(folder) {
 load_seurat_data <- function(folder) {
   files <- c(
     "nb_general.csv",
+    "nb_doublet.csv",
     "nb_clusters_0.2.csv",
     "nb_clusters_0.5.csv",
     "nb_clusters_0.8.csv",

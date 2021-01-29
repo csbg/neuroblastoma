@@ -880,6 +880,8 @@ plot_gene_program_cvg(nb_data, noradrenergic, ncc_like, cell_type_broad_lumped,
 
 # Quality control ---------------------------------------------------------
 
+## Mitochondrial genes ----
+
 plot_clusters_all(nb_data, UMAP_1, UMAP_2, percent.mt,
                   label_direct = FALSE, show_resolution = FALSE,
                   color_scale = scale_color_viridis_c(),
@@ -892,6 +894,34 @@ ggplot(nb_data, aes(integrated_snn_res.0.5, percent.mt)) +
   ylab("% mitochondrial genes") +
   theme_classic()
 ggsave_default("qc_mtgene_per_cluster", width = 200, height = 150)
+
+
+## Doublets ----
+
+plot_clusters_all(nb_data %>% arrange(cxds_score),
+                  UMAP_1, UMAP_2, cxds_score,
+                  label_direct = FALSE, show_resolution = FALSE,
+                  color_scale = scale_color_viridis_c(),
+                  filename = "qc_doublet_cxds")
+
+plot_clusters_all(nb_data %>% arrange(bcds_score),
+                  UMAP_1, UMAP_2, bcds_score,
+                  label_direct = FALSE, show_resolution = FALSE,
+                  color_scale = scale_color_viridis_c(),
+                  filename = "qc_doublet_bcds")
+
+plot_clusters_all(nb_data %>% arrange(hybrid_score),
+                  UMAP_1, UMAP_2, hybrid_score,
+                  label_direct = FALSE, show_resolution = FALSE,
+                  color_scale = scale_color_viridis_c(),
+                  filename = "qc_doublet_hybrid")
+
+nb_data %>% 
+  pivot_longer(ends_with("score"), names_to = "method", values_to = "score") %>% 
+  ggplot(aes(score)) +
+  geom_histogram(bins = 100) +
+  facet_wrap(vars(method), scales = "free")
+ggsave_default("qc_doublet_histogram", width = 210, height = 70)
 
 
 
