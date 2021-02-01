@@ -4,6 +4,7 @@ library(ggpmisc)
 library(patchwork)
 library(tidyverse)
 library(ggalluvial)
+library(GGally)
 library(egg)
 library(fs)
 
@@ -922,6 +923,13 @@ nb_data %>%
   geom_histogram(bins = 100) +
   facet_wrap(vars(method), scales = "free")
 ggsave_default("qc_doublet_histogram", width = 210, height = 70)
+
+nb_data %>% 
+  select(cxds_score, hybrid_score, bcds_score) %>%
+  ggpairs(
+    lower = list(continuous = wrap("points", alpha = 0.01)),
+    diag = list(continuous = wrap("barDiag", bins = 100))
+  )
 
 
 
