@@ -495,12 +495,14 @@ walk(
 #' @param clusters Column with cluster IDs.
 #' @param lump_n Preserve the `lump_n` most common cell types, lump the
 #'   remaining ones as "other".
+#' @param save_subplots If `TRUE`, save each subplot into a separate file.
 #' @param filename Name of output file.
 #' @param ... further arguments passed to `ggsave_default()`
 #'
 #' @return A ggplot object.
 plot_cvt_bar <- function(data, cell_types, clusters,
-                         lump_n = 10, filename = NULL, ...) {
+                         lump_n = 10, save_subplots = TRUE,
+                         filename = NULL, ...) {
   pdata <- 
     data %>% 
     transmute(
@@ -539,14 +541,16 @@ plot_cvt_bar <- function(data, cell_types, clusters,
         strip.text = element_text(face = "bold")
       ) +
       NULL
-    ggsave_default(
-      str_glue("{filename}/{cluster}"),
-      plot = set_panel_size(
-        ps,
-        width = unit(30, "mm"),
-        height = unit(30, "mm")
-      )
-    )
+    if (save_subplots) {
+      ggsave_default(
+        str_glue("{filename}/{cluster}"),
+        plot = set_panel_size(
+          ps,
+          width = unit(30, "mm"),
+          height = unit(30, "mm")
+        )
+      ) 
+    }
     ps
   }
   
