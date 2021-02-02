@@ -178,16 +178,18 @@ add_refined_clusters <- function(df_seurat, folder) {
 add_split_clusters <- function(df_seurat, folder) {
   split_cluster_file <- str_glue("{folder}/manual/splitcluster_mapping.csv")
   df_seurat %>% 
+    mutate(tmp_col = as.character(cell_type_broad_lumped)) %>% 
     left_join(
       read_csv(split_cluster_file, col_types = "ccc"),
-      by = c("integrated_snn_res.0.5", "cell_type_broad_lumped")
+      by = c("integrated_snn_res.0.5", tmp_col = "cell_type_broad_lumped")
     ) %>% 
     mutate(
       split_cluster =
         split_cluster %>%
         as_factor() %>% 
         fct_relevel(function(l) str_sort(l, numeric = TRUE))
-    )
+    ) %>% 
+    select(!tmp_col)
 }
 
 
