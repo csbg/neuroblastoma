@@ -1,0 +1,34 @@
+# description: Miscellaneous metadata for neuroblastoma samples
+# source: extracted manually from Assigned groups-scATACRNA-seq-1-12-2020_FACSdata_120121.xlsx
+# columns:
+#   bsf_id: sample name extracted from the folder containing cellranger output
+#   bsf_order: order of the sample for cellranger aggr (determines the numeric barcode suffix)
+#   sample: clean sample name used for all analyses
+#   group: patient group
+#     I: controls, ganglioneuroma (GNM) or ganglioneuroblastoma (GNB)
+#     II: MYCN-amplified (MNA)
+#     III: ATRX-deleted (ATRXdel)
+#     IV: sporadic (wild-type MYCN and wild-type ATRXdel)
+#   facs_X: cell counts from FACS characterization
+#     alive: living cells
+#     tumor: cancer cells (CD45- GD2+ L1CAM+)
+#     hematopoietic: all hematopoietic cells (CD45+)
+#     HSPC: hematopoietic stem and precursor cells (CD45+ CD34+)
+bsf_id,bsf_order,sample,group,facs_alive,facs_tumor,facs_hematopoietic,facs_HSPC
+R1_GNB_2014_0102,2,2014_0102,I,11880,0,10980,437
+R2_GNM_2018_4252,6,2018_4252,I,17986,0,16589,514
+R1_GNM_2020_1288,3,2020_1288,I,16452,0,15342,309
+R2_NB_2020_1667,9,2020_1667,IV,17282,410,16816,76
+R3_NB_2019_5022,11,2019_5022,II,6560,2704,3511,245
+R4_NB_2005_1702,12,2005_1702,III,9227,302,8521,76
+R1_NB_2019_5754,5,2019_5754,II,12975,7308,5008,39
+R2_NB_2018_6056,8,2018_6056,IV,12959,1990,9841,257
+R3_NB_2006_2684,10,2006_2684,IV,2246,20,1490,94
+R1_NB_2018_1404,4,2018_1404,II,6599,3546,2250,18
+R2_NB_2016_3924,7,2016_3924,III,9452,282,8711,92
+S_16_4503_Re,1,2016_4503,II,7973,3020,4915,18
+S_2019_2495_Re,14,2019_2495,IV,10621,412,10129,118
+S_2018_1625_Li,13,2018_1625,IV,7408,12,7256,300
+MF244_GNM_BM_Patient1,17,2016_2950,I,11387,0,10750,400
+MF244_GNB_BM_Patient1,16,2016_1853,I,17940,1,17496,1829
+MF220_NB_BM_Patient1,15,2018_1404,II,NA,NA,NA,NA

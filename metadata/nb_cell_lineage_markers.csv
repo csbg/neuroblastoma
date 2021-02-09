@@ -1,0 +1,15 @@
+# Description: Markers of NB cell lineages
+# Source: Table 1 of Cogo et al, Exp Biol Med 245, 1637-1647 (2020); DOI: 10.1177/1535370220949237
+lineage,gene,remarks
+S,VIM,vimentin
+S,CD44,CD44
+S,FN1,fibronectin
+S,DBH,dopamine beta-hydroxylase
+N,NEFL,low molecular weight neurofilament protein (neurofilament component)
+N,NEFM,medium molecular weight neurofilament protein (neurofilament component)
+N,NEFH,high molecular weight neurofilament protein (neurofilament component)
+N,INA,alpha-internexin (neurofilament component)
+N,PRPH,peripherin (neurofilament component)
+N,TUBB,beta-tubulin
+I,PROM1,CD133
+I,KIT,c-KIT

@@ -1,0 +1,58 @@
+# Description: Cell type markers for tumor and NB cells
+# Sources:
+#   Dong: Table S2C from Dong et al., Cancer Cell 38, 716–733 (2020); DOI: 
+#   Neildez-Nguyen: Table 1 from Neildez-Nguyen et al., Nat. Biotech. 20, 467–472 (2002); DOI: 10.1038/nbt0502-467
+#   Akashi: Figure 1 from Akashi et al, Nature 404, 193–197 (2000); DOI: 10.1038/35004599
+#     CMP is FCGR-/CD34+, GMP is FRGR+/CD34+, MEP is FCGR-/CD34-
+#   biotechne: A Guide to Human Immune Cell Characterization by Flow Cytometry (https://resources.rndsystems.com/images/site/br_imm-cell-character-fc_rsdfy20-8243-w-mp.pdf, accessed 2021-01-07)
+#   ccri: Sabine Taschner-Mandl and Irfete Fetahu, CCRI, personal communication
+cell_type,gene,source
+leukocyte,PTPRC,biotechne
+lymphocyte,CD52,Dong
+T cell,CD2,Dong
+T cell,CD3D,Dong
+T cell,CD3E,Dong
+T cell,CD3G,Dong
+T cell,CD7,Dong
+Th cell,CD4,biotechne
+Th cell,IL7R,biotechne
+"Th cell, naive",CCR7,biotechne
+Tc cell,CD8A,biotechne
+Tc cell,CD8B,biotechne
+NK cell,GNLY,biotechne
+NK cell,NKG7,biotechne
+B cell,CD79A,Dong
+B cell,CD79B,Dong
+B cell,CD19,Dong
+B cell,MS4A1,Dong
+B cell,CD27,Dong
+#B cell,CD38,
+myeloid cell,CD68,Dong
+myeloid cell,AIF1,Dong
+myeloid cell,CSF1R,Dong
+myeloid cell,TYROBP,Dong
+myeloid cell,FCER1G,Dong
+monocyte,CD14,biotechne
+monocyte,LYZ,biotechne
+monocyte,FCGR3A,biotechne
+monocyte,MS4A7,biotechne
+plasmacytoid DC,IL3RA,Dong
+plasmacytoid DC,CLEC4C,Dong
+plasmacytoid DC,NRP1,biotechne
+neuroblastoma,PHOX2B,Dong
+neuroblastoma,PHOX2A,Dong
+neuroblastoma,TH,Dong
+neuroblastoma,SYP,Dong
+neuroblastoma,CHGA,Dong
+neuroblastoma,CHGB,Dong
+neuroblastoma,DBH,Dong
+neuroblastoma,GATA2,Dong
+neuroblastoma,MYCN,ccri
+neuroblastoma,L1CAM,ccri
+neuroblastoma,B4GALNT1,ccri
+neuroblastoma,NCAM1,ccri
+erythroblast,TFRC,Neildez-Nguyen
+erythroblast,GYPA,Neildez-Nguyen
+erythroblast,CD36,Neildez-Nguyen
+CMP,CD34,Akashi
+CMP,FCGR2A,Akashi
