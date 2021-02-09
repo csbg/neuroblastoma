@@ -14,7 +14,7 @@
 ### priority; 0 is highest priority
 #$ -p -500
 
-### send email for (b)eginning, (e)nd, (a)bort and (s)uspension
+### send email for (b)eginning, (e)nd, (a)bort and (s)uspension ...
 #$ -m beas
 
 ### run in current working directory
@@ -30,6 +30,6 @@
 #$ -o $JOB_ID_$JOB_NAME_out.txt
 
 ### jobname
-#$ -N neuroblastoma_merge_all_samples
+#$ -N classify_cell_types
 
-Rscript merge_samples.R
+Rscript classify_cell_types.R

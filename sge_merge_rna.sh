@@ -4,7 +4,7 @@
 #$ -l h_rt=5:00:00
 
 ### estimated memory usage
-#$ -l mt=5000m
+#$ -l mt=16g
 
 ### request number of CPUs:
 ###   -pe smp <x>  for a fixed number of cpus that you need
@@ -30,6 +30,6 @@
 #$ -o $JOB_ID_$JOB_NAME_out.txt
 
 ### jobname
-#$ -N neuroblastoma_integrate_all_samples
+#$ -N merge_rna
 
-Rscript integrate_samples.R
+Rscript merge_rna.R

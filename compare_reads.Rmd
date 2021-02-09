@@ -36,8 +36,8 @@ These two samples differ in sequencing read length (50 and 75 bp, respectively).
 
 ```{r}
 use_samples <- c(
-  "data/S_16_4503_Re_DOWN_transcriptome/filtered_feature_bc_matrix.h5",
-  "data/S_16_4503_Re_transcriptome/filtered_feature_bc_matrix.h5"
+  "data_raw/COUNT/S_16_4503_Re_DOWN_transcriptome/filtered_feature_bc_matrix.h5",
+  "data_raw/COUNT/S_16_4503_Re_transcriptome/filtered_feature_bc_matrix.h5"
 )
 ```
 

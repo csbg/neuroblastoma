@@ -1,4 +1,4 @@
-# Plot QC metrics (% mitochondrial genes, feature and molecule count)
+# Plot QC metrics (% mitochondrial genes, feature and molecule count).
 
 library(tidyverse)
 library(Seurat)
@@ -9,7 +9,7 @@ library(patchwork)
 
 # Load data ---------------------------------------------------------------
 
-data_dir <- "data_raw"
+data_dir <- "data_raw/COUNT"
 
 samples <-
   tibble(
@@ -18,10 +18,10 @@ samples <-
       recurse = TRUE,
       regexp = "filtered_feature_bc_matrix.h5"
     ),
-    bsf_id = str_match(file, "/(.*)_trans")[, 2]
+    bsf_id = str_match(file, "([\\w\\d_]*)_trans")[, 2]
   ) %>%
   left_join(
-    read_csv("data_raw/metadata/sample_groups.csv", comment = "#"),
+    read_csv("metadata/sample_groups.csv", comment = "#"),
     by = "bsf_id"
   ) %>%
   drop_na() %>% 

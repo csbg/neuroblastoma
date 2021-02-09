@@ -13,8 +13,7 @@ df <-
   map_dfr(read_csv, .id = "file") %>%
   rename_with(~str_glue("{.x} (%)"), !file & where(is.character)) %>% 
   mutate(across(!file & where(is.character), parse_number)) %>%
-  extract(file, into = "sample", regex = "/(.*)_trans") %>%
-  {.}
+  extract(file, into = "sample", regex = "([\\w\\d_]*)_trans")
 
 broken_labels = c(
   "Reads Mapped Antisense to Gene (%)" = "Reads Mapped\nAntisense to Gene (%)",
@@ -46,7 +45,7 @@ df %>%
   ggtitle("Cellranger summary statistics for RNA-seq") +
   NULL
 
-  
+dir_create("plots/cellranger_summary")  
 ggsave("plots/cellranger_summary/measures_rna.pdf",
        units = "mm", width = 297, height = 210)
 
@@ -57,8 +56,7 @@ ggsave("plots/cellranger_summary/measures_rna.pdf",
 df <- 
   dir_ls("data_raw/", recurse = TRUE, regex = "/summary.csv$") %>% 
   map_dfr(read_csv, na = "None", .id = "file") %>%
-  extract(file, into = "sample", regex = "/(.*)_ATAC") %>%
-  {.}
+  extract(file, into = "sample", regex = "([\\w\\d_]*)_ATAC")
 
 broken_labels = c(
   "frac_fragments_overlapping_peaks" = "frac_fragments_\noverlapping_peaks",

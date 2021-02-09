@@ -94,6 +94,7 @@ plot_cells_rows <- function(row_samples) {
     caption = "cells colored by graph-based clusters"
   )
 
+dir_create("plots/cellranger_summary")
 ggsave("plots/cellranger_summary/tsne_cells.pdf",
        units = "mm", width = 400, height = 210)
 
@@ -140,4 +141,3 @@ plot_hexbin_rows <- function(row_samples) {
 
 ggsave("plots/cellranger_summary/tsne_hexbin.pdf",
        units = "mm", width = 400, height = 210)
-

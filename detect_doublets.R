@@ -6,25 +6,39 @@
 #     (`scds::bcds()`), and
 # (3) a hybrid approach (`scds::cxds_bcds_hybrid()`).
 #
-# Generates a CSV file `nb_doublet.csv` with columns
-# * `cell` and `sample` (as usual)
+# Generates a CSV file `doublet_scores.csv` with columns
+# * `cell`
 # * `cxds_score`, `bcds_score`, and `hybrid_score` (doublet scores)
 
 library(Seurat)
-library(tidyverse)
 library(scds)
 library(SingleCellExperiment)
+library(tidyverse)
+library(fs)
 
-nb <- readRDS("data_generated/all_datasets_current/nb_integrated.rds")
-DefaultAssay(nb) <- "RNA"
+
+
+# Parameters --------------------------------------------------------------
+
+# the merged dataset
+merged_data <- "data_generated/rna_merged.rds"
+
+# folder where results are saved
+out_dir <- "data_generated"
+
+
+
+# Analysis ----------------------------------------------------------------
+
+nb <- readRDS(merged_data)
 
 nb <-
-    as.SingleCellExperiment(nb) %>%
-    cxds(verb = TRUE) %>%
-    bcds(verb = TRUE) %>%
-    cxds_bcds_hybrid(verb = TRUE)
+  as.SingleCellExperiment(nb) %>%
+  cxds(verb = TRUE) %>%
+  bcds(verb = TRUE) %>%
+  cxds_bcds_hybrid(verb = TRUE)
 
 colData(nb) %>%
-    as_tibble(rownames = "cell") %>% 
-    select(cell, sample, ends_with("_score")) %>%
-    write_csv("data_generated/all_datasets_current/nb_doublet.csv")
+  as_tibble(rownames = "cell") %>%
+  select(cell, ends_with("_score")) %>%
+  write_csv(path_join(c(out_dir, "doublet_scores.csv")))
