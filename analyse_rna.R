@@ -7,6 +7,8 @@ library(ggalluvial)
 library(egg)
 library(fs)
 library(clustree)
+library(bluster)
+library(ggbeeswarm)
 
 
 #' Save a plot with default settings.
@@ -362,6 +364,72 @@ nb_data %>%
   select(cluster_0.5, cluster_50) %>% 
   clustree(prefix = "cluster_", edge_arrow = FALSE)
 ggsave_default("clustree_seurat_monocle")
+
+
+
+# Cluster diagnostics -----------------------------------------------------
+
+#' Plot silhouettes and neighborhood purity as calculated by `bluster`.
+#'
+#' @param data Metadata.
+#' @param x Column with x-axis data.
+#' @param y Column with y-axis data.
+#' @param clusters Column with cluster IDs.
+#' @param filename Name of output file.
+#'
+#' @return A ggplot object.
+plot_cluster_diagnostics <- function(data, x, y, clusters, filename = NULL) {
+  mat <- 
+    nb_data %>%
+    select({{x}}, {{y}}) %>%
+    as.matrix()
+  
+  clusters <-
+    data %>%
+    pull({{clusters}})
+  
+  p1 <-
+    approxSilhouette(mat, clusters) %>% 
+    as_tibble(rownames = "cell") %>% 
+    mutate(
+      cluster = clusters,
+      closest = if_else(width > 0, cluster, other)
+    ) %>% 
+    ggplot(aes(cluster, width, color = closest)) +
+    geom_quasirandom(size = 0.1, show.legend = FALSE) +
+    geom_hline(yintercept = 0) +
+    ggtitle("Silhouette")
+  
+  p2 <-
+    neighborPurity(mat, clusters) %>% 
+    as_tibble(rownames = "cell") %>% 
+    mutate(
+      cluster = clusters,
+      maximum = as_factor(maximum)
+    ) %>% 
+    ggplot(aes(cluster, purity, color = maximum)) +
+    geom_quasirandom(alpha = .1, show.legend = FALSE) +
+    ggtitle("Neighborhood purity")
+  
+  p <- wrap_plots(p1, p2)
+  ggsave_default(filename)
+  p
+}
+
+plot_cluster_diagnostics(nb_data, umap_1_monocle, umap_2_monocle, cluster_20,
+                         filename = "monocle/cluster_diagnostics_20")
+
+plot_cluster_diagnostics(nb_data, umap_1_monocle, umap_2_monocle, cluster_50,
+                         filename = "monocle/cluster_diagnostics_50")
+
+plot_cluster_diagnostics(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.2,
+                         filename = "seurat/cluster_diagnostics_0.2")
+
+plot_cluster_diagnostics(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.5,
+                         filename = "seurat/cluster_diagnostics_0.5")
+
+plot_cluster_diagnostics(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.8,
+                         filename = "seurat/cluster_diagnostics_0.8")
 
 
 
