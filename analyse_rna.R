@@ -6,6 +6,7 @@ library(tidyverse)
 library(ggalluvial)
 library(egg)
 library(fs)
+library(clustree)
 
 
 #' Save a plot with default settings.
@@ -106,14 +107,18 @@ plot_clusters_all(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.8,
 plot_clusters_all(nb_data, tsne_1_seurat, tsne_2_seurat, cluster_0.5,
                   filename = "seurat/clusters_all_tsne_0.5")
 
-plot_clusters_all(nb_data, umap_1_monocle, umap_2_monocle, cluster,
-                  filename = "monocle/clusters_all_umap")
-plot_clusters_all(nb_data, tsne_1_monocle, tsne_2_monocle, cluster,
-                  filename = "monocle/clusters_all_tsne")
-plot_clusters_all(nb_data, umap_1_monocle, umap_2_monocle, partition,
-                  filename = "monocle/partitions_all_umap")
-plot_clusters_all(nb_data, tsne_1_monocle, tsne_2_monocle, partition,
-                  filename = "monocle/partitions_all_tsne")
+plot_clusters_all(nb_data, umap_1_monocle, umap_2_monocle, cluster_20,
+                  filename = "monocle/clusters_all_umap_20")
+plot_clusters_all(nb_data, umap_1_monocle, umap_2_monocle, cluster_50,
+                  filename = "monocle/clusters_all_umap_50")
+plot_clusters_all(nb_data, tsne_1_monocle, tsne_2_monocle, cluster_50,
+                  filename = "monocle/clusters_all_tsne_50")
+plot_clusters_all(nb_data, umap_1_monocle, umap_2_monocle, partition_20,
+                  filename = "monocle/partitions_all_umap_20")
+plot_clusters_all(nb_data, umap_1_monocle, umap_2_monocle, partition_50,
+                  filename = "monocle/partitions_all_umap_50")
+plot_clusters_all(nb_data, tsne_1_monocle, tsne_2_monocle, partition_50,
+                  filename = "monocle/partitions_all_tsne_50")
 
 
 
@@ -170,13 +175,13 @@ plot_clusters_per_sample(nb_data %>% mutate(group2 = group),
                          nrow = 2, filename = "seurat/clusters_groups_umap_0.5")
 
 plot_clusters_per_sample(nb_data, umap_1_monocle, umap_2_monocle,
-                         cluster, sample,
-                         nrow = 3, filename = "monocle/clusters_sample_umap")
+                         cluster_50, sample,
+                         nrow = 3, filename = "monocle/clusters_sample_umap_50")
 
 plot_clusters_per_sample(nb_data %>% mutate(group2 = group),
                          umap_1_monocle, umap_2_monocle,
-                         cluster, group2,
-                         nrow = 2, filename = "monocle/clusters_groups_umap")
+                         cluster_50, group2,
+                         nrow = 2, filename = "monocle/clusters_groups_umap_50")
 
 
 #' Highlight an individual cluster over all cells on the background (light
@@ -221,9 +226,11 @@ plot_clusters_highlight <- function(data, x, y, clusters,
 }
 
 plot_clusters_highlight(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.5,
-                        nrow = 4, filename = "seurat/clusters_highlight_umap_0.5")
-plot_clusters_highlight(nb_data, umap_1_monocle, umap_2_monocle, cluster,
-                        nrow = 5, filename = "monocle/clusters_highlight_umap")
+                        nrow = 4,
+                        filename = "seurat/clusters_highlight_umap_0.5")
+plot_clusters_highlight(nb_data, umap_1_monocle, umap_2_monocle, cluster_50,
+                        nrow = 5,
+                        filename = "monocle/clusters_highlight_umap_50")
 
 
 
@@ -278,8 +285,8 @@ plot_clusters_selected <- function(data, x, y, clusters, folder = NULL) {
 
 plot_clusters_selected(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.5,
                        folder = "seurat/clusters_selected_umap_0.5")
-plot_clusters_selected(nb_data, umap_1_monocle, umap_2_monocle, cluster,
-                       folder = "monocle/clusters_selected_umap")
+plot_clusters_selected(nb_data, umap_1_monocle, umap_2_monocle, cluster_50,
+                       folder = "monocle/clusters_selected_umap_50")
 
 
 
@@ -340,68 +347,21 @@ plot_cluster_corr_resolution(
 )
 
 
+# alternative visualization using clustree
+nb_data %>% 
+  select(starts_with("cluster_0")) %>% 
+  clustree(prefix = "cluster_", edge_arrow = FALSE)
+ggsave_default("seurat/clustree")
 
-#' Create alluvial plot that shows how clusters depend on the package used.
-#'
-#' @param data Metadata.
-#' @param new_level_order New order of levels in the upper axis.
-#' @param filename Name of output file.
-#'
-#' @return A ggplot object.
-plot_cluster_corr_package <- function(data,
-                                      new_level_order = list(),
-                                      filename = NULL) {
-  cluster_flow <- 
-    data %>%
-    count(
-      seurat = cluster_0.5,
-      monocle = cluster
-    ) %>% 
-    mutate(
-      seurat = fct_relabel(seurat, ~str_glue("S-{.}")),
-      monocle = monocle %>% 
-      fct_relevel(!!!new_level_order) %>%
-        fct_relabel(~str_glue("M-{.}")),
-    )
-  
-  p <- 
-    cluster_flow %>% 
-    ggplot(aes(axis1 = seurat, axis2 = monocle, y = n)) +
-    stat_alluvium(aes(fill = seurat), show.legend = FALSE, reverse = FALSE) +
-    stat_stratum(reverse = FALSE) +
-    stat_stratum(
-      geom = "text",
-      aes(label = str_sub(after_stat(stratum), start = 3L)),
-      reverse = FALSE,
-      size = 3
-    ) +
-    scale_x_discrete(
-      "package",
-      limits = c("seurat", "monocle"),
-      expand = expansion(add = .2)
-    ) +
-    scale_y_continuous(
-      "cumulative number of cells",
-      expand = expansion()
-    ) +
-    coord_flip() +
-    theme_classic() +
-    theme(axis.line.x = element_blank()) +
-    NULL
-  
-  ggsave_default(filename, width = 400, height = 200)
-  p
-}
+nb_data %>% 
+  select(cluster_20, cluster_50) %>% 
+  clustree(prefix = "cluster_", edge_arrow = FALSE)
+ggsave_default("monocle/clustree")
 
-plot_cluster_corr_package(
-  nb_data,
-  new_level_order = list("1", "2", "5", "9", "10", "20", "22", "4",
-                         "11", "26", "15", "6", "13", "25", "3", "17",
-                         "27", "14", "8", "7", "12", "19", "24", "16",
-                         "32", "18", "23", "28"),
-  filename = "cluster_correspondence_package"
-)
-
+nb_data %>% 
+  select(cluster_0.5, cluster_50) %>% 
+  clustree(prefix = "cluster_", edge_arrow = FALSE)
+ggsave_default("clustree_seurat_monocle")
 
 
 
@@ -532,10 +492,10 @@ plot_cvt_heatmap(nb_data, cell_type_broad, cluster_0.5,
 plot_cvt_heatmap(nb_data, cell_type_fine, cluster_0.5,
                  lump_n = 35, filename = "seurat/cvt_heatmap_fine_0.5")
 
-plot_cvt_heatmap(nb_data, cell_type_broad, cluster,
-                 filename = "monocle/cvt_heatmap_broad")
-plot_cvt_heatmap(nb_data, cell_type_fine, cluster,
-                 lump_n = 35, filename = "monocle/cvt_heatmap_fine")
+plot_cvt_heatmap(nb_data, cell_type_broad, cluster_50,
+                 filename = "monocle/cvt_heatmap_broad_50")
+plot_cvt_heatmap(nb_data, cell_type_fine, cluster_50,
+                 lump_n = 35, filename = "monocle/cvt_heatmap_fine_50")
 
 
 
@@ -622,12 +582,12 @@ plot_cvt_bar(nb_data, cell_type_fine, cluster_0.5,
              lump_n = 8, filename = "seurat/cvt_bar_fine_0.5",
              width = 420, height = 297)
 
-plot_cvt_bar(nb_data, cell_type_broad, cluster,
+plot_cvt_bar(nb_data, cell_type_broad, cluster_50,
              lump_n = 5, width = 420, height = 297,
-             filename = "monocle/cvt_bar_broad_cluster")
-plot_cvt_bar(nb_data, cell_type_broad, partition,
+             filename = "monocle/cvt_bar_broad_cluster_50")
+plot_cvt_bar(nb_data, cell_type_broad, partition_50,
              lump_n = 5,
-             filename = "monocle/cvt_bar_broad_partition")
+             filename = "monocle/cvt_bar_broad_partition_50")
 
 
 
@@ -769,7 +729,7 @@ plot_cluster_size(nb_data, cluster_0.5,
                   angle_col = "0",
                   filename = "seurat/cluster_size_vs_samples")
 
-plot_cluster_size(nb_data, cluster,
+plot_cluster_size(nb_data, cluster_50,
                   angle_col = "0",
                   filename = "monocle/cluster_size_vs_samples")
 
@@ -837,8 +797,8 @@ plot_neurons(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.5,
              filename = "seurat/groupwise_abundance_neurons_0.5")
 plot_neurons(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.8,
              filename = "seurat/groupwise_abundance_neurons_0.8")
-plot_neurons(nb_data, umap_1_monocle, umap_2_monocle, cluster,
-             filename = "monocle/groupwise_abundance_neurons")
+plot_neurons(nb_data, umap_1_monocle, umap_2_monocle, cluster_50,
+             filename = "monocle/groupwise_abundance_neurons_50")
 
 
 
@@ -881,13 +841,11 @@ plot_gene_program(nb_data,
 
 plot_gene_program(nb_data,
                   signature_adrenergic, signature_mesenchymal,
-                  cluster,
-                  ncol = 8,
+                  cluster_50,
                   filename = "monocle/gene_programs_am_clusters")
 plot_gene_program(nb_data,
                   signature_noradrenergic, signature_ncc_like,
-                  cluster,
-                  ncol = 8,
+                  cluster_50,
                   filename = "monocle/gene_programs_nn_clusters")
 
 plot_gene_program(nb_data,
@@ -979,7 +937,7 @@ plot_doublet_scores <- function(data, x, y, clusters, filename = NULL) {
 
 plot_doublet_scores(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.5,
                     filename = "seurat/qc_doublet_scores")
-plot_doublet_scores(nb_data, umap_1_monocle, umap_2_monocle, cluster,
+plot_doublet_scores(nb_data, umap_1_monocle, umap_2_monocle, cluster_50,
                     filename = "monocle/qc_doublet_scores")
 
 
@@ -1305,5 +1263,5 @@ plot_infiltration_rate(nb_data, cell_type_broad, "Neurons",
                        filename = "tif_neurons")
 plot_infiltration_rate(nb_data, cluster_0.5, c("6", "10"),
                        filename = "seurat/tif_clusters")
-plot_infiltration_rate(nb_data, cluster, "3",
+plot_infiltration_rate(nb_data, cluster_50, "8",
                        filename = "monocle/tif_clusters")

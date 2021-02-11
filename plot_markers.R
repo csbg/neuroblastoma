@@ -1,4 +1,5 @@
 library(Seurat)
+library(SeuratObject)
 library(tidyverse)
 library(fs)
 library(patchwork)
@@ -24,8 +25,8 @@ ggsave_default <- function(filename, width = 297, height = 210,
 
 # Load data ---------------------------------------------------------------
 
-nb <- readRDS("data_generated/all_datasets_current/nb_assay_SCT.rds")
-nb_data <- readRDS("data_generated/all_datasets_current/nb_metadata.rds")
+nb <- readRDS("data_generated/assay_SCT_seurat.rds")
+nb_data <- readRDS("data_generated/metadata.rds")
 
 nb@meta.data <-
   nb_data %>%
@@ -35,48 +36,42 @@ nb@meta.data <-
 
 # Canonical cell type markers ---------------------------------------------
 
-markers <- read_csv("data_raw/metadata/cell_markers.csv", comment = "#")
+markers <- read_csv("metadata/cell_markers.csv", comment = "#")
 
-# original mid-res clusters
+
+# monocle clusters
 Idents(nb) <- 
   fct_relevel(
-    nb@meta.data$integrated_snn_res.0.5,
-    "0", "14", "7", "21",               # T cells
-    "2", "8",                           # NK cells
-    "1", "6", "13", "20",               # B cells
-    "3", "11", "19", "10", "12", "18",  # myeloid
-    "15",                               # pDC
-    "5", "9",                           # NB
-    "17",                               # erythroblast
-    "16",                               # CMP
-    "4"                                 # other
+    nb@meta.data$cluster_50,
+    # T and NK cells
+    "3", "5", "4", "6", "18",
+    
+    # B cells
+    "2", "9", "12", "17", "19", "21",
+    
+    # monocyte
+    "1", "15", "16", "22",
+    
+    # pDC
+    "14",
+
+    # NB
+    "8",
+    
+    # erythroblast
+    "13",
+    
+    # bone marrow
+    "10", "11", 
+    
+    # other
+    "7", "20"
   )
 
 DotPlot(nb, features = rev(markers$gene)) +
   coord_flip() +
   scale_color_viridis(option = "inferno", direction = -1)
-ggsave_default("markers/canonical_markers")
-
-
-# refined clusters
-Idents(nb) <- 
-  fct_relevel(
-    nb@meta.data$refined_cluster,
-    "0", "14", "7a", "7b", "21a", "4b", "9b",  # T cells
-    "2", "8", "21b",                           # NK cells
-    "1a", "1b", "6a", "6b", "13", "20a", "5b", # B cells
-    "3", "11", "19", "10", "12", "18",         # myeloid
-    "15a", "15b",                              # pDC
-    "5a", "9a", "20b",                         # NB
-    "17",                                      # erythroblast
-    "16",                                      # CMP
-    "4a",                                      # other
-  )
-
-DotPlot(nb, features = rev(markers$gene)) +
-  coord_flip() +
-  scale_color_viridis(option = "inferno", direction = -1)
-ggsave_default("markers/canonical_markers_refined")
+ggsave_default("monocle/markers/canonical_markers_clusters")
 
 
 
@@ -87,9 +82,21 @@ nb_markers <-
   filter(cell_type == "neuroblastoma") %>%
   pull(gene)
 
+# add monocle UMAP coordinates to the Seurat object
+nb@reductions$umap_monocle <- CreateDimReducObject(
+  embeddings = nb_data %>% 
+    column_to_rownames("cell") %>% 
+    select(UMAP_1 = umap_1_monocle, UMAP_2 = umap_2_monocle) %>% 
+    as.matrix(),
+  assay = "monocle_align_cds",
+  global = TRUE,
+  key = "UMAPMON_"
+)
+
 FeaturePlot(
   nb,
   nb_markers,
+  reduction = "umap_monocle",
   min.cutoff = "q5",
   max.cutoff = "q95",
   coord.fixed = TRUE,
@@ -97,10 +104,9 @@ FeaturePlot(
   order = TRUE
 ) &
   scale_color_viridis(option = "cividis")
-ggsave_default("markers/nb_markers", width = 420, height = 297)
+ggsave_default("monocle/markers/nb_markers", width = 420, height = 297)
 
 
-# this only works on the cluster
 map(
   levels(nb@meta.data$group),
   function(g) {
@@ -116,18 +122,5 @@ map(
   }
 ) %>% 
   wrap_plots()
-ggsave_default(str_glue("markers/nb_dotplot"),
+ggsave_default(str_glue("monocle/markers/nb_dotplot_groupwise"),
                height = 200, width = 400)
-
-
-
-# Cell lineage markers ----------------------------------------------------
-
-lineage_markers <-
-  read_csv("data_raw/metadata/nb_cell_lineage_markers.csv", comment = "#")
-
-Idents(nb) <- "refined_cluster"
-DotPlot(nb, features = rev(lineage_markers$gene)) +
-  coord_flip() +
-  scale_color_viridis(option = "inferno", direction = -1)
-ggsave_default("markers/nb_lineage_markers", height = 100)

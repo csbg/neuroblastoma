@@ -4,12 +4,12 @@
 #
 # Metadata is exported to metadata_monocle.csv with columns
 # * cell – barcode as used by Seurat
-# * cluster – cluster ID
-# * partition – partition ID
 # * umap_1 ↓
 # * umap_2 – UMAP coordinates
 # * tsne_1 ↓
 # * tsne_2 – tSNE coordinates
+# * cluster_[k] – cluster IDs for different numbers k of nearest neighbors
+# * partition_[k] – partition IDs for different k
 
 library(monocle3) 
 library(Seurat)
@@ -31,30 +31,47 @@ out_dir <- "data_generated"
 # Integrate samples -------------------------------------------------------
 
 nb <- readRDS(merged_dataset)
+
 cds <-
   nb$RNA@counts %>% 
   new_cell_data_set(cell_metadata = nb@meta.data) %>% 
-  preprocess_cds() %>% 
-  align_cds(alignment_group = "sample") %>% 
-  reduce_dimension(reduction_method = "UMAP", preprocess_method = "Aligned") %>% 
-  reduce_dimension(reduction_method = "tSNE", preprocess_method = "Aligned") %>% 
-  cluster_cells()
+  preprocess_cds(verbose = TRUE) %>% 
+  align_cds(alignment_group = "sample", verbose = TRUE) %>% 
+  reduce_dimension(
+    reduction_method = "UMAP",
+    preprocess_method = "Aligned",
+    verbose = TRUE
+  ) %>% 
+  reduce_dimension(
+    reduction_method = "tSNE",
+    preprocess_method = "Aligned",
+    verbose = TRUE
+  ) %>% 
+  cluster_cells(k = 20, random_seed = 42, verbose = TRUE)
 
-saveRDS(cds, path_join(c(out_dir, "rna_integrated_monocle.rds")))
+cds_50 <- cluster_cells(cds, k = 50, random_seed = 42, verbose = TRUE)
+
+saveRDS(cds_50, path_join(c(out_dir, "rna_integrated_monocle.rds")))
 
 
 
 # Export metadata ---------------------------------------------------------
 
 monocle_metadata <- list(
-  enframe(cds@clusters$UMAP$clusters, name = "cell", value = "cluster"),
-  enframe(cds@clusters$UMAP$partitions, name = "cell", value = "partition"),
   reducedDim(cds, "UMAP") %>%
-    as_tibble(rownames = "cell") %>%
-    rename(umap_1 = V1, umap_2 = V2),
+    magrittr::set_colnames(c("umap_1", "umap_2")) %>% 
+    as_tibble(rownames = "cell"),
   reducedDim(cds, "tSNE") %>%
-    as_tibble(rownames = "cell") %>%
-    rename(tsne_1 = V1, tsne_2 = V2)
+    magrittr::set_colnames(c("tsne_1", "tsne_2")) %>% 
+    as_tibble(rownames = "cell"),
+  clusters(cds) %>%
+    enframe(name = "cell", value = "cluster_20"),
+  partitions(cds) %>%
+    enframe(name = "cell", value = "partition_20"),
+  clusters(cds_50) %>% 
+    enframe(name = "cell", value = "cluster_50"),
+  partitions(cds_50) %>%
+    enframe(name = "cell", value = "partition_50")
 ) %>%
   reduce(left_join, by = "cell")
 
