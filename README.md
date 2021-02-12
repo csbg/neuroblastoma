@@ -33,15 +33,16 @@
   invoke via [sge_detect_doublets.sh](sge_job_doublet.sh)
 * [assemble_metadata.R](assemble_metadata.R) -
   generate one CSV and RDS file with all metadata
-* [analysis_integration.R](analysis_integration.R) -
+* [analyse_rna.R](analyse_rna.R) -
   analysis of integrated data
+* [plot_markers.R](plot_markers.R) -
+  plot canonical cell type and NB markers
+* [find_conserved_markers.R](find_conserved_markers.R) -
+  find conserved markers
+  
   
 ## Needs revision
 
-* [conserved_markers.R](conserved_markers.R) -
-  find conserved markers
-* [plot_markers.R](plot_markers.R) -
-  plot canonical cell type and NB markers
 * [dge_seurat.R](dge_seurat.R) -
   differential expression via Seurat;
   invoke via [sge_job_dge_seurat.sh](sge_job_de_seurat.sh)
