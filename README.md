@@ -39,7 +39,8 @@
   plot canonical cell type and NB markers
 * [find_conserved_markers.R](find_conserved_markers.R) -
   find conserved markers
-  
+* [dge_muscat.R](dge_muscat.R) -
+  differential expression via muscat
   
 ## Needs revision
 
