@@ -54,6 +54,8 @@
 
 ## Other analyses
 
+* [common_functions.R](common_functions.R) -
+  functions used throughout the project
 * [compare_reads.Rmd](compare_reads.Rmd) -
   compare two samples that differ in read length (50 vs 75 bp)
 * [download_data.R](download_data.R) -
