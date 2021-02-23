@@ -123,7 +123,7 @@ filter_dge_results <- function(data,
 }
 
 dge_results_filtered <- 
-  filter_dge_results(dge_results)
+  filter_dge_results(dge_results, min_freq = 0.05)
 
 
 
@@ -490,7 +490,8 @@ enrich_all_genes <- function(data,
     rowwise() %>% 
     filter(!is.null(data)) %>%
     filter(nrow(data) > 0) %>% 
-    unnest(data)
+    unnest(data) %>% 
+    mutate(contrast = as_factor(contrast) %>% fct_relevel(str_sort))
 }
 
 enrichr_results <- enrich_all_genes(dge_results_filtered)
@@ -603,91 +604,76 @@ plot_enrichr_bars(enrichr_results, "III_vs_I",
 plot_enrichr_bars(enrichr_results, "IV_vs_I",
                   filename = "dge/enrichr_bars_IV")  
 
-enrichr_results %>% 
-  filter(contrast == "II_vs_I") %>% 
-  mutate(Term = str_sub(Term, end = 40)) %>% 
-  group_by(cluster, db) %>% 
-  slice_max(Combined.Score, n = 10, with_ties = FALSE) %>% 
-  filter(cluster == "1", db == "GO_Cellular_Component_2018") %>% 
-  mutate(Term = as_factor(Term) %>% fct_reorder(Combined.Score)) %>% 
-  View()
-
-x[[8]] %>% View()
 
 
-
-
-
-
-
-# from here, work in progress ...
-plot_enrichr_heatmap <- function(data,
-                                 min_combined_score = 3000,
-                                 db = "GO_Biological_Process_2018") {
-  data <-
+plot_enrichr_dots <- function(data,
+                              db,
+                              max_p_adj = 0.05,
+                              min_odds_ratio = 2,
+                              filename = NULL,
+                              plot_params = list()) {
+  p <-
     data %>% 
-    filter(db == {{db}}) %>% 
-    select(contrast, Term, cluster, Combined.Score) %>%
-    arrange(contrast, cluster) %>% 
-    pivot_wider(
-      names_from = c(contrast, cluster),
-      names_sep = ".",
-      values_from = Combined.Score
+    filter(
+      db == {{db}},
+      Adjusted.P.value < max_p_adj,
+      Odds.Ratio > min_odds_ratio,
     ) %>% 
-    column_to_rownames("Term")
+    select(contrast, cluster, Term, Odds.Ratio, Adjusted.P.value) %>% 
+    ggplot(aes(cluster, Term)) +
+    geom_point(aes(size = -log10(Adjusted.P.value), color = log2(Odds.Ratio))) +
+    scale_color_distiller(palette = "Reds", direction = 1) +
+    coord_fixed() +
+    facet_wrap(vars(contrast), drop = FALSE) +
+    labs(
+      y = "",
+      color = TeX("log_2 (odds ratio)"),
+      size = TeX("-log_{10} (p_{adj})"),
+      title = str_glue( "Enrichr results ({db})"),
+      caption = str_glue(
+        "adjusted p value < {max_p_adj}, ",
+        "odds ratio > {min_odds_ratio}"
+      )
+    ) +
+    theme_bw() +
+    theme(
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+    NULL
   
-  col_data <-
-    tibble(cols = colnames(data)) %>%
-    separate(cols, into = c("contrast", "cluster"), sep = "\\.")
-
-  mat <- 
-    data %>%
-    rowwise() %>% 
-    mutate(row_sum = mean(c_across(everything()), na.rm = TRUE)) %>%
-    arrange(desc(row_sum)) %>%
-    select(!row_sum) %>% 
-    filter(if_any(everything(), ~. > min_combined_score)) %>% 
-    as.matrix() %>%
-    magrittr::set_colnames(col_data$cluster)
-  
-  Heatmap(
-    mat,
-    col = circlize::colorRamp2(
-      seq(0, quantile(mat, 0.95, na.rm = TRUE), length.out = 10),
-      plasma(10, direction = -1)
-    ),
-    # col = plasma(10, direction = -1),
-    na_col = "gray95",
-    show_row_names = FALSE,
-    cluster_rows = FALSE,
-    cluster_columns = FALSE,
-    top_annotation = HeatmapAnnotation(
-      contrast = col_data$contrast,
-      col = list(
-        contrast = c(
-          "II_vs_I" = "red",
-          "III_vs_I" = "green",
-          "IV_vs_I" = "blue"
-        )
-      ),
-      show_legend = FALSE
-    ),
-    column_split = col_data$contrast
-  )
+  rlang::exec(ggsave_default, filename, !!!plot_params)
+  p
 }
 
-plot_enrichr_heatmap(enrichr_results)
-ggsave_default("dge/heatmap")
 
-  
+enrichr_results %>%
+  filter(
+    !cluster %in% c("7", "19"),
+    !(contrast == "III_vs_I" & cluster %in% c("5", "11"))
+  ) %>%
+  plot_enrichr_dots(db = "GO_Biological_Process_2018",
+                    min_odds_ratio = 50,
+                    filename = "dge/dots_bioproc",
+                    plot_params = list(height = 420))
 
+plot_enrichr_dots(enrichr_results,
+                  db = "GO_Cellular_Component_2018",
+                  filename = "dge/dots_cellcomp")
 
-enrichr_results %>% 
-  ggplot(aes(Combined.Score)) +
-  geom_histogram(binwidth = 100) +
-  scale_y_log10()
+plot_enrichr_dots(enrichr_results,
+                  db = "GO_Molecular_Function_2018",
+                  min_odds_ratio = 50,
+                  filename = "dge/dots_molfun")
 
+plot_enrichr_dots(enrichr_results,
+                  db = "KEGG_2019_Human",
+                  filename = "dge/dots_kegg")
 
+plot_enrichr_dots(enrichr_results,
+                  db = "WikiPathways_2019_Human",
+                  min_odds_ratio = 50,
+                  filename = "dge/dots_wiki")
 
 
 
