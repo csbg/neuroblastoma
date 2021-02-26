@@ -6,6 +6,8 @@ library(patchwork)
 library(ggpmisc)
 library(ComplexHeatmap)
 library(enrichR)
+library(latex2exp)
+library(fgsea)
 source("common_functions.R")
 
 
@@ -438,17 +440,26 @@ plot_pbheatmap(dge_results_filtered, pb_log,
 #' @param cluster The selected cluster.
 #' @param dbs Character vector containing valid enrichr databases
 #'   as returned by `enrichR::listEnrichrDbs()`.
+#' @param direction Use genes that are up- or downregulated, respectively.
 #'
 #' @return A dataframe, which combines the dataframes returned by
 #'   `enrichR::enrichr()` (empty results are removed) by adding a column "db".
-enrich_genes <- function(data, contrast, cluster, dbs) {
-  message("Cluster ", cluster, " in contrast ", contrast)
+enrich_genes <- function(data,
+                         contrast,
+                         cluster,
+                         dbs,
+                         direction = c("up", "down")) {
+  message("Cluster ", cluster, ", contrast ", contrast, ", ",
+          direction, "regulated genes")
+  
+  direction <- match.arg(direction)
+  
   top_genes <- 
     data %>% 
     filter(
       cluster_id == {{cluster}},
       contrast == {{contrast}},
-      logFC > 0
+      if (direction == "up") logFC > 0 else logFC < 0
     ) %>% 
     pull(gene)
   
@@ -479,24 +490,26 @@ enrich_all_genes <- function(data,
                              )) {
   queries <- 
     data %>%
-    distinct(contrast, cluster = cluster_id)
+    distinct(contrast, cluster = cluster_id) %>% 
+    mutate(direction = list(c("up", "down"))) %>% 
+    unnest_longer(direction)
   
   enrichr_data <-
-    queries %>% 
+    queries %>%
     pmap(enrich_genes, data = data, dbs = dbs)
-  
-  queries %>% 
-    mutate(data = enrichr_data) %>% 
-    rowwise() %>% 
+
+  queries %>%
+    mutate(data = enrichr_data) %>%
+    rowwise() %>%
     filter(!is.null(data)) %>%
-    filter(nrow(data) > 0) %>% 
-    unnest(data) %>% 
+    filter(nrow(data) > 0) %>%
+    unnest(data) %>%
     mutate(contrast = as_factor(contrast) %>% fct_relevel(str_sort))
 }
 
 enrichr_results <- enrich_all_genes(dge_results_filtered)
 
-
+enrichr_results
 
 
 #' Shorten enrichment terms.
@@ -533,14 +546,19 @@ shorten_go_term <- function(s, max_length = 30) {
 #'
 #' @param data Results from enrichtment analysis.
 #' @param contrast The selected contrast.
+#' @param direction Select results for up- or downregulated genes, respectively.
 #' @param n_bars Number of bars to plot per subchart.
 #' @param filename Name of output file.
 #'
 #' @return A ggplot object.
-plot_enrichr_bars <- function(data, contrast, n_bars = 10, filename = NULL) {
+plot_enrichr_bars <- function(data,
+                              contrast,
+                              direction = "up",
+                              n_bars = 10,
+                              filename = NULL) {
   data <- 
     data %>%
-    filter(contrast == {{contrast}}) %>%
+    filter(contrast == {{contrast}}, direction == {{direction}}) %>%
     mutate(Term = shorten_go_term(Term, 30)) %>% 
     group_by(cluster, db) %>% 
     slice_max(Combined.Score, n = n_bars, with_ties = FALSE) %>% 
@@ -610,28 +628,40 @@ plot_enrichr_dots <- function(data,
                               db,
                               max_p_adj = 0.05,
                               min_odds_ratio = 2,
+                              direction = "up",
                               filename = NULL,
                               plot_params = list()) {
-  p <-
+  data_filtered <-
     data %>% 
+    filter(db == {{db}}, direction == {{direction}}) %>% 
+    group_by(Term) %>%
     filter(
-      db == {{db}},
-      Adjusted.P.value < max_p_adj,
-      Odds.Ratio > min_odds_ratio,
-    ) %>% 
+      min(Adjusted.P.value) < max_p_adj,
+      max(Odds.Ratio) > min_odds_ratio
+    ) %>%
+    ungroup() %>%
     select(contrast, cluster, Term, Odds.Ratio, Adjusted.P.value) %>% 
-    ggplot(aes(cluster, Term)) +
-    geom_point(aes(size = -log10(Adjusted.P.value), color = log2(Odds.Ratio))) +
+    mutate(
+      Term = as_factor(Term) %>% fct_reorder(Odds.Ratio, max),
+      is_significant =
+        Adjusted.P.value < max_p_adj & Odds.Ratio > min_odds_ratio
+    )
+    
+  p <- 
+    ggplot(data_filtered, aes(cluster, Term, size = -log10(Adjusted.P.value))) +
+    geom_point(aes(color = log10(Odds.Ratio))) +
+    geom_point(data = data_filtered %>% filter(is_significant), shape = 1) +
     scale_color_distiller(palette = "Reds", direction = 1) +
+    scale_size_area() +
     coord_fixed() +
     facet_wrap(vars(contrast), drop = FALSE) +
     labs(
       y = "",
-      color = TeX("log_2 (odds ratio)"),
+      color = TeX("log_{10} (odds ratio)"),
       size = TeX("-log_{10} (p_{adj})"),
       title = str_glue( "Enrichr results ({db})"),
       caption = str_glue(
-        "adjusted p value < {max_p_adj}, ",
+        "bordered circles: adjusted p value < {max_p_adj}, ",
         "odds ratio > {min_odds_ratio}"
       )
     ) +
@@ -647,6 +677,13 @@ plot_enrichr_dots <- function(data,
 }
 
 
+
+enrichr_results %>%
+  plot_enrichr_dots(db = "GO_Biological_Process_2018",
+                    min_odds_ratio = 50,
+                    filename = "dge/dots_bioproc_all",
+                    plot_params = list(height = 840))
+
 enrichr_results %>%
   filter(
     !cluster %in% c("7", "19"),
@@ -660,11 +697,16 @@ enrichr_results %>%
 plot_enrichr_dots(enrichr_results,
                   db = "GO_Cellular_Component_2018",
                   filename = "dge/dots_cellcomp")
+plot_enrichr_dots(enrichr_results,
+                  direction = "down",
+                  db = "GO_Cellular_Component_2018",
+                  filename = "dge/dots_cellcomp_down")
 
 plot_enrichr_dots(enrichr_results,
                   db = "GO_Molecular_Function_2018",
                   min_odds_ratio = 50,
-                  filename = "dge/dots_molfun")
+                  filename = "dge/dots_molfun",
+                  plot_params = list(width = 420))
 
 plot_enrichr_dots(enrichr_results,
                   db = "KEGG_2019_Human",
@@ -678,29 +720,294 @@ plot_enrichr_dots(enrichr_results,
 
 
 
-# Unused ------------------------------------------------------------------
 
-# cross table
-table(colData(nb)$cluster_id, colData(nb)$group_id) %>% sum()
 
-# UMAP with expression colored
-top_12 <- 
-  dge_results_filtered %>%
-  filter(contrast == "II_vs_I", cluster_id == "9") %>% 
-  slice_max(n = 4, logFC, with_ties = FALSE) %>%
-  pull(gene) %>%
-  {.}
 
-top_12 %>% 
-  map(
-    ~plotReducedDim(
-      nb,
-      "UMAP",
-      colour_by = .x,
-      point_size = 0.1,
-      point_alpha = 1,
-      add_legend = FALSE
+plot_enrichr_halfdots <- function(data,
+                                  db,
+                                  max_p_adj = 0.05,
+                                  min_odds_ratio = 2,
+                                  filename = NULL,
+                                  plot_params = list()) {
+  data_filtered <-
+    data %>% 
+    filter(db == {{db}}) %>% 
+    group_by(Term) %>%
+    filter(
+      min(Adjusted.P.value) < max_p_adj,
+      max(Odds.Ratio) > min_odds_ratio
+    ) %>%
+    ungroup() %>%
+    select(contrast, cluster, Term, Odds.Ratio, Adjusted.P.value) %>% 
+    mutate(
+      cluster = 
+        cluster %>% 
+        fct_drop() %>%
+        {.},
+      Term =
+        as_factor(Term) %>%
+        fct_reorder(Odds.Ratio, max) %>% 
+        fct_drop() %>%
+        {.}
+    )
+  
+  scale_factor <- max(-log10(data_filtered$Adjusted.P.value)) / 2.5
+  
+  p <- 
+    ggplot(data_filtered) +
+    geom_arc_bar(
+      aes(
+        x0 = as.integer(cluster),
+        y0 = as.integer(Term),
+        fill = log10(Odds.Ratio),
+        r0 = 0,
+        r = sqrt(-log10(Adjusted.P.value)) / scale_factor,
+        start = 0,
+        end = pi
+      ),
+      color = NA
     ) +
-      coord_fixed()
-  ) %>% 
-  wrap_plots()
+    geom_arc_bar(
+      aes(
+        x0 = as.integer(cluster),
+        y0 = as.integer(Term),
+        fill = log10(Odds.Ratio),
+        r0 = 0,
+        r = sqrt(-log10(Adjusted.P.value)) / scale_factor,
+        start = pi,
+        end = 2*pi
+      ),
+      color = NA
+    ) +
+    scale_x_continuous(
+      breaks = seq(nlevels(data_filtered$cluster)),
+      labels = levels(data_filtered$cluster),
+      minor_breaks = NULL,
+      expand = c(0, 0)
+    ) +
+    scale_y_continuous(
+      breaks = seq(nlevels(data_filtered$Term)),
+      labels = levels(data_filtered$Term),
+      minor_breaks = NULL,
+      expand = c(0, 0)
+    ) +
+    scale_fill_distiller(palette = "Reds", direction = 1) +
+    coord_fixed(
+      xlim = c(0.5, nlevels(data_filtered$cluster) + 0.5),
+      ylim = c(0.5, nlevels(data_filtered$Term) + 0.5)
+    ) +
+    facet_wrap(vars(contrast), drop = FALSE) +
+    labs(
+      y = "",
+      fill = TeX("log_{10} (odds ratio)"),
+      size = TeX("-log_{10} (p_{adj})"),
+      title = str_glue( "Enrichr results ({db})"),
+      caption = str_glue(
+        "adjusted p value < {max_p_adj}, ",
+        "odds ratio > {min_odds_ratio}"
+      )
+    ) +
+    theme_bw() +
+    theme(
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+    NULL
+  # {.}
+  
+  rlang::exec(ggsave_default, filename, !!!plot_params)
+  p
+}
+
+plot_enrichr_halfdots(enrichr_results,
+                      db = "GO_Cellular_Component_2018",
+                      filename = "dge/dots_cellcomp_half")
+plot_enrichr_dots(enrichr_results,
+                  db = "GO_Cellular_Component_2018",
+                  filename = "dge/dots_cellcomp")
+
+
+
+
+enrichr_results %>% 
+  filter(
+    db == "GO_Cellular_Component_2018",
+  ) %>%
+  group_by(Term) %>%
+  filter(min(Adjusted.P.value) < 0.05, max(Odds.Ratio) > 2) %>%
+  ungroup() %>% 
+  # filter(
+  #   Adjusted.P.value < 0.05,
+  #   Odds.Ratio > 2,
+  # ) %>%
+  select(contrast, cluster, Term, Odds.Ratio, Adjusted.P.value)
+
+
+
+
+# GSEA --------------------------------------------------------------------
+
+get_enrichr_genesets <- function(dbs) {
+  dbs %>% 
+    map(
+      function(db) {
+        message("Downloading ", db)
+        url <- paste0(
+          "http://amp.pharm.mssm.edu/Enrichr/geneSetLibrary",
+          "?mode=text&libraryName=",
+          db
+        )
+        read_lines(url)
+      }
+    ) %>% 
+    set_names(dbs) %>% 
+    map(
+      function(db) {
+        m <- str_match(db, "(.+?)\\t\\t(.+)")
+        terms <- m[, 2]
+        genes <- m[, 3] %>% str_split("\\t")
+        genes %>% 
+          map(stringi::stri_remove_empty) %>% 
+          set_names(terms)
+      }
+    )
+}
+# TODO: currently, selection does not work!
+do_gsea <- function(data, gene_sets) {
+  data %>% 
+    distinct(contrast, cluster = cluster_id) %>% 
+    mutate(gene_set = list(names(gene_sets))) %>% 
+    unnest_longer(gene_set) %>% 
+    pmap_dfr(
+      function(contrast, cluster, gene_set) {
+        ranked_genes <-
+          data %>% 
+          filter(contrast == {{contrast}}, cluster == {{cluster}}) %>%
+          select(gene, logFC) %>%
+          deframe()
+        message("GSEA of contrast ", contrast, ", cluster ", cluster,
+                ", gene set ", gene_set, " (", length(ranked_genes), " genes)")
+        
+        fgseaMultilevel(
+          gene_sets[[gene_set]],
+          ranked_genes,
+          eps = 0
+        ) %>% 
+          as_tibble() %>% 
+          mutate(
+            gene_set = {{gene_set}},
+            contrast = {{contrast}},
+            cluster = {{cluster}},
+            .before = 1
+          )
+      }
+    )
+}
+
+enrichr_genesets <- get_enrichr_genesets(c("GO_Molecular_Function_2018",
+                                           "WikiPathways_2019_Human"))
+
+gsea_results <-
+  dge_results %>%
+  filter_dge_results(min_abs_log_fc = 0, min_freq = 0.05, max_p_adj = 0.05) %>%
+  # do_gsea(enrichr_genesets) %>% 
+  {.}
+gsea_results
+
+gsea_results %>% 
+  ggplot(aes(NES, -log10(padj))) +
+  geom_point(alpha = .1)
+
+
+
+
+plot_gsea_dots <- function(data,
+                           db,
+                           max_p_adj = 0.05,
+                           min_NES = 1,
+                           filename = NULL,
+                           plot_params = list()) {
+  data_filtered <-
+    data %>% 
+    filter(db == {{db}}) %>% 
+    group_by(pathway) %>%
+    filter(
+      min(padj) < max_p_adj,
+      max(NES) > min_NES
+    ) %>%
+    ungroup() %>%
+    select(contrast, cluster, pathway, NES, padj) %>% 
+    mutate(
+      pathway = as_factor(pathway) %>% fct_reorder(NES, max),
+      is_significant =
+        padj < max_p_adj & NES > min_NES
+    )
+  
+  p <- 
+    ggplot(data_filtered, aes(cluster, pathway, size = -log10(padj))) +
+    geom_point(aes(color = NES)) +
+    geom_point(data = data_filtered %>% filter(is_significant), shape = 1) +
+    scale_color_distiller(palette = "Reds", direction = 1) +
+    scale_size_area() +
+    coord_fixed() +
+    facet_wrap(vars(contrast), drop = FALSE) +
+    labs(
+      y = "",
+      size = TeX("-log_{10} (p_{adj})"),
+      title = str_glue( "GSEA results ({db})"),
+      caption = str_glue(
+        "bordered circles: adjusted p value < {max_p_adj}, ",
+        "normalized enrichment score > {min_NES}"
+      )
+    ) +
+    theme_bw() +
+    theme(
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+    NULL
+  
+  rlang::exec(ggsave_default, filename, !!!plot_params)
+  p
+}
+
+gsea_results %>% 
+  plot_gsea_dots("GO_Molecular_Function_2018",
+                 filename = "dge/gsea_molfun")
+
+
+
+
+
+
+top_terms <- 
+  gsea_molfun_II_1 %>% 
+  arrange(padj) %>% 
+  head(20) %>% 
+  pull(pathway)
+
+plotEnrichment(
+  pathways$GO_Molecular_Function_2018[[
+    gsea_molfun_II_1 %>% 
+      arrange(padj) %>% 
+      magrittr::extract2(1, 1)
+  ]],
+  dge_results %>%
+    filter_dge_results(min_abs_log_fc = 0, min_freq = 0.05, max_p_adj = 0.05) %>%
+    filter(contrast == "II_vs_I", cluster_id == "1") %>%
+    select(gene, logFC) %>% 
+    deframe(),
+)
+
+plotGseaTable(
+  pathways$GO_Molecular_Function_2018[top_terms],
+  dge_results %>%
+    filter_dge_results(min_abs_log_fc = 0, min_freq = 0.05, max_p_adj = 0.05) %>%
+    filter(contrast == "II_vs_I", cluster_id == "1") %>%
+    select(gene, logFC) %>% 
+    deframe(),
+  gsea_molfun_II_1,
+  gseaParam = 0.5
+)
+
+
