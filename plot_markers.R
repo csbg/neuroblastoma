@@ -4,22 +4,7 @@ library(tidyverse)
 library(fs)
 library(patchwork)
 library(viridis)
-
-ggsave_default <- function(filename, width = 297, height = 210,
-                           crop = TRUE, ...) {
-  if (is.null(filename))
-    return()
-  
-  filename <- str_glue("plots/{filename}.png")
-  filename %>% path_dir() %>% dir_create()
-  
-  ggsave(filename, dpi = 300, units = "mm", limitsize = FALSE,
-         width = width, height = height, ...)
-  
-  if (crop) knitr::plot_crop(filename)
-  
-  invisible(filename)
-}
+source("common_functions.R")
 
 
 
