@@ -28,8 +28,11 @@ markers <- read_csv("metadata/cell_markers.csv", comment = "#")
 Idents(nb) <- 
   fct_relevel(
     nb@meta.data$cluster_50,
-    # T and NK cells
-    "3", "5", "4", "6", "18",
+    # T cells
+    "3", "5", "18",
+    
+    # NK cells
+    "4", "6",
     
     # B cells
     "2", "9", "12", "17", "19", "21",
@@ -39,9 +42,6 @@ Idents(nb) <-
     
     # pDC
     "14",
-
-    # NB
-    "8",
     
     # erythroblast
     "13",
@@ -50,13 +50,19 @@ Idents(nb) <-
     "10", "11", 
     
     # other
-    "7", "20"
+    "7", "20",
+    
+    # NB
+    "8"
   )
 
 DotPlot(nb, features = rev(markers$gene)) +
   coord_flip() +
   scale_color_viridis(option = "inferno", direction = -1)
-ggsave_default("monocle/markers/canonical_markers_clusters")
+ggsave_default("monocle/markers/canonical_markers_clusters",
+               height = 297, width = 210)
+ggsave_default("monocle/markers/canonical_markers_clusters",
+               type = "pdf", height = 297, width = 210, crop = FALSE)
 
 
 
