@@ -9,33 +9,7 @@ library(fs)
 library(clustree)
 library(bluster)
 library(ggbeeswarm)
-
-
-#' Save a plot with default settings.
-#'
-#' @param filename output filename, stored as PNG in folder ./plots; any missing
-#'   folders are created. If NULL, do not create output.
-#' @param width figure width in mm (size is not limited)
-#' @param height figure height in mm
-#' @param crop If `TRUE`, crop the generated plot.
-#' @param ... additional arguments passed to ggsave().
-#'
-#' @return The final file name, invisibly.
-ggsave_default <- function(filename, width = 297, height = 210,
-                           crop = TRUE, ...) {
-  if (is.null(filename))
-    return()
-  
-  filename <- str_glue("plots/{filename}.png")
-  filename %>% path_dir() %>% dir_create()
-  
-  ggsave(filename, dpi = 300, units = "mm", limitsize = FALSE,
-         width = width, height = height, ...)
-  
-  if (crop) knitr::plot_crop(filename)
-  
-  invisible(filename)
-}
+source("common_functions.R")
 
 
 
@@ -477,6 +451,24 @@ plot_clusters_all(nb_data,
                   umap_1_monocle, umap_2_monocle,
                   cell_type_broad_lumped,
                   label_direct = FALSE,
+                  color_scale = scale_color_manual(
+                    values = c(
+                      T_cell = "#1f78b4",
+                      NK_cell = "#a6cee3",
+                      B_cell = "#33a02c",
+                      "Pro-B_cell_CD34+" = "#b2df8a",
+                      Monocyte = "#ff7f00",
+                      Neurons = "#e31a1c",
+                      Erythroblast = "#b15928",
+                      "Pre-B_call_CD34-" = "#6a3d9a",
+                      GMP = "#6a3d9a",
+                      CMP = "#6a3d9a",
+                      "Pro-Myelocyte" = "#6a3d9a",
+                      Other = "#6a3d9a",
+                      "NA" = "gray80"
+                    ),
+                    na.value = "gray80"
+                  ),
                   filename = "monocle/celltype_all_umap")
 
 plot_clusters_per_sample(nb_data,
@@ -923,7 +915,7 @@ plot_gene_program(nb_data,
 plot_gene_program(nb_data,
                   signature_noradrenergic, signature_ncc_like,
                   cell_type_broad_lumped,
-                  ncol = 5, filename = "gene_programs_nn_ctb")
+                  ncol = 4, filename = "gene_programs_nn_ctb")
 
 
 
