@@ -39,6 +39,11 @@ monocyte,MS4A7,biotechne
 plasmacytoid DC,IL3RA,Dong
 plasmacytoid DC,CLEC4C,Dong
 plasmacytoid DC,NRP1,biotechne
+erythroblast,TFRC,Neildez-Nguyen
+erythroblast,GYPA,Neildez-Nguyen
+erythroblast,CD36,Neildez-Nguyen
+CMP,CD34,Akashi
+CMP,FCGR2A,Akashi
 neuroblastoma,PHOX2B,Dong
 neuroblastoma,PHOX2A,Dong
 neuroblastoma,TH,Dong
@@ -51,8 +56,3 @@ neuroblastoma,MYCN,ccri
 neuroblastoma,L1CAM,ccri
 neuroblastoma,B4GALNT1,ccri
 neuroblastoma,NCAM1,ccri
-erythroblast,TFRC,Neildez-Nguyen
-erythroblast,GYPA,Neildez-Nguyen
-erythroblast,CD36,Neildez-Nguyen
-CMP,CD34,Akashi
-CMP,FCGR2A,Akashi
