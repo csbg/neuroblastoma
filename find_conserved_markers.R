@@ -7,22 +7,7 @@ library(pheatmap)
 library(tidyverse)
 library(RColorBrewer)
 library(patchwork)
-
-ggsave_default <- function(filename, width = 297, height = 210,
-                           crop = TRUE, ...) {
-  if (is.null(filename))
-    return()
-  
-  filename <- str_glue("plots/{filename}.png")
-  filename %>% fs::path_dir() %>% fs::dir_create()
-  
-  ggsave(filename, dpi = 300, units = "mm", limitsize = FALSE,
-         width = width, height = height, ...)
-  
-  if (crop) knitr::plot_crop(filename)
-  
-  invisible(filename)
-}
+source("common_functions.R")
 
 
 
