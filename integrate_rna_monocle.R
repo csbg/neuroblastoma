@@ -36,7 +36,10 @@ cds <-
   nb$RNA@counts %>% 
   new_cell_data_set(cell_metadata = nb@meta.data) %>% 
   preprocess_cds(verbose = TRUE) %>% 
-  align_cds(alignment_group = "sample", verbose = TRUE) %>% 
+  reduce_dimension(preprocess_method = "PCA", verbose = TRUE)
+
+cds_aligned <- 
+  align_cds(cds, alignment_group = "sample", verbose = TRUE) %>% 
   reduce_dimension(
     reduction_method = "UMAP",
     preprocess_method = "Aligned",
@@ -49,7 +52,7 @@ cds <-
   ) %>% 
   cluster_cells(k = 20, random_seed = 42, verbose = TRUE)
 
-cds_50 <- cluster_cells(cds, k = 50, random_seed = 42, verbose = TRUE)
+cds_50 <- cluster_cells(cds_aligned, k = 50, random_seed = 42, verbose = TRUE)
 
 saveRDS(cds_50, path_join(c(out_dir, "rna_integrated_monocle.rds")))
 
@@ -59,14 +62,17 @@ saveRDS(cds_50, path_join(c(out_dir, "rna_integrated_monocle.rds")))
 
 monocle_metadata <- list(
   reducedDim(cds, "UMAP") %>%
+    magrittr::set_colnames(c("umap_1_unaligned", "umap_2_unaligned")) %>% 
+    as_tibble(rownames = "cell"),
+  reducedDim(cds_aligned, "UMAP") %>%
     magrittr::set_colnames(c("umap_1", "umap_2")) %>% 
     as_tibble(rownames = "cell"),
-  reducedDim(cds, "tSNE") %>%
+  reducedDim(cds_aligned, "tSNE") %>%
     magrittr::set_colnames(c("tsne_1", "tsne_2")) %>% 
     as_tibble(rownames = "cell"),
-  clusters(cds) %>%
+  clusters(cds_aligned) %>%
     enframe(name = "cell", value = "cluster_20"),
-  partitions(cds) %>%
+  partitions(cds_aligned) %>%
     enframe(name = "cell", value = "partition_20"),
   clusters(cds_50) %>% 
     enframe(name = "cell", value = "cluster_50"),
