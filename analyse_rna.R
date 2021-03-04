@@ -415,6 +415,10 @@ plot_clusters_all(nb_data %>% arrange(umap_1_seurat),
 plot_clusters_all(nb_data %>% arrange(umap_1_monocle),
                   umap_1_monocle, umap_2_monocle, sample,
                   label_direct = FALSE, filename = "monocle/samples_all_umap")
+plot_clusters_all(nb_data,
+                  umap_1_unaligned, umap_2_unaligned, sample,
+                  label_direct = FALSE,
+                  filename = "monocle/samples_all_umap_unaligned")
 
 
 
@@ -445,31 +449,31 @@ plot_clusters_highlight(nb_data,
                         cell_type_broad_lumped,
                         nrow = 3, filename = "seurat/celltype_highlight_umap")
 
-
-
-plot_clusters_all(nb_data,
-                  umap_1_monocle, umap_2_monocle,
-                  cell_type_broad_lumped,
-                  label_direct = FALSE,
-                  color_scale = scale_color_manual(
-                    values = c(
-                      T_cell = "#1f78b4",
-                      NK_cell = "#a6cee3",
-                      B_cell = "#33a02c",
-                      "Pro-B_cell_CD34+" = "#b2df8a",
-                      Monocyte = "#ff7f00",
-                      Neurons = "#e31a1c",
-                      Erythroblast = "#b15928",
-                      "Pre-B_call_CD34-" = "#6a3d9a",
-                      GMP = "#6a3d9a",
-                      CMP = "#6a3d9a",
-                      "Pro-Myelocyte" = "#6a3d9a",
-                      Other = "#6a3d9a",
-                      "NA" = "gray80"
+fct_explicit_na(nb_data$cell_type_broad_lumped) %>% levels()
+nb_data %>% 
+  mutate(ct = fct_explicit_na(cell_type_broad_lumped, na_level = "Unknown")) %>% 
+  plot_clusters_all(umap_1_monocle, umap_2_monocle,
+                    ct,
+                    label_direct = FALSE,
+                    color_scale = scale_color_manual(
+                      values = c(
+                        T_cell = "#1f78b4",
+                        NK_cell = "#a6cee3",
+                        B_cell = "#33a02c",
+                        "Pro-B_cell_CD34+" = "#b2df8a",
+                        Monocyte = "#ff7f00",
+                        Neurons = "#e31a1c",
+                        Erythroblast = "#b15928",
+                        "Pre-B_cell_CD34-" = "#b2df8a",
+                        GMP = "#6a3d9a",
+                        CMP = "#6a3d9a",
+                        "Pro-Myelocyte" = "#6a3d9a",
+                        BM = "#6a3d9a",
+                        Other = "#6a3d9a",
+                        "Unknown" = "gray80"
+                      ),
                     ),
-                    na.value = "gray80"
-                  ),
-                  filename = "monocle/celltype_all_umap")
+                    filename = "monocle/celltype_all_umap")
 
 plot_clusters_per_sample(nb_data,
                          umap_1_monocle, umap_2_monocle,
