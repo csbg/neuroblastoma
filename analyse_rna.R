@@ -1,4 +1,4 @@
-library(pheatmap)
+library(ComplexHeatmap)
 library(RColorBrewer)
 library(ggpmisc)
 library(patchwork)
@@ -43,11 +43,6 @@ plot_clusters_all <- function(data, x, y, clusters, label_direct = TRUE,
     data %>% 
     group_by(label = {{clusters}}) %>% 
     summarise({{x}} := mean({{x}}), {{y}} := mean({{y}}))
-  
-  res <-
-    enquo(clusters) %>% 
-    rlang::as_name() %>%
-    str_sub(start = -3L)
   
   p <- 
     data %>%
@@ -424,75 +419,176 @@ plot_clusters_all(nb_data,
 
 # Cell types --------------------------------------------------------------
 
-plot_clusters_all(nb_data,
-                  umap_1_seurat, umap_2_seurat,
-                  cell_type_broad_lumped,
-                  label_direct = FALSE,
-                  filename = "seurat/celltype_all_umap")
+#' Preprocess cell types: Convert to factor, order by frequency, possibly lump.
+#'
+#' @param data Metadata.
+#' @param ref Reference cell type dataset (hpca, blueprint, dice, dmap, monaco).
+#' @param label Label granularity (broad fine).
+#' @param prop Lump cell types with a lower relative abundance.
+#' @param n Lump cell types except for the most frequent ones. If `prop` and `n`
+#'   are `NULL` (default value), do nothing.
+#'
+#' @return A data frame with a new column `cell_type`.
+preprocess_celltypes <- function(data, ref, label, prop = NULL, n = NULL) {
+  if (!is.null(prop)) {
+    if (!is.null(n))
+      stop("Values were specified for both prop and n.")
+    lump <- partial(fct_lump_prop, prop = prop)
+  } else if (!is.null(n)) {
+    lump <- partial(fct_lump_n, n = n)
+  } else {
+    lump <- function(x) x
+  }
+  
+  cell_type_column <- rlang::sym(str_glue("cell_type_{ref}_{label}"))
+  
+  data %>% 
+    mutate(
+      cell_type =
+        as_factor(!!cell_type_column) %>%
+        fct_infreq() %>% 
+        lump() %>% 
+        fct_explicit_na("Unknown")
+    )
+}
 
-plot_clusters_per_sample(nb_data,
-                         umap_1_seurat, umap_2_seurat,
-                         cell_type_broad_lumped,
-                         sample,
-                         nrow = 3, show_legend = TRUE,
-                         filename = "seurat/celltype_sample_umap")
 
-plot_clusters_per_sample(nb_data %>% mutate(group2 = group),
-                         umap_1_seurat, umap_2_seurat,
-                         cell_type_broad_lumped,
-                         group2,
-                         nrow = 2, show_legend = TRUE,
-                         filename = "seurat/celltype_group_umap")
+#' Plot a UMAP with cell types highlighted.
+#'
+#' @param data Metadata.
+#' @param ref   |
+#' @param label |
+#' @param prop  ↓
+#' @param n Passed to `preprocess_celltypes()`.
+#' @param ... Passed to `plot_clusters_all()`.
+#'
+#' @return A ggplot object.
+plot_celltypes_all <- function(data, ref, label,
+                               prop = NULL, n = NULL, ...) {
+  colors <- list(
+    T4 = "#1f78b4",
+    T8 = "#62a3cb",
+    NK = "#a6cee3",
+    B = "#33a02c",
+    B_prec = "#b2df8a",
+    mono = "#ff7f00",
+    neuron = "#e31a1c",
+    ery = "#b15928",
+    hsc = "#6a3d9a",
+    gran = "#cab2d6",
+    den = "#fdbf6f",
+    other = "black",
+    na = "gray80"
+  )
+  
+  cell_type_colors <- c(
+    T_cells = colors$T4,
+    "T cells" = colors$T4,
+    "CD4+ T cells" = colors$T4,
+    "CD4+ T-cells" = colors$T4,
+    "T cells, CD4+" = colors$T4,
+    "CD8+ T cells" = colors$T8,
+    "CD8+ T-cells" = colors$T8,
+    "T cells, CD8+" = colors$T8,
+    
+    NK_cell = colors$NK,
+    "NK cells" = colors$NK,
+    
+    B_cell = colors$B,
+    "B-cells" = colors$B,
+    "B cells" = colors$B,
+    
+    "Pro-B_cell_CD34+" = colors$B_prec,
+    "Pre-B_cell_CD34-" = colors$B_prec,
+    
+    Monocyte = colors$mono,
+    Monocytes = colors$mono,
+    
+    Neurons = colors$neuron,
+    
+    Erythroblast = colors$ery,
+    Erythrocytes = colors$ery,
+    "Erythroid cells" = colors$ery,
+    
+    GMP = colors$hsc,
+    CMP = colors$hsc,
+    "Pro-Myelocyte" = colors$hsc,
+    BM = colors$hsc,
+    HSC = colors$hsc,
+    HSCs = colors$hsc,
+    MEPs = colors$hsc,
+    Progenitors = colors$hsc,
+    
+    Granulocytes = colors$gran,
+    Basophils = colors$gran,
+    Neutrophils = colors$gran,
+    
+    "Dendritic cells" = colors$den,
+    
+    Other = colors$other,
+    Unknown = colors$na
+  )
+  
+  data %>% 
+    preprocess_celltypes(ref, label, prop, n) %>% 
+    plot_clusters_all(
+      umap_1_monocle,
+      umap_2_monocle,
+      cell_type,
+      label_direct = FALSE,
+      color_scale = scale_color_manual(
+        values = cell_type_colors,
+        guide = guide_legend(override.aes = list(size = 5))
+      ),
+      ...
+    )
+}
 
-plot_clusters_highlight(nb_data,
-                        umap_1_seurat, umap_2_seurat,
-                        cell_type_broad_lumped,
-                        nrow = 3, filename = "seurat/celltype_highlight_umap")
+plot_celltypes_all(nb_data, "hpca", "broad", prop = 0.01,
+                   filename = "monocle/celltype_all_hpca")
+plot_celltypes_all(nb_data, "blueprint", "broad", prop = 0.01,
+                   filename = "monocle/celltype_all_blueprint")
+plot_celltypes_all(nb_data, "dice", "broad",
+                   filename = "monocle/celltype_all_dice")
+plot_celltypes_all(nb_data, "dmap", "broad", prop = 0.01,
+                   filename = "monocle/celltype_all_dmap")
+plot_celltypes_all(nb_data, "monaco", "broad",
+                   filename = "monocle/celltype_all_monaco")
 
-fct_explicit_na(nb_data$cell_type_broad_lumped) %>% levels()
-nb_data %>% 
-  mutate(ct = fct_explicit_na(cell_type_broad_lumped, na_level = "Unknown")) %>% 
-  plot_clusters_all(umap_1_monocle, umap_2_monocle,
-                    ct,
-                    label_direct = FALSE,
-                    color_scale = scale_color_manual(
-                      values = c(
-                        T_cell = "#1f78b4",
-                        NK_cell = "#a6cee3",
-                        B_cell = "#33a02c",
-                        "Pro-B_cell_CD34+" = "#b2df8a",
-                        Monocyte = "#ff7f00",
-                        Neurons = "#e31a1c",
-                        Erythroblast = "#b15928",
-                        "Pre-B_cell_CD34-" = "#b2df8a",
-                        GMP = "#6a3d9a",
-                        CMP = "#6a3d9a",
-                        "Pro-Myelocyte" = "#6a3d9a",
-                        BM = "#6a3d9a",
-                        Other = "#6a3d9a",
-                        "Unknown" = "gray80"
-                      ),
-                    ),
-                    filename = "monocle/celltype_all_umap")
 
-plot_clusters_per_sample(nb_data,
-                         umap_1_monocle, umap_2_monocle,
-                         cell_type_broad_lumped,
-                         sample,
-                         nrow = 3, show_legend = TRUE,
-                         filename = "monocle/celltype_sample_umap")
 
-plot_clusters_per_sample(nb_data %>% mutate(group2 = group),
-                         umap_1_monocle, umap_2_monocle,
-                         cell_type_broad_lumped,
-                         group2,
-                         nrow = 2, show_legend = TRUE,
-                         filename = "monocle/celltype_group_umap")
+#' Make subplots, each of which highlights a particular cell type.
+#'
+#' @param data Metadata.
+#' @param ref   |
+#' @param label |
+#' @param prop  ↓
+#' @param n Passed to `preprocess_celltypes()`.
+#' @param ... Passed to `plot_clusters_all()`.
+#'
+#' @return A ggplot object.
+plot_celltypes_highlight <- function(data, ref, label,
+                                     prop = NULL, n = NULL, ...) {
+  data %>% 
+    preprocess_celltypes(ref, label, prop, n) %>% 
+    plot_clusters_highlight(
+      umap_1_monocle,
+      umap_2_monocle,
+      cell_type,
+      ...
+    )
+}
 
-plot_clusters_highlight(nb_data,
-                        umap_1_monocle, umap_2_monocle,
-                        cell_type_broad_lumped,
-                        nrow = 3, filename = "monocle/celltype_highlight_umap")
+plot_celltypes_highlight(nb_data, "hpca", "broad", prop = 0.01,
+                         filename = "monocle/celltype_highlight_hpca")
+plot_celltypes_highlight(nb_data, "blueprint", "broad", prop = 0.01,
+                         filename = "monocle/celltype_highlight_blueprint")
+plot_celltypes_highlight(nb_data, "dice", "broad",
+                         filename = "monocle/celltype_highlight_dice")
+plot_celltypes_highlight(nb_data, "dmap", "broad", prop = 0.01,
+                         filename = "monocle/celltype_highlight_dmap")
+plot_celltypes_highlight(nb_data, "monaco", "broad",
+                         filename = "monocle/celltype_highlight_monaco")
 
 
 
@@ -501,31 +597,23 @@ plot_clusters_highlight(nb_data,
 #' Plot a heatmap of cell type vs cluster.
 #'
 #' @param data Metadata.
-#' @param cell_types Column with cell types.
 #' @param clusters Column with cluster IDs.
-#' @param lump_n Preserve the `lump_n` most common cell types, lump the
-#'   remaining ones as "other".
-#' @param sample Only include this sample.
-#' @param cluster_cols If `TRUE`, cluster the columns (i.e., Seurat clusters).
+#' @param ref   |
+#' @param label |
+#' @param prop  ↓
+#' @param n Passed to `preprocess_celltypes()`.
 #' @param filename Name of output file.
+#' @param ... Passed to `Heatmap()`.
 #'
 #' @return A ggplot object.
-plot_cvt_heatmap <- function(data, cell_types, clusters,
-                             lump_n = NULL, sample = NULL, cluster_cols = TRUE,
-                             filename = NULL) {
-  if (is.null(sample))
-    sample <- "."
-  if (is.null(lump_n))
-    lump_n <- Inf
+plot_cvt_heatmap <- function(data, clusters, ref, label,
+                             prop = NULL, n = NULL, filename = NULL, ...) {
   
-  p <-
+  mat <-
     data %>% 
-    mutate(
-      cell_type = fct_lump_n({{cell_types}}, lump_n),
-      cluster = {{clusters}}
-    ) %>%
-    filter(sample %>% str_detect({{sample}})) %>%     
-    count(cluster, cell_type, .drop = FALSE) %>% 
+    preprocess_celltypes(ref, label, prop, n) %>% 
+    mutate(cluster = {{clusters}}) %>%
+    count(cluster, cell_type, .drop = FALSE) %>%
     group_by(cluster) %>%
     mutate(n_rel = n / sum(n)) %>%
     select(!n) %>%
@@ -534,78 +622,106 @@ plot_cvt_heatmap <- function(data, cell_types, clusters,
     column_to_rownames("cluster") %>%
     as.matrix() %>%
     t() %>%
-    replace_na(0) %>%
-    pheatmap(
-      color = colorRampPalette(brewer.pal(9, "YlOrRd"))(100),
-      legend = FALSE,
-      border_color = "white",
-      cluster_cols = cluster_cols,
-      cluster_rows = FALSE,
-      angle_col = "0",
-      fontsize = 12
-    )
-  set_last_plot(p)
+    replace_na(0)
 
-  ggsave_default(filename)
-  invisible(p)
+  p <- Heatmap(
+    mat,
+    col = colorRampPalette(brewer.pal(9, "YlOrRd"))(100),
+    show_heatmap_legend = FALSE,
+    rect_gp = gpar(col = "white", lwd = 1),
+    cluster_rows = FALSE,
+    column_names_rot = 0
+  )
+
+  ggsave_default(filename, plot = p)
+  p
 }
 
+plot_cvt_heatmap(nb_data, cluster_50, "hpca", "broad",
+                 filename = "monocle/cvt_heatmap_hpca_broad")
+plot_cvt_heatmap(nb_data, cluster_50, "hpca", "fine", n = 35,
+                 filename = "monocle/cvt_heatmap_hpca_fine")
 
-plot_cvt_heatmap(nb_data, cell_type_broad, cluster_0.5,
-                 filename = "seurat/cvt_heatmap_broad_0.5")
-plot_cvt_heatmap(nb_data, cell_type_fine, cluster_0.5,
-                 lump_n = 35, filename = "seurat/cvt_heatmap_fine_0.5")
+plot_cvt_heatmap(nb_data, cluster_50, "blueprint", "broad",
+                 filename = "monocle/cvt_heatmap_blueprint_broad")
+plot_cvt_heatmap(nb_data, cluster_50, "blueprint", "fine", n = 25,
+                 filename = "monocle/cvt_heatmap_blueprint_fine")
 
-plot_cvt_heatmap(nb_data, cell_type_broad, cluster_50,
-                 filename = "monocle/cvt_heatmap_broad_50")
-plot_cvt_heatmap(nb_data, cell_type_fine, cluster_50,
-                 lump_n = 35, filename = "monocle/cvt_heatmap_fine_50")
+plot_cvt_heatmap(nb_data, cluster_50, "dice", "broad",
+                 filename = "monocle/cvt_heatmap_dice_broad")
+plot_cvt_heatmap(nb_data, cluster_50, "dice", "fine",
+                 filename = "monocle/cvt_heatmap_dice_fine")
+
+plot_cvt_heatmap(nb_data, cluster_50, "dmap", "broad",
+                 filename = "monocle/cvt_heatmap_dmap_broad")
+plot_cvt_heatmap(nb_data, cluster_50, "dmap", "fine", n = 25,
+                 filename = "monocle/cvt_heatmap_dmap_fine")
+
+plot_cvt_heatmap(nb_data, cluster_50, "monaco", "broad",
+                 filename = "monocle/cvt_heatmap_monaco_broad")
+plot_cvt_heatmap(nb_data, cluster_50, "monaco", "fine",
+                 filename = "monocle/cvt_heatmap_monaco_fine")
 
 
 
 #' For each cluster, plot a bar chart that counts the most frequent cell types.
 #'
 #' @param data Metadata.
-#' @param cell_types Column with cell types.
 #' @param clusters Column with cluster IDs.
-#' @param lump_n Preserve the `lump_n` most common cell types, lump the
-#'   remaining ones as "other".
+#' @param ref   ↓
+#' @param label Passed to `preprocess_celltypes()`.
+#' @param max_bars Maximum number of bars in each subplot. Collapse additional
+#'   cell types (except "Unknown") into type "Other".
 #' @param save_subplots If `TRUE`, also save each subplot into a separate file.
 #' @param filename Name of output file.
 #' @param ... further arguments passed to `ggsave_default()`
 #'
 #' @return A ggplot object.
-plot_cvt_bar <- function(data, cell_types, clusters,
-                         lump_n = 10, save_subplots = FALSE,
+plot_cvt_bar <- function(data, clusters, ref, label,
+                         max_bars = 8L, save_subplots = FALSE,
                          filename = NULL, ...) {
   pdata <- 
     data %>% 
-    transmute(
-      cell_type = {{cell_types}},
-      cluster = {{clusters}}
-    )
+    preprocess_celltypes(ref, label) %>% 
+    select(cell_type, cluster = {{clusters}})
   
   plot_single <- function(cluster) {
-    ps <- 
-      pdata %>% 
+    cell_types <-
+      pdata %>%
       filter(cluster == {{cluster}}) %>%
-      mutate(cell_type = fct_lump_n(cell_type, lump_n)) %>%
-      count(cell_type) %>%
+      pull(cell_type) %>% 
+      fct_drop() %>% 
+      fct_infreq()
+    
+    if (nlevels(cell_types) > max_bars) {
+      if ("Unknown" %in% levels(cell_types))
+        cell_types <- fct_relevel(cell_types, "Unknown", after = 0)
+      
+      kept_levels <- levels(cell_types)[1:max_bars - 1]
+      cell_types <- fct_relabel(
+        cell_types,
+        ~case_when(. %in% kept_levels ~ ., TRUE ~ "Other")
+      )
+    }
+
+    ps <-
+      fct_count(cell_types, prop = TRUE) %>% 
       mutate(
-        cell_type = cell_type %>% 
+        f =
+          f %>%
           fct_reorder(n) %>%
-          fct_relevel("Other"),
-        n_rel = n / sum(n) * 100
-      ) %>% 
-      ggplot(aes(cell_type, n)) +
-      geom_col(aes(fill = n_rel), show.legend = FALSE) +
+          fct_relevel("Other") %>% 
+          fct_relevel("Unknown")
+      ) %>%
+      ggplot(aes(f, n)) +
+      geom_col(aes(fill = p), show.legend = FALSE) +
       annotate("text_npc", npcx = 0.5, npcy = 0.9, label = cluster) +
       xlab("") +
       ylab("") +
       scale_fill_distiller(
         palette = "YlOrRd",
         direction = 1,
-        limits = c(0, 100)
+        limits = c(0, 1)
       ) +
       coord_flip() +
       theme_classic() +
@@ -624,100 +740,45 @@ plot_cvt_bar <- function(data, cell_types, clusters,
           width = unit(30, "mm"),
           height = unit(30, "mm")
         )
-      ) 
+      )
     }
     ps
   }
-  
+
   p <-
-    levels(pdata$cluster) %>% 
-    map(plot_single) %>% 
+    levels(pdata$cluster) %>%
+    map(plot_single) %>%
     wrap_plots()
   set_last_plot(p)
-  
-  ggsave_default(filename, ...)
+
+  ggsave_default(filename, width = 420, height = 297, ...)
   p
 }
 
+plot_cvt_bar(nb_data, cluster_50, "hpca", "broad",
+             filename = "monocle/cvt_bar_hpca_broad")
+plot_cvt_bar(nb_data, cluster_50, "hpca", "fine",
+             filename = "monocle/cvt_bar_hpca_fine")
 
-plot_cvt_bar(nb_data, cell_type_broad, cluster_0.5,
-             lump_n = 5, filename = "seurat/cvt_bar_broad_0.5")
-plot_cvt_bar(nb_data, cell_type_fine, cluster_0.5,
-             lump_n = 8, filename = "seurat/cvt_bar_fine_0.5",
-             width = 420, height = 297)
+plot_cvt_bar(nb_data, cluster_50, "blueprint", "broad",
+             filename = "monocle/cvt_bar_blueprint_broad")
+plot_cvt_bar(nb_data, cluster_50, "blueprint", "fine",
+             filename = "monocle/cvt_bar_blueprint_fine")
 
-plot_cvt_bar(nb_data, cell_type_broad, cluster_50,
-             lump_n = 5, width = 420, height = 297,
-             filename = "monocle/cvt_bar_broad_cluster_50")
-plot_cvt_bar(nb_data, cell_type_broad, partition_50,
-             lump_n = 5,
-             filename = "monocle/cvt_bar_broad_partition_50")
+plot_cvt_bar(nb_data, cluster_50, "dice", "broad",
+             filename = "monocle/cvt_bar_dice_broad")
+plot_cvt_bar(nb_data, cluster_50, "dice", "fine",
+             filename = "monocle/cvt_bar_dice_fine")
 
+plot_cvt_bar(nb_data, cluster_50, "dmap", "broad",
+             filename = "monocle/cvt_bar_dmap_broad")
+plot_cvt_bar(nb_data, cluster_50, "dmap", "fine",
+             filename = "monocle/cvt_bar_dmap_fine")
 
-
-#' For each group, plot a bar chart that counts the most frequent cell types.
-#' Only include selected clusters.
-#'
-#' @param data Metadata.
-#' @param cell_types Column with cell types.
-#' @param clusters Column with cluster IDs.
-#' @param selected_clusters Vector of selected cluster IDs.
-#' @param filename Name of output file.
-#'
-#' @return A ggplot object.
-plot_cvt_group <- function(data, cell_types, clusters, selected_clusters,
-                           filename = NULL) {
-  p <- 
-    map(
-      levels(data$group),
-      function(group) {
-        data_plot <- 
-          data %>%
-          filter(
-            {{clusters}} %in% {{selected_clusters}},
-            group == {{group}}
-          ) %>%
-          count(cell_type = {{cell_types}}) %>%
-          mutate(
-            cell_type = fct_reorder(cell_type, n),
-            n_rel = n / sum(n) * 100
-          )
-        
-        ggplot(data_plot, aes(cell_type, n)) +
-          geom_col(aes(fill = n_rel), show.legend = FALSE) +
-          annotate(
-            "text_npc",
-            npcx = 0.5,
-            npcy = 0.9,
-            label = str_glue("group {group}\n{sum(data_plot$n)} cells")
-          ) +
-          xlab("") +
-          ylab("") +
-          scale_fill_distiller(
-            palette = "YlOrRd",
-            direction = 1,
-            limits = c(0, 100)
-          ) +
-          coord_flip() +
-          theme_classic() +
-          theme(
-            axis.text.x = element_text(angle = 270, vjust = 0.5),
-            strip.background = element_blank(),
-            strip.text = element_text(face = "bold")
-          ) +
-          NULL
-      }
-    ) %>% 
-    wrap_plots() +
-    plot_annotation(
-      str_glue("Cell types in cluster ",
-               "{str_c(selected_clusters, collapse = ', ')}, ",
-               "split by patient groups")
-    )
-  
-  ggsave_default(filename, width = 200, height = 150)
-  p
-}
+plot_cvt_bar(nb_data, cluster_50, "monaco", "broad",
+             filename = "monocle/cvt_bar_monaco_broad")
+plot_cvt_bar(nb_data, cluster_50, "monaco", "fine",
+             filename = "monocle/cvt_bar_monaco_fine")
 
 
 
@@ -727,12 +788,12 @@ plot_cvt_group <- function(data, cell_types, clusters, selected_clusters,
 #'
 #' @param data Metadata.
 #' @param clusters Column with cluster IDs.
-#' @param angle_col Angle of pheatmap column labels.
+#' @param angle_col Angle of column labels.
 #' @param filename Name of output file.
 #'
 #' @return A ggplot object.
 plot_cluster_size <- function(data, clusters,
-                              angle_col = "90", filename = NULL) {
+                              angle_col = 90, filename = NULL) {
   pivot_and_scale <- function(x) {
     x %>%
       mutate(n_rel = n / sum(n)) %>%
@@ -761,51 +822,57 @@ plot_cluster_size <- function(data, clusters,
     )
 
   annotation_row <-
-    data %>%
-    distinct(group, sample) %>%
-    column_to_rownames("sample")
+    bind_rows(
+      count(data, group, sample),
+      count(data, group)  
+    ) %>% 
+    mutate(
+      split = case_when(
+        is.na(sample) ~ "groups", TRUE ~ as.character(group)
+      ) %>% 
+        as_factor() %>% 
+        fct_relevel("groups", after = Inf)
+    )
 
-  gaps_row <-
-    data %>%
-    group_by(group) %>%
-    summarise(n = n_distinct(sample)) %>%
-    pull(n) %>%
-    cumsum()
-
-  p <- pheatmap(
+  p <- Heatmap(
     size_mat,
-    color = colorRampPalette(brewer.pal(9, "Greens"))(100),
-    border_color = "white",
-    angle_col = angle_col,
-    annotation_row = annotation_row,
-    gaps_row = gaps_row,
+    col = colorRampPalette(brewer.pal(9, "Greens"))(100),
+    column_names_rot = angle_col,
+    left_annotation = rowAnnotation(
+      group = annotation_row$group,
+      col = list(
+        group = c(
+          I = "#1b9e77",
+          II = "#d95f02",
+          III = "#7570b3",
+          IV = "#e7298a"
+        )
+      ),
+      show_legend = FALSE
+    ),
+    row_split = annotation_row$split,
+    cluster_row_slices = FALSE,
     cluster_rows = FALSE,
-    cluster_cols = FALSE,
-    main = "Relative cluster sizes in samples and groups"
+    cluster_columns = FALSE,
+    heatmap_legend_param = list(title = "scaled\nabundance")
   )
-  set_last_plot(p)
 
-  ggsave_default(filename)
-  invisible(p)
+  ggsave_default(filename, plot = p)
+  p
 }
 
-plot_cluster_size(nb_data, cluster_0.5,
-                  angle_col = "0",
-                  filename = "seurat/cluster_size_vs_samples")
-
-plot_cluster_size(nb_data, cluster_50,
-                  angle_col = "0",
+plot_cluster_size(nb_data, cluster_50, angle_col = 0,
                   filename = "monocle/cluster_size_vs_samples")
 
 nb_data %>%
-  mutate(cell_type = fct_explicit_na(cell_type_broad_lumped)) %>% 
-  plot_cluster_size(cell_type, 
-                    filename = "celltype_broad_count_vs_samples")
+  preprocess_celltypes("hpca", "broad", prop = 0.01) %>% 
+  plot_cluster_size(cell_type,
+                    filename = "celltype_hpca_broad_count_vs_samples")
 
 nb_data %>%
-  mutate(cell_type = fct_explicit_na(cell_type_fine_lumped)) %>% 
+  preprocess_celltypes("hpca", "fine", prop = 0.01) %>% 
   plot_cluster_size(cell_type,
-                    filename = "celltype_fine_count_vs_samples")
+                    filename = "celltype_hpca_fine_count_vs_samples")
 
 
 
