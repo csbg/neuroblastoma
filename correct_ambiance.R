@@ -1,3 +1,8 @@
+# Remove cell-free RNA contamination via SoupX to improve DGE.
+# 
+# Creates a cell_data_set with an additional assay `soupx_counts`, containing
+# decontaminated counts as determined by SoupX.
+
 library(SingleCellExperiment)
 library(DropletUtils)
 library(monocle3)
@@ -18,8 +23,8 @@ data_dir <- "data_raw/COUNT"
 # integrated dataset
 in_file <- "data_generated/rna_integrated_monocle.rds"
 
-# dataset with corrected counts
-out_file <- "data_generated/rna_soupx.rds"
+# dataset with decontaminated counts
+out_file <- "data_generated/rna_decontaminated.rds"
 
 # data frame with three columns 'order', 'sample_name', and 'sample_file'
 samples <-
@@ -157,7 +162,7 @@ map(
   sce = nb
 ) %>% 
   wrap_plots(guides = "collect")
-ggsave_default("ambiance/rel_change", width = 420, height = 297)
+ggsave_default("ambiance/relative_change", width = 420, height = 297)
 
 
 tibble(
