@@ -854,7 +854,7 @@ plot_cluster_size <- function(data, clusters,
     cluster_row_slices = FALSE,
     cluster_rows = FALSE,
     cluster_columns = FALSE,
-    heatmap_legend_param = list(title = "scaled\nabundance")
+    heatmap_legend_param = list(title = "relative\nabundance")
   )
 
   ggsave_default(filename, plot = p)

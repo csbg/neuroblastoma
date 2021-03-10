@@ -39,6 +39,8 @@
   plot canonical cell type and NB markers
 * [find_conserved_markers.R](find_conserved_markers.R) -
   find conserved markers
+* [correct_ambiance.R](correct_ambiance.R) –
+  remove cell-free RNA contamination
 * [dge_muscat.R](dge_muscat.R) -
   differential expression via muscat
 
@@ -64,3 +66,5 @@
 
 * [make_subclusters.R](make_subclusters.R) -
   perform subclustering
+* [process_droplets.R](process_droplets.R) –
+  droplet calling and QC filtering
