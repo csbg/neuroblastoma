@@ -18,6 +18,12 @@
 # Individual assays are exported to
 # * assay_RNA_seurat.rds and
 # * assay_SCT_seurat.rds
+#
+# @DEPI rna_integrated_seurat.rds
+# @DEPO metadata_seurat.csv
+# @DEPO assay_rna_seurat.rds
+# @DEPO assay_sct_seurat.rds
+
 
 library(Seurat)
 library(tidyverse)

@@ -9,6 +9,9 @@
 # Generates a CSV file `doublet_scores.csv` with columns
 # * `cell`
 # * `cxds_score`, `bcds_score`, and `hybrid_score` (doublet scores)
+#
+# @DEPI rna_merged.rds
+# @DEPO doublet_scores.csv
 
 library(Seurat)
 library(scds)

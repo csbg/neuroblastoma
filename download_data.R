@@ -1,5 +1,7 @@
 # Download files specified in the variables rna_files and atac_files for each
 # sample in parent_url, and save the files in data_dir
+#
+# @DEPO raw data
 
 library(tidyverse)
 library(fs)

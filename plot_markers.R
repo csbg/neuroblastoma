@@ -1,5 +1,8 @@
 # Plot canonical cell type and neuroblastoma markers.
 # Exports several plots to plots/markers.
+#
+# @DEPI metadata.rds
+# @DEPI assay_sct_seurat.rds
 
 library(Seurat)
 library(tidyverse)

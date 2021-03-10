@@ -54,6 +54,8 @@
   compare two samples that differ in read length (50 vs 75 bp)
 * [download_data.R](download_data.R) -
   download raw data from the BSF
+* [plot_dependencies.R](plot_dependencies.R) –
+  plot the dependency graph
 * [plot_qc_metrics.R](plot_qc_metrics.R) -
   plot QC metrics for cell filtering (i.e., % of mitochondrial genes etc.)
 * [summarize_cellranger_metrics.R](summarize_cellranger_metrics.R) -

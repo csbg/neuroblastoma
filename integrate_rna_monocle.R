@@ -10,6 +10,10 @@
 # * tsne_2 – tSNE coordinates
 # * cluster_[k] – cluster IDs for different numbers k of nearest neighbors
 # * partition_[k] – partition IDs for different k
+#
+# @DEPI rna_merged.rds
+# @DEPO rna_integrated_monocle.rds
+# @DEPO metadata_monocle.csv
 
 library(monocle3) 
 library(Seurat)
