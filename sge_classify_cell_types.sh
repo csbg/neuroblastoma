@@ -1,7 +1,7 @@
 #!/usr/bin/qsub
 
 ### max runtime: HH:MM:SS
-#$ -l h_rt=5:00:00
+#$ -l h_rt=8:00:00
 
 ### estimated memory usage
 #$ -l mt=5000m
@@ -32,4 +32,4 @@
 ### jobname
 #$ -N classify_cell_types
 
-Rscript classify_cell_types.R
+singularity run rocker4csbg.sif classify_cell_types.R

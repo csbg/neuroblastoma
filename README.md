@@ -41,14 +41,6 @@
   find conserved markers
 * [dge_muscat.R](dge_muscat.R) -
   differential expression via muscat
-  
-## Needs revision
-
-* [dge_seurat.R](dge_seurat.R) -
-  differential expression via Seurat;
-  invoke via [sge_job_dge_seurat.sh](sge_job_de_seurat.sh)
-* [plot_dge_seurat.R](plot_dge_seurat.R) -
-  plot DGE results from Seurat
 
 
 

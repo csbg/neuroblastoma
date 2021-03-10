@@ -1,16 +1,17 @@
 # Cell type assignment via SingleR.
 #
-# Creates two CSV files:
-# * cell_types_singler.csv – the dataframe returned by SingleR::SingleR(),
-#                            with added cell and sample information
-# * degenes_singler.csv – @metadata$de.genes of SingleR results (wide form)
+# Creates several CSV files named 'cell_types_singler_[ref]_[labels].csv', where
+# [ref] indicates the celldex reference dataset and [labels] denotes whether the
+# broad or fine labels from the reference dataset were used for classification.
+# Each file contains the dataframe returned by SingleR::SingleR(), with added
+# cell and sample information
 
 
 library(Seurat)
 library(SingleR)
 library(celldex)
 library(tidyverse)
-library(fs)
+source("common_functions.R")
 
 
 
@@ -29,37 +30,70 @@ out_dir <- "data_generated"
 nb <- readRDS(merged_data)
 
 # for testing: choose only a few cells
-# nb <- subset(nb, cells = sample(ncol(nb), 50))
+# nb <- subset(nb, cells = sample(ncol(nb), 20))
 
-reference_cell_types <- HumanPrimaryCellAtlasData()
+reference_cell_types <- list(
+  # two general purpose datasets
+  hpca = HumanPrimaryCellAtlasData(),
+  blueprint = BlueprintEncodeData(),
+  
+  # comprehensive CD4+ subsets; only one B cell subset, no dendritic cells
+  dice = DatabaseImmuneCellExpressionData(),
+  
+  # for bone marrow samples
+  dmap = NovershternHematopoieticData(),
+  
+  # for PBMC
+  monaco = MonacoImmuneData()
+)
 
 
 
 # Predict cell types ------------------------------------------------------
 
-predicted_cell_types <- SingleR(
-  test = nb$RNA@counts,
-  ref = reference_cell_types,
-  labels = reference_cell_types$label.fine
-)
+predicted_cell_types <- 
+  list(
+    ref = names(reference_cell_types),
+    labels = c("label.main", "label.fine")
+  ) %>% 
+  cross_df() %>% 
+  pmap(
+    function(ref, labels) {
+      info("Classifying with reference dataset '{ref}' and labels '{labels}'")
+      results <- SingleR(
+        test = nb$RNA@counts,
+        ref = reference_cell_types[[ref]],
+        labels = colData(reference_cell_types[[ref]])[, labels]
+      )
+      list(
+        table = results,
+        ref = ref,
+        labels = labels
+      )
+    }
+  )
 
 
 
 # Save data ---------------------------------------------------------------
 
-nb@meta.data %>% 
-  select(sample) %>% 
-  as_tibble(rownames = "cell") %>% 
-  bind_cols(as_tibble(predicted_cell_types)) %>% 
-  write_csv(path_join(c(out_dir, "cell_types_singler.csv")))
+save_results <- function(results) {
+  score_colnames <- str_c(
+    "score_",
+    colnames(results$table$scores)
+  )
+  
+  df <- as_tibble(results$table, rownames = "cell")
+  colnames(df) <- c(
+    "cell", score_colnames,
+    "first_labels", "tuning_scores_first", "tuning_scores_second",
+    "labels", "pruned_labels"
+  )
 
-tibble(
-  cell_type_1 = names(predicted_cell_types@metadata$de.genes),
-  lc = predicted_cell_types@metadata$de.genes
-) %>%
-  unnest_longer(lc, indices_to = "cell_type_2", values_to = "genes") %>% 
-  rowwise() %>% 
-  mutate(genes = str_c(genes, collapse = ", ")) %>% 
-  relocate(cell_type_2, .after = cell_type_1) %>% 
-  write_csv(path_join(c(out_dir, "degenes_singler.csv")))
+  write_csv(
+    df,
+    str_glue("{out_dir}/cell_types_singler_{results$ref}_{results$labels}.csv")
+  )
+}
 
+predicted_cell_types %>% walk(save_results)

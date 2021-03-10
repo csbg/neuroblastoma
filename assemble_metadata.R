@@ -6,6 +6,8 @@
 # * celltype_details.rds - processed SingleR details
 
 library(tidyverse)
+library(fs)
+source("common_functions.R")
 
 
 
@@ -13,12 +15,13 @@ library(tidyverse)
 
 #' Load cell type data from SingleR.
 #'
-#' @param folder Folder containing cell_types_singler.csv.
+#' @param file SingleR results file (`cell_types_singler_[ref]_[labels].csv`).
 #'
-#' @return A dataframe with one row per cell abd 14 columns:
-#'   * `first.labels`,
-#'     `tuning.scores.first`,
-#'     `tuning.scores.second`,
+#' @return A dataframe with one row per cell and 12 columns:
+#'   * `cell`: barcode
+#'   * `first_labels`,
+#'     `tuning_scores_first`,
+#'     `tuning_scores_second`, and
 #'     `labels`: reused from the output of `SingleR::SingleR()`
 #'   * `median_score`: median of cell type-specific correlation scores
 #'   * `diff_next`: difference between the best score and next best score
@@ -28,37 +31,38 @@ library(tidyverse)
 #'                           of the assigned type
 #'   * `mad_delta_score`: mean absolute deviation
 #'   * `z_score`: `delta_score` normalized via median and MAD
-load_singler_data <- function(folder) {
+load_singler_data <- function(file) {
+  info("Loading {file}")
   df <- 
-    read_csv(str_glue("{folder}/cell_types_singler.csv")) %>%
+    read_csv(file) %>%
     rowwise() %>% 
-    mutate(median_score = median(c_across(starts_with("scores.")))) %>% 
+    mutate(median_score = median(c_across(starts_with("score_")))) %>% 
     ungroup() %>% 
-    mutate(
-      diff_next = tuning.scores.first - tuning.scores.second,
-      label_name = str_glue("scores.{make.names(labels)}")
-    ) %>% 
+    mutate(diff_next = tuning_scores_first - tuning_scores_second) %>%
     pivot_longer(
-      starts_with("scores."),
+      starts_with("score_"),
       names_to = "scores",
+      names_prefix = "score_",
       values_to = "label_score"
-    ) %>% 
-    filter(scores == label_name) %>% 
-    mutate(delta_score = label_score - median_score) %>% 
-    select(!c(pruned.labels, label_name, scores))
+    ) %>%
+    filter(scores == labels) %>%
+    mutate(delta_score = label_score - median_score) %>%
+    select(!c(pruned_labels, scores))
   
   left_join(
     df,
-    df %>% 
-      group_by(labels) %>% 
+    df %>%
+      group_by(labels) %>%
       summarise(
         median_delta_score = median(delta_score),
         mad_delta_score = mad(delta_score)
       ),
     by = "labels"
-  ) %>% 
+  ) %>%
     mutate(z_score = (delta_score - median_delta_score) / mad_delta_score)
 }
+
+
 
 #' Load cell metadata from several CSV files.
 #' 
@@ -94,8 +98,9 @@ load_cell_metadata <- function(folder) {
 
 #' Combine general metadata and cell types.
 #'
-#' @param df_metadata Dataframe returned by `load_cell_metadata()`
-#' @param df_cell_types Dataframe returned by `load_singler_data()` 
+#' @param df_metadata Dataframe returned by `load_cell_metadata()`.
+#' @param singler_list Named list of dataframes as returned by
+#'   `load_singler_data()`.
 #' @param min_z_score Minimum z score, ...
 #' @param min_delta_score minimum delta score, ...
 #' @param min_diff_next ... and minimum `diff_next` for a cell type label to be
@@ -105,32 +110,38 @@ load_cell_metadata <- function(folder) {
 #' @return The dataframe provided by `df_metadata`, with two additional columns
 #'   `cell_type_fine` and `cell_type_broad`.
 add_cell_types <- function(df_metadata,
-                           df_cell_types,
+                           singler_list,
                            min_z_score = -3,
                            min_delta_score = -Inf,
                            min_diff_next = 0) {
   df_cell_types <- 
-    df_cell_types %>% 
-    mutate(
-      labels_pruned = case_when(
-        z_score >= min_z_score &
-          delta_score >= min_delta_score &
-          diff_next > min_diff_next
-        ~ labels,
-        TRUE
-        ~ NA_character_
-      )
+    imap(
+      singler_list,
+      function(df, file) {
+        ref <- str_match(file, "cell_types_singler_(.*)_")[, 2]
+        label <- ifelse(str_detect(file, "main"), "broad", "fine")
+        type_name <- str_glue("cell_type_{ref}_{label}")
+        
+        df %>% 
+          transmute(
+            cell = cell,
+            {{type_name}} :=
+              case_when(
+                z_score >= min_z_score &
+                  delta_score >= min_delta_score &
+                  diff_next > min_diff_next
+                ~ labels,
+                TRUE
+                ~ NA_character_
+              ) %>% 
+              as_factor() %>% 
+              fct_infreq()
+          )
+      }
     ) %>% 
-    select(cell, sample, cell_type_fine = labels_pruned) %>% 
-    extract(
-      cell_type_fine,
-      into = "cell_type_broad",
-      regex = "([^:]*)",
-      remove = FALSE
-    ) %>%
-    mutate(across(starts_with("cell_type"), ~as_factor(.x) %>% fct_infreq()))
-  
-  left_join(df_metadata, df_cell_types, by = c("cell", "sample"))
+    reduce(left_join, by = "cell")
+
+  left_join(df_metadata, df_cell_types, by = "cell")
 }
 
 #' #' Add clusters obtained by subclustering.
@@ -191,19 +202,17 @@ add_cell_types <- function(df_metadata,
 
 folder <- "data_generated"
 
-singler_data <- load_singler_data(folder)
+singler_data <- map(
+  dir_ls(folder, regex = "cell_types"),
+  load_singler_data
+)
 
 nb_data <-
   load_cell_metadata(folder) %>% 
-  add_cell_types(singler_data) %>% 
-  mutate(
-    cell_type_fine_lumped = fct_lump_n(cell_type_fine, 24),
-    cell_type_broad_lumped = fct_lump_prop(cell_type_broad, 0.01)
-  ) %>% 
+  add_cell_types(singler_data) %>%
   # add_refined_clusters(folder) %>% 
   # add_split_clusters(folder) %>% 
   {.}
-
 
 
 
