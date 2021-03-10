@@ -1,3 +1,8 @@
+# Misc analyses and plots.
+#
+# @DEPI metadata.rds
+# @DEPO many plots
+
 library(ComplexHeatmap)
 library(RColorBrewer)
 library(ggpmisc)

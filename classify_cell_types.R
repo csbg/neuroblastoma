@@ -5,6 +5,9 @@
 # broad or fine labels from the reference dataset were used for classification.
 # Each file contains the dataframe returned by SingleR::SingleR(), with added
 # cell and sample information
+#
+# @DEPI rna_merged.rds
+# @DEPO cell_types_singler_[ref]_[labels].csv
 
 
 library(Seurat)

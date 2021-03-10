@@ -9,6 +9,9 @@
 #
 # Generates the file rna_merged.rds, which contains a Seurat object representing
 # the merged, QC-filtered dataset.
+#
+# @DEPI raw data
+# @DEPO rna_merged.rds
 
 library(Seurat)
 library(tidyverse)

@@ -1,6 +1,9 @@
 # Integrate scRNA-seq datasets via SCTransform and Seurat.
 #
 # Generates rna_integrated_seurat.rds, containing the intrgrated dataset.
+#
+# @DEPI rna_merged.rds
+# @DEPO rna_integrated_seurat.rds
 
 library(Seurat)
 library(sctransform)

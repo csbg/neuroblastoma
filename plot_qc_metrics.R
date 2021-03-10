@@ -1,4 +1,6 @@
 # Plot QC metrics (% mitochondrial genes, feature and molecule count).
+#
+# @DEPI raw data
 
 library(tidyverse)
 library(Seurat)

@@ -4,6 +4,14 @@
 # * metadata.csv - combined metadata exported via `write_csv()`
 # * metadata.rds - combined metadata stored with factor levels
 # * celltype_details.rds - processed SingleR details
+#
+# @DEPI metadata_seurat.csv
+# @DEPI metadata_monocle.csv
+# @DEPI doublet_scores.csv
+# @DEPI cell_types_singler_[ref]_[labels].csv
+# @DEPO metadata.csv
+# @DEPO metadata.rds
+# @DEPO celltype_details.rds
 
 library(tidyverse)
 library(fs)
