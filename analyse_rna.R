@@ -8,7 +8,6 @@ library(RColorBrewer)
 library(ggpmisc)
 library(patchwork)
 library(tidyverse)
-library(ggalluvial)
 library(egg)
 library(fs)
 library(clustree)
@@ -74,13 +73,9 @@ plot_clusters_all <- function(data, x, y, clusters, label_direct = TRUE,
   p
 }
 
-plot_clusters_all(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.2,
-                  filename = "seurat/clusters_all_umap_0.2")
 plot_clusters_all(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.5,
                   filename = "seurat/clusters_all_umap_0.5")
 plot_clusters_all(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.8,
-                  filename = "seurat/clusters_all_umap_0.8")
-plot_clusters_all(nb_data, tsne_1_seurat, tsne_2_seurat, cluster_0.5,
                   filename = "seurat/clusters_all_tsne_0.5")
 
 plot_clusters_all(nb_data, umap_1_monocle, umap_2_monocle, cluster_20,
@@ -141,15 +136,6 @@ plot_clusters_per_sample <- function(data, x, y, clusters, sample,
   p
 }
 
-plot_clusters_per_sample(nb_data, umap_1_seurat, umap_2_seurat,
-                         cluster_0.5, sample,
-                         nrow = 3, filename = "seurat/clusters_sample_umap_0.5")
-
-plot_clusters_per_sample(nb_data %>% mutate(group2 = group),
-                         umap_1_seurat, umap_2_seurat,
-                         cluster_0.5, group2,
-                         nrow = 2, filename = "seurat/clusters_groups_umap_0.5")
-
 plot_clusters_per_sample(nb_data, umap_1_monocle, umap_2_monocle,
                          cluster_50, sample,
                          nrow = 3, filename = "monocle/clusters_sample_umap_50")
@@ -201,9 +187,6 @@ plot_clusters_highlight <- function(data, x, y, clusters,
   p
 }
 
-plot_clusters_highlight(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.5,
-                        nrow = 4,
-                        filename = "seurat/clusters_highlight_umap_0.5")
 plot_clusters_highlight(nb_data, umap_1_monocle, umap_2_monocle, cluster_50,
                         nrow = 5,
                         filename = "monocle/clusters_highlight_umap_50")
@@ -259,14 +242,12 @@ plot_clusters_selected <- function(data, x, y, clusters, folder = NULL) {
   )
 }
 
-plot_clusters_selected(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.5,
-                       folder = "seurat/clusters_selected_umap_0.5")
 plot_clusters_selected(nb_data, umap_1_monocle, umap_2_monocle, cluster_50,
                        folder = "monocle/clusters_selected_umap_50")
 
 
 
-# Cluster correspondence --------------------------------------------------
+# Cluster diagnostics -----------------------------------------------------
 
 #' Create alluvial plot that shows how clusters change with resolution.
 #'
@@ -274,7 +255,7 @@ plot_clusters_selected(nb_data, umap_1_monocle, umap_2_monocle, cluster_50,
 #' @param filename Name of output file.
 #'
 #' @return A ggplot object.
-plot_cluster_corr_resolution <- function(data, filename = NULL) {
+plot_cluster_correspondence <- function(data, filename = NULL) {
   cluster_flow <- 
     data %>%
     count(
@@ -317,31 +298,17 @@ plot_cluster_corr_resolution <- function(data, filename = NULL) {
   p
 }
 
-plot_cluster_corr_resolution(
+plot_cluster_correspondence(
   nb_data,
-  filename = "seurat/cluster_correspondence_resolution"
+  filename = "seurat/cluster_correspondence"
 )
-
-
-# alternative visualization using clustree
-nb_data %>% 
-  select(starts_with("cluster_0")) %>% 
-  clustree(prefix = "cluster_", edge_arrow = FALSE)
-ggsave_default("seurat/clustree")
 
 nb_data %>% 
   select(cluster_20, cluster_50) %>% 
   clustree(prefix = "cluster_", edge_arrow = FALSE)
-ggsave_default("monocle/clustree")
-
-nb_data %>% 
-  select(cluster_0.5, cluster_50) %>% 
-  clustree(prefix = "cluster_", edge_arrow = FALSE)
-ggsave_default("clustree_seurat_monocle")
+ggsave_default("monocle/cluster_correspondence")
 
 
-
-# Cluster diagnostics -----------------------------------------------------
 
 #' Plot silhouettes and neighborhood purity as calculated by `bluster`.
 #'
@@ -396,14 +363,8 @@ plot_cluster_diagnostics(nb_data, umap_1_monocle, umap_2_monocle, cluster_20,
 plot_cluster_diagnostics(nb_data, umap_1_monocle, umap_2_monocle, cluster_50,
                          filename = "monocle/cluster_diagnostics_50")
 
-plot_cluster_diagnostics(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.2,
-                         filename = "seurat/cluster_diagnostics_0.2")
-
 plot_cluster_diagnostics(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.5,
                          filename = "seurat/cluster_diagnostics_0.5")
-
-plot_cluster_diagnostics(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.8,
-                         filename = "seurat/cluster_diagnostics_0.8")
 
 
 
@@ -550,15 +511,15 @@ plot_celltypes_all <- function(data, ref, label,
 }
 
 plot_celltypes_all(nb_data, "hpca", "broad", prop = 0.01,
-                   filename = "monocle/celltype_all_hpca")
+                   filename = "cell_types/celltype_all_hpca")
 plot_celltypes_all(nb_data, "blueprint", "broad", prop = 0.01,
-                   filename = "monocle/celltype_all_blueprint")
+                   filename = "cell_types/celltype_all_blueprint")
 plot_celltypes_all(nb_data, "dice", "broad",
-                   filename = "monocle/celltype_all_dice")
+                   filename = "cell_types/celltype_all_dice")
 plot_celltypes_all(nb_data, "dmap", "broad", prop = 0.01,
-                   filename = "monocle/celltype_all_dmap")
+                   filename = "cell_types/celltype_all_dmap")
 plot_celltypes_all(nb_data, "monaco", "broad",
-                   filename = "monocle/celltype_all_monaco")
+                   filename = "cell_types/celltype_all_monaco")
 
 
 
@@ -585,15 +546,15 @@ plot_celltypes_highlight <- function(data, ref, label,
 }
 
 plot_celltypes_highlight(nb_data, "hpca", "broad", prop = 0.01,
-                         filename = "monocle/celltype_highlight_hpca")
+                         filename = "cell_types/celltype_highlight_hpca")
 plot_celltypes_highlight(nb_data, "blueprint", "broad", prop = 0.01,
-                         filename = "monocle/celltype_highlight_blueprint")
+                         filename = "cell_types/celltype_highlight_blueprint")
 plot_celltypes_highlight(nb_data, "dice", "broad",
-                         filename = "monocle/celltype_highlight_dice")
+                         filename = "cell_types/celltype_highlight_dice")
 plot_celltypes_highlight(nb_data, "dmap", "broad", prop = 0.01,
-                         filename = "monocle/celltype_highlight_dmap")
+                         filename = "cell_types/celltype_highlight_dmap")
 plot_celltypes_highlight(nb_data, "monaco", "broad",
-                         filename = "monocle/celltype_highlight_monaco")
+                         filename = "cell_types/celltype_highlight_monaco")
 
 
 
@@ -643,29 +604,29 @@ plot_cvt_heatmap <- function(data, clusters, ref, label,
 }
 
 plot_cvt_heatmap(nb_data, cluster_50, "hpca", "broad",
-                 filename = "monocle/cvt_heatmap_hpca_broad")
+                 filename = "cell_types/cvt_heatmap_hpca_broad")
 plot_cvt_heatmap(nb_data, cluster_50, "hpca", "fine", n = 35,
-                 filename = "monocle/cvt_heatmap_hpca_fine")
+                 filename = "cell_types/cvt_heatmap_hpca_fine")
 
 plot_cvt_heatmap(nb_data, cluster_50, "blueprint", "broad",
-                 filename = "monocle/cvt_heatmap_blueprint_broad")
+                 filename = "cell_types/cvt_heatmap_blueprint_broad")
 plot_cvt_heatmap(nb_data, cluster_50, "blueprint", "fine", n = 25,
-                 filename = "monocle/cvt_heatmap_blueprint_fine")
+                 filename = "cell_types/cvt_heatmap_blueprint_fine")
 
 plot_cvt_heatmap(nb_data, cluster_50, "dice", "broad",
-                 filename = "monocle/cvt_heatmap_dice_broad")
+                 filename = "cell_types/cvt_heatmap_dice_broad")
 plot_cvt_heatmap(nb_data, cluster_50, "dice", "fine",
-                 filename = "monocle/cvt_heatmap_dice_fine")
+                 filename = "cell_types/cvt_heatmap_dice_fine")
 
 plot_cvt_heatmap(nb_data, cluster_50, "dmap", "broad",
-                 filename = "monocle/cvt_heatmap_dmap_broad")
+                 filename = "cell_types/cvt_heatmap_dmap_broad")
 plot_cvt_heatmap(nb_data, cluster_50, "dmap", "fine", n = 25,
-                 filename = "monocle/cvt_heatmap_dmap_fine")
+                 filename = "cell_types/cvt_heatmap_dmap_fine")
 
 plot_cvt_heatmap(nb_data, cluster_50, "monaco", "broad",
-                 filename = "monocle/cvt_heatmap_monaco_broad")
+                 filename = "cell_types/cvt_heatmap_monaco_broad")
 plot_cvt_heatmap(nb_data, cluster_50, "monaco", "fine",
-                 filename = "monocle/cvt_heatmap_monaco_fine")
+                 filename = "cell_types/cvt_heatmap_monaco_fine")
 
 
 
@@ -761,29 +722,29 @@ plot_cvt_bar <- function(data, clusters, ref, label,
 }
 
 plot_cvt_bar(nb_data, cluster_50, "hpca", "broad",
-             filename = "monocle/cvt_bar_hpca_broad")
+             filename = "cell_types/cvt_bar_hpca_broad")
 plot_cvt_bar(nb_data, cluster_50, "hpca", "fine",
-             filename = "monocle/cvt_bar_hpca_fine")
+             filename = "cell_types/cvt_bar_hpca_fine")
 
 plot_cvt_bar(nb_data, cluster_50, "blueprint", "broad",
-             filename = "monocle/cvt_bar_blueprint_broad")
+             filename = "cell_types/cvt_bar_blueprint_broad")
 plot_cvt_bar(nb_data, cluster_50, "blueprint", "fine",
-             filename = "monocle/cvt_bar_blueprint_fine")
+             filename = "cell_types/cvt_bar_blueprint_fine")
 
 plot_cvt_bar(nb_data, cluster_50, "dice", "broad",
-             filename = "monocle/cvt_bar_dice_broad")
+             filename = "cell_types/cvt_bar_dice_broad")
 plot_cvt_bar(nb_data, cluster_50, "dice", "fine",
-             filename = "monocle/cvt_bar_dice_fine")
+             filename = "cell_types/cvt_bar_dice_fine")
 
 plot_cvt_bar(nb_data, cluster_50, "dmap", "broad",
-             filename = "monocle/cvt_bar_dmap_broad")
+             filename = "cell_types/cvt_bar_dmap_broad")
 plot_cvt_bar(nb_data, cluster_50, "dmap", "fine",
-             filename = "monocle/cvt_bar_dmap_fine")
+             filename = "cell_types/cvt_bar_dmap_fine")
 
 plot_cvt_bar(nb_data, cluster_50, "monaco", "broad",
-             filename = "monocle/cvt_bar_monaco_broad")
+             filename = "cell_types/cvt_bar_monaco_broad")
 plot_cvt_bar(nb_data, cluster_50, "monaco", "fine",
-             filename = "monocle/cvt_bar_monaco_fine")
+             filename = "cell_types/cvt_bar_monaco_fine")
 
 
 
@@ -872,12 +833,12 @@ plot_cluster_size(nb_data, cluster_50, angle_col = 0,
 nb_data %>%
   preprocess_celltypes("hpca", "broad", prop = 0.01) %>% 
   plot_cluster_size(cell_type,
-                    filename = "celltype_hpca_broad_count_vs_samples")
+                    filename = "cell_types/celltype_hpca_broad_count_vs_samples")
 
 nb_data %>%
   preprocess_celltypes("hpca", "fine", prop = 0.01) %>% 
   plot_cluster_size(cell_type,
-                    filename = "celltype_hpca_fine_count_vs_samples")
+                    filename = "cell_types/celltype_hpca_fine_count_vs_samples")
 
 
 
@@ -890,10 +851,11 @@ nb_data %>%
 #' @param x Column with x-axis data.
 #' @param y Column with y-axis data.
 #' @param clusters Column with cluster IDs.
+#' @param cell_types Column with cell types.
 #' @param filename Name of output file.
 #'
 #' @return A ggplot object.
-plot_neurons <- function(data, x, y, clusters, filename = NULL) {
+plot_neurons <- function(data, x, y, clusters, cell_types, filename = NULL) {
   p <- wrap_plots(
     data %>%
       ggplot(aes({{x}}, {{y}})) +
@@ -904,7 +866,7 @@ plot_neurons <- function(data, x, y, clusters, filename = NULL) {
       ) +
       geom_point(
         data = data %>%
-          filter(cell_type_broad == "Neurons"),
+          filter({{cell_types}} == "Neurons"),
         size = .01,
         shape = 20
       ) +
@@ -914,7 +876,7 @@ plot_neurons <- function(data, x, y, clusters, filename = NULL) {
       theme(strip.background = element_blank()) +
       NULL,
     data %>% 
-      count(cell_type = cell_type_broad, {{clusters}}) %>% 
+      count(cell_type = {{cell_types}}, {{clusters}}) %>% 
       group_by(cell_type) %>% 
       mutate(n_rel = n / sum(n) * 100) %>% 
       ungroup() %>% 
@@ -929,11 +891,11 @@ plot_neurons <- function(data, x, y, clusters, filename = NULL) {
   p
 }
 
-plot_neurons(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.5,
+plot_neurons(nb_data, umap_1_seurat, umap_2_seurat,
+             cluster_0.5, cell_type_hpca_broad,
              filename = "seurat/groupwise_abundance_neurons_0.5")
-plot_neurons(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.8,
-             filename = "seurat/groupwise_abundance_neurons_0.8")
-plot_neurons(nb_data, umap_1_monocle, umap_2_monocle, cluster_50,
+plot_neurons(nb_data, umap_1_monocle, umap_2_monocle,
+             cluster_50, cell_type_hpca_broad,
              filename = "monocle/groupwise_abundance_neurons_50")
 
 
@@ -968,30 +930,21 @@ plot_gene_program <- function(data, x, y, clusters,
 
 plot_gene_program(nb_data,
                   signature_adrenergic, signature_mesenchymal,
-                  cluster_0.5,
-                  filename = "seurat/gene_programs_am_clusters")
-plot_gene_program(nb_data,
-                  signature_noradrenergic, signature_ncc_like,
-                  cluster_0.5,
-                  filename = "seurat/gene_programs_nn_clusters")
-
-plot_gene_program(nb_data,
-                  signature_adrenergic, signature_mesenchymal,
                   cluster_50,
-                  filename = "monocle/gene_programs_am_clusters")
+                  filename = "gene_programs/gene_programs_am_clusters")
 plot_gene_program(nb_data,
                   signature_noradrenergic, signature_ncc_like,
                   cluster_50,
-                  filename = "monocle/gene_programs_nn_clusters")
+                  filename = "gene_programs/gene_programs_nn_clusters")
 
-plot_gene_program(nb_data,
-                  signature_adrenergic, signature_mesenchymal,
-                  cell_type_broad_lumped,
-                  ncol = 5, filename = "gene_programs_am_ctb")
-plot_gene_program(nb_data,
-                  signature_noradrenergic, signature_ncc_like,
-                  cell_type_broad_lumped,
-                  ncol = 4, filename = "gene_programs_nn_ctb")
+nb_data %>% 
+  preprocess_celltypes("hpca", "broad", prop = 0.01) %>% 
+  plot_gene_program(signature_adrenergic, signature_mesenchymal, cell_type,
+                    ncol = 5, filename = "gene_programs/gene_programs_am_hpca")
+nb_data %>% 
+  preprocess_celltypes("hpca", "broad", prop = 0.01) %>% 
+  plot_gene_program( signature_noradrenergic, signature_ncc_like, cell_type,
+                  ncol = 4, filename = "gene_programs/gene_programs_nn_hpca")
 
 
 
@@ -999,14 +952,10 @@ plot_gene_program(nb_data,
 
 ## Mitochondrial genes ----
 
-plot_clusters_all(nb_data, umap_1_seurat, umap_2_seurat, percent_mt,
-                  label_direct = FALSE,
-                  color_scale = scale_color_viridis_c(),
-                  filename = "seurat/qc_mtgene_umap")
 plot_clusters_all(nb_data, umap_1_monocle, umap_2_monocle, percent_mt,
                   label_direct = FALSE,
                   color_scale = scale_color_viridis_c(),
-                  filename = "monocle/qc_mtgene_umap")
+                  filename = "qc/qc_mtgene_umap")
 
 
 
@@ -1071,10 +1020,8 @@ plot_doublet_scores <- function(data, x, y, clusters, filename = NULL) {
   p
 }
 
-plot_doublet_scores(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.5,
-                    filename = "seurat/qc_doublet_scores")
 plot_doublet_scores(nb_data, umap_1_monocle, umap_2_monocle, cluster_50,
-                    filename = "monocle/qc_doublet_scores")
+                    filename = "qc/qc_doublet_scores")
 
 
 
@@ -1395,9 +1342,7 @@ plot_infiltration_rate <- function(data, filter_col, filter_values,
   p
 }
 
-plot_infiltration_rate(nb_data, cell_type_broad, "Neurons",
-                       filename = "tif_neurons")
-plot_infiltration_rate(nb_data, cluster_0.5, c("6", "10"),
-                       filename = "seurat/tif_clusters")
+plot_infiltration_rate(nb_data, cell_type_hpca_broad, "Neurons",
+                       filename = "monocle/tif_neurons")
 plot_infiltration_rate(nb_data, cluster_50, "8",
                        filename = "monocle/tif_clusters")
