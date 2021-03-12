@@ -14,8 +14,7 @@
 ## Main workflow
 
 * [merge_rna.R](merge_rna.R) -
-  merge samples, perform QC filtering, ensure unique cell names;
-  invoke via [sge_merge_rna.sh](sge_merge_rna.sh)
+  merge samples, perform QC filtering, ensure unique cell names
 * [integrate_rna_seurat.R](integrate_rna_seurat.R) -
   integrate scRNA-seq samples with Seurat; 
   invoke via [integrate_rna_seurat.sh](sge_integrate_rna_seurat.sh)
@@ -56,8 +55,6 @@
   download raw data from the BSF
 * [plot_dependencies.R](plot_dependencies.R) –
   plot the dependency graph
-* [plot_qc_metrics.R](plot_qc_metrics.R) -
-  plot QC metrics for cell filtering (i.e., % of mitochondrial genes etc.)
 * [summarize_cellranger_metrics.R](summarize_cellranger_metrics.R) -
   generate summary plots of Cell Ranger QC metrics
 * [summarize_cellranger_tsne.R](summarize_cellranger_tsne.R) -
@@ -68,5 +65,3 @@
 
 * [make_subclusters.R](make_subclusters.R) -
   perform subclustering
-* [process_droplets.R](process_droplets.R) –
-  droplet calling and QC filtering

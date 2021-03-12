@@ -14,8 +14,13 @@
 # @DEPO rna_merged.rds
 
 library(Seurat)
+library(scuttle)
 library(tidyverse)
 library(fs)
+library(ggbeeswarm)
+library(grid)
+library(patchwork)
+source("common_functions.R")
 
 
 
@@ -27,7 +32,7 @@ data_dir <- "data_raw/COUNT"
 # path where the merged dataset is saved
 out_file <- "data_generated/rna_merged.rds"
 
-# data frame with three columns 'order', 'sample_name', and 'sample_file'
+# data frame with columns 'bsf_order', 'sample_file', 'sample_name', and 'group'
 samples <-
   tibble(
     sample_file = dir_ls(
@@ -42,43 +47,260 @@ samples <-
     by = "bsf_id"
   ) %>% 
   arrange(bsf_order) %>% 
-  select(order = bsf_order, sample_file, sample_name = sample) %>% 
+  select(bsf_order, sample_file, sample_name = sample, group) %>%
   drop_na()
 
-# QC parameters
-max_percent_mt <- 10
-min_n_feature <- 200
-max_n_feature <- 5000
 
 
+# Load datasets -----------------------------------------------------------
 
-# Merge datasets ----------------------------------------------------------
-
-nb_list <- pmap(
-  samples,
-  function(order, sample_file, sample_name) {
-    message("Loading ", sample_name)
-    sample_file %>% 
-      Read10X_h5() %>% 
-      magrittr::set_colnames(
-        str_replace(colnames(.), "\\d+$", as.character(order))
+#' Perform quality control checks on scRNA-seq data.
+#' 
+#' Method "cutoff" marks those cells for discarding whose percentage of
+#' mitochondrial genes exceeds a fixed threshold and whose number of features
+#' does not fall within a fixed range. Method "outlier" uses the outlier-based
+#' method implemented in `scuttle`.
+#'
+#' @param data A Seurat object.
+#' @param method QC filtering method `"cutoff"` (default) or `"outlier"`.
+#' @param max_percent_mito Maximum percentage of mitochondrial genes.
+#' @param min_n_feature Minimum number of features.
+#' @param max_n_feature Maximum number of features.
+#'
+#' @return The Seurat object with an additional boolean metadata column
+#'   `pass_qc`.
+perform_qc <- function(data,
+                       method = c("cutoff", "outlier"),
+                       max_percent_mito = 10,
+                       min_n_feature = 200,
+                       max_n_feature = 5000) {
+  method <- match.arg(method) 
+  
+  if (method == "outlier") {
+    qc_results <- quickPerCellQC(
+      data@meta.data,
+      sum.field = "library_size",
+      detected.field = "n_features",
+      sub.fields = "percent_mito"
+    )
+    pass_qc <- !qc_results$discard
+  } else {
+    pass_qc <- 
+      data@meta.data %>% 
+      mutate(
+        pass_qc =
+          n_features > min_n_feature &
+          n_features < max_n_feature &
+          percent_mito < max_percent_mito
       ) %>% 
-      CreateSeuratObject(sample_name) %>% 
-      AddMetaData(sample_name, col.name = "sample") %>%
-      PercentageFeatureSet(pattern = "^MT-", col.name = "percent.mt") %>% 
-      subset(
-        subset =
-          nFeature_RNA > min_n_feature &
-          nFeature_RNA < max_n_feature &
-          percent.mt < max_percent_mt
-      )
+      pull(pass_qc)
   }
+  
+  data %>% 
+    AddMetaData(pass_qc, "pass_qc")
+}
+
+datasets <-
+  pmap(
+    samples,
+    function(bsf_order, sample_file, sample_name, group) {
+      info("Loading ", sample_file)
+      data <- 
+        Read10X_h5(sample_file) %>% 
+        magrittr::set_colnames(
+          str_replace(colnames(.), "\\d+$", as.character(bsf_order))
+        ) %>% 
+        CreateSeuratObject(sample_file) %>% 
+        PercentageFeatureSet(pattern = "^MT-", col.name = "percent_mito")
+      
+      data@meta.data <-
+        data@meta.data %>%
+        select(!orig.ident) %>%
+        rename(library_size = nCount_RNA, n_features = nFeature_RNA) %>%
+        mutate(sample = {{sample_name}}, group = {{group}})
+        
+      perform_qc(data)
+    }
+  )
+
+
+
+# Plot QC metrics ---------------------------------------------------------
+
+# use black for cells passing QC and pink for discarded cells
+default_color_scheme <- scale_color_manual(
+  name = "QC passed",
+  values = c("#dd1c77", "black"),
+  guide = guide_legend(override.aes = list(size = 2, alpha = 1))
 )
 
-nb <- merge(nb_list[[1]], nb_list[-1])
+# tune facet labels
+default_theme <- 
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold")
+  )
+
+
+#' Generate QC plots.
+#'
+#' The patchworked plot contains five plots: Violin plots of (1) mitochondrial
+#' gene percentage, (2) library size, and (3) number of features; as well as
+#' scatter plots of (4) mt genes vs library size and (5) mt genes vs feature
+#' count.
+#'
+#' @param data A Seurat object after QC analysis, but before filtering.
+#' @param filename Name of output file. If `NULL`, do not save the plot. If
+#'   `"generate"`, automatically generate the file name from the names of the
+#'   sample and the raw file.
+#'
+#' @return A ggplot object.
+plot_qc_details <- function(data, filename = NULL) {
+  vis_data <- 
+    data@meta.data %>% 
+    arrange(desc(pass_qc))
+  
+  plot_violin <- function(column, name, ylim_upper = NA) {
+    ggplot(vis_data, aes(name, {{column}})) +
+      geom_violin(color = "gray60", alpha = 0.2, width = 0.8) +
+      geom_quasirandom(
+        aes(color = pass_qc),
+        width = 0.4,
+        bandwidth = 1,
+        alpha = 0.25,
+        size = 0.1,
+        show.legend = FALSE
+      ) +
+      ylab(NULL) +
+      ylim(0, ylim_upper) +
+      default_color_scheme +
+      default_theme +
+      theme(axis.title.x = element_blank())
+  }
+  
+  plot_scatter <- function(x, y, x_title, y_title) {
+    ggplot(vis_data, aes({{x}}, {{y}})) +
+      geom_point(
+        aes(color = pass_qc),
+        alpha = 0.25,
+        size = 0.5,
+        show.legend = FALSE
+      ) +
+      ylim(0, 100) +
+      xlab(x_title) +
+      ylab(y_title) +
+      default_color_scheme +
+      default_theme
+  }
+  
+  layout <- "
+    AAAEF
+    BCDEF"
+
+  p <-
+    wrap_plots(
+      wrap_elements(
+        panel = textGrob(
+          str_glue(
+            "sample: {vis_data$sample[1]}\n",
+            "file: {data@project.name}\n",
+            "QC: passed by {sum(vis_data$pass_qc)} of {nrow(vis_data)} cells"
+          ),
+          x = 0,
+          just = "left",
+          gp = gpar(fontsize = 8)
+        ),
+        clip = FALSE
+      ),
+      plot_violin(library_size, "library size"),
+      plot_violin(n_features, "number of features"),
+      plot_violin(percent_mito, "% mito genes", ylim_upper = 100),
+      plot_scatter(library_size, percent_mito, "library size", "% mito genes"),
+      plot_scatter(n_features, percent_mito, "number of features", "% mito genes")
+    ) +
+    plot_layout(design = layout, widths = c(2, 2, 2, 4, 4), heights = c(1, 7))
+  
+  if (filename == "generate") {
+    file <- str_match(data@project.name , "T/(.*)_trans")[, 2]
+    filename <- str_glue("qc/details/{vis_data$sample[1]}__{file}")
+  }
+    
+  ggsave_default(filename, width = 297, height = 105)
+  p
+}
+
+walk(
+  datasets,
+  plot_qc_details,
+  filename = "generate"
+)
 
 
 
-# Save results ------------------------------------------------------------
+# plot only the violin plots, facet by group
+datasets %>%
+  map_dfr(~.@meta.data) %>%
+  arrange(desc(pass_qc)) %>% 
+  pivot_longer(c(library_size, n_features, percent_mito)) %>% 
+  mutate(
+    name = recode(name,
+                  library_size = "library size",
+                  n_features = "number of features",
+                  percent_mito = "% mito genes")
+  ) %>% 
+  ggplot(aes(sample, value)) +
+  geom_violin(color = "gray60", alpha = 0.2, width = 0.8, scale = "width") +
+  geom_quasirandom(
+    aes(color = pass_qc),
+    width = 0.4,
+    bandwidth = 1,
+    alpha = 0.25,
+    size = 0.1
+  ) +
+  facet_grid(
+    vars(name),
+    vars(group),
+    scales = "free",
+    space = "free_x",
+    switch = "y"
+  ) +
+  ylab(NULL) +
+  default_color_scheme +
+  default_theme +
+  theme(strip.placement = "outside")
+ggsave_default("qc/qc_overview", width = 420, height = 200)
+
+
+
+
+# Merge and save datasets -------------------------------------------------
+
+# merge datasets
+nb <-
+  datasets %>%
+  map(subset, subset = pass_qc == TRUE) %>% 
+  {merge(.[[1]], .[-1])}
+
+# convert sample and group to factor
+sample_order <- 
+  samples %>%
+  arrange(group, sample_name) %>%
+  pull(sample_name) %>% 
+  unique()
+
+nb@meta.data <-
+  nb@meta.data %>%
+  mutate(
+    group =
+      as_factor(group) %>%
+      fct_relevel("I", "II", "III", "IV"),
+    sample =
+      as_factor(sample) %>% 
+      fct_relevel(sample_order)
+  ) %>%
+  select(!c(pass_qc, nCount_RNA, nFeature_RNA))
+
 
 saveRDS(nb, out_file)
