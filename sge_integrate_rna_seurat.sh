@@ -32,4 +32,4 @@
 ### jobname
 #$ -N integrate_rna_seurat
 
-Rscript integrate_rna_seurat.R
+singularity run rocker4csbg.sif integrate_rna_seurat.R

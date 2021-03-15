@@ -75,7 +75,7 @@ plot_clusters_all <- function(data, x, y, clusters, label_direct = TRUE,
 
 plot_clusters_all(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.5,
                   filename = "seurat/clusters_all_umap_0.5")
-plot_clusters_all(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.8,
+plot_clusters_all(nb_data, tsne_1_seurat, tsne_2_seurat, cluster_0.5,
                   filename = "seurat/clusters_all_tsne_0.5")
 
 plot_clusters_all(nb_data, umap_1_monocle, umap_2_monocle, cluster_20,

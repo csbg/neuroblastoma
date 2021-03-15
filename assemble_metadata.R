@@ -84,22 +84,32 @@ load_cell_metadata <- function(folder) {
     "doublet_scores.csv"
   )
   
-  nb_groups <-
+  nb_groups <- 
     read_csv("metadata/sample_groups.csv", comment = "#") %>%
-    distinct(sample, group) %>% 
-    mutate(group = as_factor(group) %>% fct_relevel("I", "II", "III", "IV")) %>%
-    arrange(group, sample) %>%
-    mutate(sample = as_factor(sample), sample_id = as.integer(sample))
+    distinct(sample, group)
+  
+  sample_order <-
+    nb_groups %>% 
+    arrange(group, sample) %>% 
+    pull(sample) %>% 
+    unique()
   
   str_glue("{folder}/{files}") %>% 
     map(read_csv) %>% 
     reduce(left_join, by = "cell", suffix = c("_seurat", "_monocle")) %>%
     left_join(nb_groups, by = "sample") %>%
     mutate(
-      sample = as_factor(sample) %>% fct_reorder(sample_id),
-      across(matches("cluster|partition"), ~as_factor(.x) %>% fct_inseq())
-    ) %>%
-    select(!sample_id)
+      group =
+        as_factor(group) %>%
+        fct_relevel("I", "II", "III", "IV"),
+      sample =
+        as_factor(sample) %>% 
+        fct_relevel(sample_order),
+      across(
+        matches("cluster|partition"),
+        ~as_factor(.x) %>% fct_inseq()
+      )
+    )
 }
 
 

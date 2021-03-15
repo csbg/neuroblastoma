@@ -31,7 +31,7 @@ nb_list <-
   SplitObject("sample") %>% 
   map(
     SCTransform,
-    vars.to.regress = "percent.mt",
+    vars.to.regress = "percent_mito",
     method = "qpoisson",
     verbose = FALSE
   )
