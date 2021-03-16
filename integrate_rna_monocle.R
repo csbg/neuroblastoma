@@ -42,6 +42,7 @@ cds <-
   preprocess_cds(verbose = TRUE) %>% 
   reduce_dimension(preprocess_method = "PCA", verbose = TRUE)
 
+set.seed(42)
 cds_aligned <- 
   align_cds(cds, alignment_group = "sample", verbose = TRUE) %>% 
   reduce_dimension(
