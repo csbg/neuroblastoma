@@ -11,6 +11,8 @@
 
 
 library(Seurat)
+library(monocle3)
+library(SingleCellExperiment)
 library(SingleR)
 library(celldex)
 library(tidyverse)
@@ -32,8 +34,15 @@ out_dir <- "data_generated"
 
 nb <- readRDS(merged_data)
 
-# for testing: choose only a few cells
-# nb <- subset(nb, cells = sample(ncol(nb), 20))
+if (inherits(nb, "Seurat")) {
+  count_matrix <- nb$RNA@counts
+} else {
+  count_matrix <- assay(nb, "soupx_counts")
+}
+  
+# subset cells for testing
+# count_matrix <- count_matrix[, sample(colnames(count_matrix), 20)]
+
 
 reference_cell_types <- list(
   # two general purpose datasets
@@ -64,7 +73,7 @@ predicted_cell_types <-
     function(ref, labels) {
       info("Classifying with reference dataset '{ref}' and labels '{labels}'")
       results <- SingleR(
-        test = nb$RNA@counts,
+        test = count_matrix,
         ref = reference_cell_types[[ref]],
         labels = colData(reference_cell_types[[ref]])[, labels]
       )
