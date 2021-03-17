@@ -17,7 +17,7 @@ library(Seurat)
 library(scds)
 library(SingleCellExperiment)
 library(tidyverse)
-library(fs)
+source("common_functions.R")
 
 
 
@@ -26,22 +26,39 @@ library(fs)
 # the merged dataset
 merged_data <- "data_generated/rna_merged.rds"
 
-# folder where results are saved
-out_dir <- "data_generated"
+# file where results are saved
+out_file <- "data_generated/doublet_scores.csv"
 
 
 
 # Analysis ----------------------------------------------------------------
 
+detect_doublets <- function(data, sample) {
+  info("Processing dataset {sample}")
+  
+  sce <- 
+    data %>% 
+    as.SingleCellExperiment() %>%
+    cxds_bcds_hybrid(verb = TRUE)
+  
+  colData(sce) %>%
+    as_tibble(rownames = "cell") %>%
+    select(cell, ends_with("score"))
+}
+
 nb <- readRDS(merged_data)
 
-nb <-
-  as.SingleCellExperiment(nb) %>%
-  cxds(verb = TRUE) %>%
-  bcds(verb = TRUE) %>%
-  cxds_bcds_hybrid(verb = TRUE)
+set.seed(42)
+doublet_scores <-
+  nb %>% 
+  SplitObject("sample") %>% 
+  imap_dfr(detect_doublets)
+  
 
-colData(nb) %>%
-  as_tibble(rownames = "cell") %>%
-  select(cell, ends_with("_score")) %>%
-  write_csv(path_join(c(out_dir, "doublet_scores.csv")))
+
+# Save data ---------------------------------------------------------------
+
+# ensure that order of rows is the same as in input dataset
+tibble(cell = colnames(nb)) %>% 
+  left_join(doublet_scores, by = "cell") %>% 
+  write_csv(out_file)
