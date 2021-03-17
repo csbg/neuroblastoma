@@ -1,7 +1,6 @@
 # Misc analyses and plots.
 #
 # @DEPI metadata.rds
-# @DEPO many plots
 
 library(ComplexHeatmap)
 library(RColorBrewer)
@@ -248,60 +247,6 @@ plot_clusters_selected(nb_data, umap_1_monocle, umap_2_monocle, cluster_50,
 
 
 # Cluster diagnostics -----------------------------------------------------
-
-#' Create alluvial plot that shows how clusters change with resolution.
-#'
-#' @param data Metadata.
-#' @param filename Name of output file.
-#'
-#' @return A ggplot object.
-plot_cluster_correspondence <- function(data, filename = NULL) {
-  cluster_flow <- 
-    data %>%
-    count(
-      low = cluster_0.2,
-      mid = cluster_0.5,
-      high = cluster_0.8
-    ) %>% 
-    mutate(
-      low = fct_relabel(low, ~str_glue("L-{.}")),
-      mid = fct_relabel(mid, ~str_glue("M-{.}")),
-      high = fct_relabel(high, ~str_glue("H-{.}"))
-    )
-  
-  p <- 
-    cluster_flow %>% 
-    ggplot(aes(axis1 = low, axis2 = mid, axis3 = high,  y = n)) +
-    stat_alluvium(aes(fill = mid), show.legend = FALSE, reverse = FALSE) +
-    stat_stratum(reverse = FALSE) +
-    stat_stratum(
-      geom = "text",
-      aes(label = str_sub(after_stat(stratum), start = 3L)),
-      reverse = FALSE,
-      size = 3
-    ) +
-    scale_x_discrete(
-      "clustering resolution",
-      limits = c("low", "mid", "high"),
-      expand = expansion(add = .2)
-    ) +
-    scale_y_continuous(
-      "cumulative number of cells",
-      expand = expansion()
-    ) +
-    coord_flip() +
-    theme_classic() +
-    theme(axis.line.x = element_blank()) +
-    NULL
-  
-  ggsave_default(filename, width = 400, height = 200)
-  p
-}
-
-plot_cluster_correspondence(
-  nb_data,
-  filename = "seurat/cluster_correspondence"
-)
 
 nb_data %>% 
   select(cluster_20, cluster_50) %>% 
@@ -1344,5 +1289,5 @@ plot_infiltration_rate <- function(data, filter_col, filter_values,
 
 plot_infiltration_rate(nb_data, cell_type_hpca_broad, "Neurons",
                        filename = "monocle/tif_neurons")
-plot_infiltration_rate(nb_data, cluster_50, "8",
+plot_infiltration_rate(nb_data, cluster_50, "9",
                        filename = "monocle/tif_clusters")
