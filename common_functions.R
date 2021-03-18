@@ -70,8 +70,16 @@ plot_dots <- function(counts, features, groups,
       pmin(max_exp)
   }
   
+  known_features <- intersect(features, rownames(counts))
+  missing_features <- setdiff(features, rownames(counts))
+  if (length(missing_features) > 0)
+    warn(
+      "The following requested features are missing: ",
+      "{str_c(missing_features, collapse = ', ')}"
+    )
+  
   vis_data <- 
-    counts[features, , drop = FALSE] %>% 
+    counts[known_features, , drop = FALSE] %>% 
     Matrix::t() %>% 
     as.matrix() %>% 
     as_tibble(rownames = "cell") %>% 
