@@ -192,7 +192,7 @@ walk(
       nb,
       conmarkers_clusters,
       group = cluster,
-      filename = str_glue("markers/conserved_markers_c{cluster}")
+      filename = str_glue("markers/cluster_{cluster}")
     )
     
     fs::dir_create("plots/markers/tables")
@@ -200,7 +200,7 @@ walk(
       as_tibble(rownames = "gene") %>% 
       filter(p.value < 1e-6) %>%
       select(gene, Top, p.value, FDR, t.summary.logFC) %>% 
-      write_csv(str_glue("plots/markers/tables/markers_c{cluster}.csv"))
+      write_csv(str_glue("plots/markers/tables/cluster_{cluster}.csv"))
   }
 )
 

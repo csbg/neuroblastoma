@@ -7,7 +7,6 @@
 library(Seurat)
 library(tidyverse)
 library(scico)
-library(gginnards)
 source("common_functions.R")
 
 
@@ -24,92 +23,10 @@ nb@meta.data <-
 
 # Canonical cell type markers ---------------------------------------------
 
-#' Make a Seurat-style dotplot of features vs clusters.
-#'
-#' @param counts Count matrix whose rownames correspond to features.
-#' @param features Vector of features, plotted in the given order.
-#' @param groups Factor of groups to which each cell belongs, plotted in the
-#'   order of its levels.
-#' @param min_exp Lower limit for the scaled average expression.
-#' @param max_exp Upper limit for the scaled average expression.
-#' @param panel_annotation A dataframe used for drawing rectangles on the panel
-#'   background. Must contain three columns "xmin", "xmax" (aesthetics for
-#'   `geom_rect()`), and "fill" (color name).
-#'
-#' @return A ggplot object.
-plot_dots <- function(counts, features, groups,
-                      min_exp = -2.5, max_exp = 2.5, panel_annotation = NULL) {
-  scale_and_limit <- function(x) {
-    scale(x)[,1] %>% 
-      pmax(min_exp) %>% 
-      pmin(max_exp)
-  }
-  
-  vis_data <- 
-    counts[features, , drop = FALSE] %>% 
-    Matrix::t() %>% 
-    as_tibble(rownames = "cell") %>% 
-    group_by(id = groups) %>% 
-    summarise(
-      across(
-        where(is.numeric),
-        list(
-          avg_exp = ~mean(expm1(.)),
-          pct_exp = ~length(.[. > 0]) / length(.) * 100
-        ),
-        .names = "{.col}__{.fn}"
-      )
-    ) %>% 
-    mutate(across(ends_with("avg_exp"), scale_and_limit)) %>%
-    pivot_longer(
-      !id,
-      names_to = c("feature", ".value"),
-      names_pattern = "(.+)__(.+)"
-    ) %>% 
-    mutate(feature = factor(feature, levels = features))
-  
-  if (!is.null(panel_annotation)) {
-    panel_bg <- list(
-      geom_point(color = "white"),  # initialize discrete coordinate system
-      geom_rect(
-        data = panel_annotation,
-        aes(xmin = xmin, xmax = xmax,
-            ymin = 0.5, ymax = nlevels(vis_data$feature) + 0.5,
-            fill = fill),
-        show.legend = FALSE,
-        inherit.aes = FALSE,
-      ),
-      scale_fill_identity()
-    )
-  } else {
-    panel_bg <- NULL
-  }
-    
-  ggplot(vis_data, aes(id, feature)) +
-    panel_bg +
-    geom_point(aes(size = pct_exp, color = avg_exp)) +
-    scale_x_discrete("cluster", expand = c(0, 0)) +
-    scale_y_discrete("canonical marker", expand = c(0, 0)) +
-    scale_color_scico(
-      "scaled\naverage\nexpression",
-      palette = "oslo",
-      direction = -1,
-      aesthetics = "color"
-    ) +
-    scale_radius("% expressed", range = c(0, 6)) +
-    coord_fixed(
-      # xlim = c(0.5, nlevels(vis_data$id) + 0.5),
-      # ylim = c(0.5, nlevels(vis_data$feature) + 0.5),
-      clip = "off"
-    ) +
-    theme_classic() +
-    theme(panel.grid = element_blank())
-}
-
 markers <- read_csv("metadata/cell_markers.csv", comment = "#")
 
 cluster_info <-
-  read_csv("metadata/clusters.csv") %>%
+  read_csv("metadata/clusters.csv", comment = "#") %>%
   mutate(
     cell_type =
       as_factor(cell_type) %>%
@@ -176,7 +93,7 @@ plot_dots(
   NULL
 
 
-ggsave_default("markers/canonical_markers_clusters",
+ggsave_default("markers/overview",
                height = 297, width = 250)
 
 
@@ -256,5 +173,5 @@ plot_features(
   x = nb@meta.data$umap_1_monocle,
   y = nb@meta.data$umap_2_monocle,
   nb_markers,
-  filename = "markers/nb_markers"
+  filename = "markers/neuroblastoma"
 )
