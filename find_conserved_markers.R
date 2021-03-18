@@ -1,4 +1,4 @@
-# Find conserved markers.
+# Find cluster markers, generate plots and export top markers to a CSV file.
 #
 # @DEPI rna_decontaminated.rds
 # @DEPI metadata.rds
@@ -28,6 +28,7 @@ colData(nb) <-
   column_to_rownames("cell") %>% 
   as("DataFrame")
 rowData(nb)[["gene_short_name"]] <- rownames(nb)
+
 
 
 # Functions ---------------------------------------------------------------
@@ -100,36 +101,16 @@ plot_conserved_markers <- function(data,
   pval_type <- match.arg(pval_type)
   sort_col <- "t.summary.logFC"
   prefix <- "t.logFC."
-  
-  clusters <- tribble(
-    ~id, ~type,
-    "3",  "T",
-    "5",  "T",
-    "18", "T",
-    "4",  "NK",
-    "6",  "NK",
-    "2",  "B",
-    "9",  "B",
-    "12", "B",
-    "17", "B",
-    "19", "B",
-    "21", "B",
-    "1",  "M",
-    "15", "M",
-    "16", "M",
-    "22", "M",
-    "14", "D",
-    "13", "E",
-    "7",  "other",
-    "10", "other",
-    "11", "other",
-    "20", "other",
-    "8",  "NB"
-  )
-  
-  colData(data)[[dotplot_groups]] <- 
-    colData(data)[[dotplot_groups]] %>% 
-    fct_relevel(clusters$id)
+
+  cluster_info <-
+    read_csv("metadata/clusters.csv") %>%
+    mutate(
+      cell_type =
+        as_factor(cell_type) %>%
+        fct_relevel("T", "NK", "B", "M", "D", "E", "NB", "other")
+    ) %>%
+    arrange(cell_type, cluster) %>%
+    mutate(cluster = as_factor(cluster) %>% fct_inorder())
 
   dge_df <-
     markers[[pval_type]][[group]] %>%
@@ -141,11 +122,11 @@ plot_conserved_markers <- function(data,
   dge_matrix <-
     dge_df %>%
     select(gene, starts_with(prefix)) %>%
-    rename_with(~str_replace(.x, prefix, "")) %>% 
-    mutate({{group}} := NA_real_) %>% 
+    rename_with(~str_replace(.x, prefix, "")) %>%
+    mutate({{group}} := NA_real_) %>%
     column_to_rownames("gene") %>%
-    as.matrix() %>% 
-    magrittr::extract(, clusters$id)
+    as.matrix() %>%
+    magrittr::extract(, levels(cluster_info$cluster))
 
   break_max <- quantile(dge_matrix, 0.95, na.rm = TRUE)
 
@@ -160,9 +141,9 @@ plot_conserved_markers <- function(data,
     name = "expression",
     top_annotation = HeatmapAnnotation(
       "cell type" =
-        clusters %>%
-        filter(id %in% colnames(dge_matrix)) %>%
-        pull(type),
+        cluster_info %>%
+        filter(cluster %in% colnames(dge_matrix)) %>%
+        pull(cell_type),
       col = list("cell type" = c(
         "T" = "#1f78b4",
         NK = "#a6cee3",
@@ -178,23 +159,13 @@ plot_conserved_markers <- function(data,
 
   p <- wrap_plots(
     grid.grabExpr(draw(heatmap, merge_legend = TRUE)),
-    plot_genes_by_group(
-      data,
+    plot_dots(
+      logcounts(data),
       rownames(dge_matrix) %>% rev(),
-      group_cells_by = dotplot_groups,
-      ordering_type = "none"
-    ) +
-      scale_color_scico(
-        name = "log(mean + 0.1)",
-        palette = "acton",
-        direction = -1
-      ) +
-      scale_radius(name = "percentage", range = c(0, 6)) +
-      xlab(NULL) +
-      ylab(NULL) +
-      theme(axis.text.x = element_text(angle = 0, hjust = 0.5))
+      colData(data)[[dotplot_groups]] %>%
+        fct_relevel(levels(cluster_info$cluster))
+    )
   ) +
-    plot_layout(widths = c(1.5, 1)) +
     plot_annotation(str_glue("Group {group} in {dotplot_groups}"))
   ggsave_default(filename)
   p
@@ -210,8 +181,8 @@ conmarkers_clusters <- assemble_markers(
   pval_types = "any"
 )
 
-plot_conserved_markers(nb, conmarkers_clusters, group = "8",
-                       filename = "markers/conserved_markers_c8")
+plot_conserved_markers(nb, conmarkers_clusters, group = "9",
+                       filename = "markers/conserved_markers_c9")
 
 walk(
   levels(colData(nb)$cluster_50),
@@ -221,8 +192,17 @@ walk(
       nb,
       conmarkers_clusters,
       group = cluster,
-      dotplot_groups = "cluster_50",
       filename = str_glue("markers/conserved_markers_c{cluster}")
-    ) 
+    )
+    
+    fs::dir_create("plots/markers/tables")
+    conmarkers_clusters$any[[cluster]] %>% 
+      as_tibble(rownames = "gene") %>% 
+      filter(p.value < 1e-6) %>%
+      select(gene, Top, p.value, FDR, t.summary.logFC) %>% 
+      write_csv(str_glue("plots/markers/tables/markers_c{cluster}.csv"))
   }
 )
+
+
+
