@@ -175,3 +175,92 @@ plot_features(
   nb_markers,
   filename = "markers/neuroblastoma"
 )
+
+
+
+# PanglaoDB ---------------------------------------------------------------
+
+panglaodb <- 
+  read_tsv("metadata/PanglaoDB_markers_27_Mar_2020.tsv.gz") %>% 
+  set_names(colnames(.) %>% str_replace_all(" ", "_")) %>%
+  filter(
+    str_detect(species, "Hs"),
+    canonical_marker == 1
+  )
+
+panglaodb_cell_types <- 
+  panglaodb %>%
+  filter(
+    organ %in% c("Immune system", "Blood", "Brain") |
+    cell_type == "Hematopoietic stem cells"
+  ) %>% 
+  count(organ, cell_type) %>% 
+  mutate(cell_type = str_replace(cell_type, "/", " or "))  
+
+
+#' Plot canonical markers as defined by the PanglaoDB database in a dotplot
+#' and highlight manual cluster classifications.
+#'
+#' @param cell_type Cell type available in the database.
+#' @param save_plot If `TRUE`, save the plot in an automatically derived folder.
+#'
+#' @return A ggplot object
+plot_panglaodb_markers <- function(cell_type, save_plot = TRUE) {
+  info("Plotting markers for {cell_type}")
+  
+  counts <- nb$SCT@data
+  
+  markers <-
+    panglaodb %>%
+    filter(cell_type == {{cell_type}}) %>%
+    pull(official_gene_symbol) %>%
+    unique() %>% 
+    str_sort(decreasing = TRUE)
+  
+  organ <- 
+    panglaodb %>%
+    filter(cell_type == {{cell_type}}) %>%
+    slice(1) %>% 
+    pull(organ)
+  
+  known_markers <- intersect(markers, rownames(counts))
+  missing_markers <- setdiff(markers, rownames(counts))
+  if (length(missing_markers) > 0)
+    missing_markers <- str_glue(
+      "Not observed: {str_c(missing_markers, collapse = ', ')}"
+    )
+  else
+    missing_markers <- waiver()
+
+  figure_height <- max(6 * length(known_markers), 70)
+
+  p <-
+    plot_dots(
+      counts,
+      known_markers,
+      fct_relevel(
+        nb@meta.data$cluster_50,
+        as.character(cluster_info$cluster)
+      ),
+      panel_annotation = x_annotation_data
+    ) +
+    geom_text(
+      data = x_annotation_data,
+      aes(x = label_x, y = length(known_markers) + 1, label = label),
+      size = 4
+    ) +
+    labs(
+      title = cell_type,
+      subtitle = "PanglaoDB canonical markers",
+      caption = missing_markers
+    )
+
+  if (save_plot)
+    ggsave_default(str_glue("markers/panglaodb/{organ}/{cell_type}"),
+                   height = figure_height, width = 250)
+  p
+}
+
+
+plot_panglaodb_markers("B cells")
+walk(panglaodb_cell_types$cell_type, plot_panglaodb_markers)
