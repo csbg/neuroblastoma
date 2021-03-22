@@ -575,121 +575,178 @@ plot_cvt_heatmap(nb_data, cluster_50, "monaco", "fine",
 
 
 
+
+#' For a given cell type reference dataset, label, and cluster, plot a bar chart
+#' that counts the most frequent cell types.
+#'
+#' @param data Metadata.
+#' @param clusters Column with cluster IDs.
+#' @param selected_cluster Cluster whose cell types should be counted.
+#' @param ref Reference cell type dataset.
+#' @param label Cell type label.
+#' @param max_bars Maximum number of bars in each subplot. Collapse additional
+#'   cell types (except "Unknown") into type "Other".
+#'
+#' @return A ggplot object.
+plot_cvt_bar_single <- function(data, clusters, selected_cluster, ref, label,
+                                max_bars = 8L) {
+  cell_types <-
+    data %>%
+    preprocess_celltypes(ref, label) %>% 
+    select(cell_type, cluster = {{clusters}}) %>% 
+    filter(cluster == {{selected_cluster}}) %>%
+    pull(cell_type) %>% 
+    fct_drop() %>% 
+    fct_infreq()
+  
+  if (nlevels(cell_types) > max_bars) {
+    if ("Unknown" %in% levels(cell_types))
+      cell_types <- fct_relevel(cell_types, "Unknown", after = 0)
+
+    kept_levels <- levels(cell_types)[1:max_bars - 1]
+    cell_types <- fct_relabel(
+      cell_types,
+      ~case_when(. %in% kept_levels ~ ., TRUE ~ "Other")
+    )
+  }
+  
+  p <-
+    fct_count(cell_types, prop = TRUE) %>%
+    mutate(
+      f =
+        f %>%
+        fct_reorder(n) %>%
+        fct_relevel("Other") %>%
+        fct_relevel("Unknown")
+    ) %>%
+    ggplot(aes(f, n)) +
+    geom_col(aes(fill = p), show.legend = FALSE) +
+    xlab("") +
+    ylab("") +
+    scale_fill_distiller(
+      palette = "YlOrRd",
+      direction = 1,
+      limits = c(0, 1)
+    ) +
+    coord_flip() +
+    theme_classic() +
+    theme(
+      axis.text.x = element_text(angle = 270, vjust = 0.5),
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+    NULL
+  p
+}
+
+plot_cvt_bar_single(nb_data, cluster_50, "3", "hpca", "broad")
+
+
+
+#' Count cell types in a given cluster and plot results in bar charts for all
+#' cell type reference datasets.
+#'
+#' @param data Metadata.
+#' @param clusters Column with cluster IDs.
+#' @param selected_cluster Cluster whose cell types should be counted.
+#' @param filename Name of output file.
+#'
+#' @return A ggplot object.
+plot_cvt_bar_cluster <- function(data, clusters, selected_cluster,
+                                 filename = NULL) {
+  references <-
+    colnames(data) %>%
+    str_match("cell_type_(.+)_broad") %>% 
+    magrittr::extract(, 2) %>% 
+    magrittr::extract(!is.na(.))
+  
+  p <- 
+    list(ref = references, label = c("broad", "fine")) %>%
+    cross_df() %>%
+    pmap(
+      function(ref, label) {
+        plot_cvt_bar_single(
+          data,
+          clusters = {{clusters}},
+          selected_cluster = selected_cluster,
+          ref = ref,
+          label = label,
+          max_bars = if (label == "broad") 8L else 15L
+        ) +
+          {if (label == "broad") xlab(ref) else NULL} +
+          {if (ref == references[length(references)]) ylab(label) else NULL}
+      }
+    ) %>% 
+    wrap_plots(ncol = 2, byrow = FALSE) +
+    plot_annotation(
+      title = str_glue("Cell types in cluster {selected_cluster}")
+    )
+  
+  ggsave_default(filename, height = 297, width = 210)
+  p
+}
+
+plot_cvt_bar_cluster(nb_data, cluster_50, "3")
+
+walk(
+  levels(nb_data$cluster_50),
+  ~plot_cvt_bar_cluster(
+    data = nb_data,
+    clusters = cluster_50,
+    selected_cluster = .,
+    filename = str_glue("cell_types/cvt_bar_cluster_{.}")
+  )
+)
+
+
+
 #' For each cluster, plot a bar chart that counts the most frequent cell types.
 #'
 #' @param data Metadata.
 #' @param clusters Column with cluster IDs.
-#' @param ref   ↓
-#' @param label Passed to `preprocess_celltypes()`.
+#' @param ref Reference cell type dataset.
+#' @param label Cell type label.
 #' @param max_bars Maximum number of bars in each subplot. Collapse additional
 #'   cell types (except "Unknown") into type "Other".
-#' @param save_subplots If `TRUE`, also save each subplot into a separate file.
 #' @param filename Name of output file.
-#' @param ... further arguments passed to `ggsave_default()`
 #'
 #' @return A ggplot object.
-plot_cvt_bar <- function(data, clusters, ref, label,
-                         max_bars = 8L, save_subplots = FALSE,
-                         filename = NULL, ...) {
-  pdata <- 
-    data %>% 
-    preprocess_celltypes(ref, label) %>% 
-    select(cell_type, cluster = {{clusters}})
+plot_cvt_bar_dataset <- function(data, clusters, ref, label,
+                                 max_bars = 8L, filename = NULL) {
   
-  plot_single <- function(cluster) {
-    cell_types <-
-      pdata %>%
-      filter(cluster == {{cluster}}) %>%
-      pull(cell_type) %>% 
-      fct_drop() %>% 
-      fct_infreq()
-    
-    if (nlevels(cell_types) > max_bars) {
-      if ("Unknown" %in% levels(cell_types))
-        cell_types <- fct_relevel(cell_types, "Unknown", after = 0)
-      
-      kept_levels <- levels(cell_types)[1:max_bars - 1]
-      cell_types <- fct_relabel(
-        cell_types,
-        ~case_when(. %in% kept_levels ~ ., TRUE ~ "Other")
-      )
-    }
-
-    ps <-
-      fct_count(cell_types, prop = TRUE) %>% 
-      mutate(
-        f =
-          f %>%
-          fct_reorder(n) %>%
-          fct_relevel("Other") %>% 
-          fct_relevel("Unknown")
-      ) %>%
-      ggplot(aes(f, n)) +
-      geom_col(aes(fill = p), show.legend = FALSE) +
-      annotate("text_npc", npcx = 0.5, npcy = 0.9, label = cluster) +
-      xlab("") +
-      ylab("") +
-      scale_fill_distiller(
-        palette = "YlOrRd",
-        direction = 1,
-        limits = c(0, 1)
-      ) +
-      coord_flip() +
-      theme_classic() +
-      theme(
-        axis.text.x = element_text(angle = 270, vjust = 0.5),
-        strip.background = element_blank(),
-        strip.text = element_text(face = "bold")
-      ) +
-      NULL
-    if (save_subplots) {
-      message("Plotting ", cluster)
-      ggsave_default(
-        str_glue("{filename}/{cluster}"),
-        plot = set_panel_size(
-          ps,
-          width = unit(30, "mm"),
-          height = unit(30, "mm")
-        )
-      )
-    }
-    ps
-  }
-
   p <-
-    levels(pdata$cluster) %>%
-    map(plot_single) %>%
+    levels(pull(data, {{clusters}})) %>%
+    map(
+      plot_cvt_bar_single,
+      data = data, 
+      clusters = {{clusters}},
+      ref = ref,
+      label = label,
+      max_bars = max_bars
+    ) %>%
     wrap_plots()
-  set_last_plot(p)
 
   ggsave_default(filename, width = 420, height = 297, ...)
   p
 }
 
-plot_cvt_bar(nb_data, cluster_50, "hpca", "broad",
-             filename = "cell_types/cvt_bar_hpca_broad")
-plot_cvt_bar(nb_data, cluster_50, "hpca", "fine",
-             filename = "cell_types/cvt_bar_hpca_fine")
-
-plot_cvt_bar(nb_data, cluster_50, "blueprint", "broad",
-             filename = "cell_types/cvt_bar_blueprint_broad")
-plot_cvt_bar(nb_data, cluster_50, "blueprint", "fine",
-             filename = "cell_types/cvt_bar_blueprint_fine")
-
-plot_cvt_bar(nb_data, cluster_50, "dice", "broad",
-             filename = "cell_types/cvt_bar_dice_broad")
-plot_cvt_bar(nb_data, cluster_50, "dice", "fine",
-             filename = "cell_types/cvt_bar_dice_fine")
-
-plot_cvt_bar(nb_data, cluster_50, "dmap", "broad",
-             filename = "cell_types/cvt_bar_dmap_broad")
-plot_cvt_bar(nb_data, cluster_50, "dmap", "fine",
-             filename = "cell_types/cvt_bar_dmap_fine")
-
-plot_cvt_bar(nb_data, cluster_50, "monaco", "broad",
-             filename = "cell_types/cvt_bar_monaco_broad")
-plot_cvt_bar(nb_data, cluster_50, "monaco", "fine",
-             filename = "cell_types/cvt_bar_monaco_fine")
+colnames(nb_data) %>%
+  str_match("cell_type_(.+)_(.+)") %>%
+  magrittr::set_colnames(c("match", "ref", "label")) %>% 
+  as_tibble() %>% 
+  filter(!is.na(ref)) %>% 
+  pwalk(
+    function(ref, label) {
+      info("Plotting {ref}, {label}")
+      plot_cvt_bar_dataset(
+        nb_data,
+        cluster_50,
+        ref,
+        label,
+        filename = str_glue("cell_types/cvt_bar_dataset_{ref}_{label}")
+      )
+    }
+  )
 
 
 
