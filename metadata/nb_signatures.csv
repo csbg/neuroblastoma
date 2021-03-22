@@ -1,5 +1,9 @@
 # Description: Cell type markers for NB cells
-# Source: Table S2E from Dong et al., Cancer Cell 38, 716–733 (2020)
+# Source:
+#   ncc_like: Boeva et al., Nature Gen 49(9), 1408 (2017); see also Table S2E from Dong et al., Cancer Cell 38, 716–733 (2020)
+#   noradrenergic: ibd
+#   mesenchymal: van Groningen et al., Nature Gen 49(8), 1261 (2017); also Dong
+#   adrenergic: ibd
 cell_type,gene
 ncc_like,NR3C1
 ncc_like,BHLHE41

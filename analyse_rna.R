@@ -897,7 +897,7 @@ nb_data %>%
 
 ## Mitochondrial genes ----
 
-plot_clusters_all(nb_data, umap_1_monocle, umap_2_monocle, percent_mt,
+plot_clusters_all(nb_data, umap_1_monocle, umap_2_monocle, percent_mito,
                   label_direct = FALSE,
                   color_scale = scale_color_viridis_c(),
                   filename = "qc/qc_mtgene_umap")
