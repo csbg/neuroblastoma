@@ -13,35 +13,31 @@
 
 ## Main workflow
 
-* [merge_rna.R](merge_rna.R) -
-  merge samples, perform QC filtering, ensure unique cell names
+* [perform_qc.R](perform_qc.R) -
+  perform QC filtering, ensure unique cell names
 * [integrate_rna_seurat.R](integrate_rna_seurat.R) -
   integrate scRNA-seq samples with Seurat; 
   invoke via [integrate_rna_seurat.sh](sge_integrate_rna_seurat.sh)
 * [extract_metadata_seurat.R](extract_metadata_seurat.R) -
-  perform basic analyses and extract resulting metadata from a Seurat object,
-  export individual assays
+  perform basic analyses and extract resulting metadata from a Seurat object
 * [integrate_rna_monocle.R](integrate_rna_monocle.R) -
-  integrate scRNA-seq samples with monocle, perform basic analyses and extract
-  resulting metadata
+  integrate scRNA-seq samples with monocle, perform basic analyses
+  and extract resulting metadata
+* [correct_ambiance.R](correct_ambiance.R) –
+  remove cell-free RNA contamination
 * [classify_cell_types.R](classify_cell_types.R) -
   perform cell type classification via SingleR;
   invoke via [sge_classify_cell_types.sh](sge_classify_cell_types.sh)
-* [detect_doublets.R](detect_doublets.R) -
-  detect doublets via scds;
-  invoke via [sge_detect_doublets.sh](sge_job_doublet.sh)
 * [assemble_metadata.R](assemble_metadata.R) -
   generate one CSV and RDS file with all metadata
 * [analyse_rna.R](analyse_rna.R) -
   analysis of integrated data
 * [plot_markers.R](plot_markers.R) -
-  plot canonical cell type and NB markers
-* [find_conserved_markers.R](find_conserved_markers.R) -
-  find conserved markers
-* [correct_ambiance.R](correct_ambiance.R) –
-  remove cell-free RNA contamination
-* [dge_muscat.R](dge_muscat.R) -
-  differential expression via muscat
+  plot manually selected canonical cell type markers
+* [find_markers.R](find_markers.R) -
+  automatically detect canonical cell type markers and plot them
+* [analyse_dge.R](analyse_dge.R) -
+  analyse differential genea expression
 
 
 
