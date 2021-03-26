@@ -2,9 +2,10 @@
 # Exports several plots to plots/markers.
 #
 # @DEPI metadata.rds
-# @DEPI assay_sct_seurat.rds
+# @DEPI rna_decontaminated.rds
 
-library(Seurat)
+library(monocle3)
+library(scuttle)
 library(tidyverse)
 library(scico)
 source("common_functions.R")
@@ -13,88 +14,116 @@ source("common_functions.R")
 
 # Load data ---------------------------------------------------------------
 
-nb <- readRDS("data_generated/assay_sct_seurat.rds")
+nb <-
+  readRDS("data_generated/rna_decontaminated.rds") %>% 
+  logNormCounts(assay.type = "soupx_counts")
 
-nb@meta.data <-
+colData(nb) <-
   readRDS("data_generated/metadata.rds") %>%
-  column_to_rownames("cell")
+  mutate(Size_Factor = colData(nb)$Size_Factor) %>% 
+  column_to_rownames("cell") %>% 
+  as("DataFrame")
+rowData(nb)[["gene_short_name"]] <- rownames(nb)
+
+markers <- read_csv("metadata/cell_markers.csv", comment = "#")
 
 
 
 # Canonical cell type markers ---------------------------------------------
 
-markers <- read_csv("metadata/cell_markers.csv", comment = "#")
-
 cluster_info <-
   read_csv("metadata/clusters.csv", comment = "#") %>%
   mutate(
-    cell_type =
-      as_factor(cell_type) %>%
-      fct_relevel("T", "NK", "B", "M", "D", "E", "NB", "other")
-  ) %>%
-  arrange(cell_type, cluster)
-
-y_annotation_data <-
-  markers %>%
-  arrange(desc(row_number())) %>%
-  mutate(
-    super_type = case_when(
-      str_starts(cell_type, "l") ~ "leukocyte",
-      str_starts(cell_type, "T") ~ "T cell",
-      str_starts(cell_type, "m") ~ "myeloid",
-      TRUE ~ cell_type
-    ),
-    r = row_number()
-  ) %>%
-  group_by(label = super_type) %>%
-  summarise(
-    yintercept = first(r) - 0.5,
-    label_y = mean(r)
+    across(
+      !id,
+      ~as_factor(.) %>%
+        fct_relevel("T", "NK", "B", "M", "D", "E", "NB", "other")
+    )
   )
 
 
-x_annotation_data <-
-  cluster_info %>%
-  mutate(r = row_number()) %>%
-  group_by(label = cell_type) %>%
-  summarize(
-    xmin = first(r) - 0.5,
-    xmax = last(r) + 0.5,
-    label_x = mean(r)
-  ) %>%
-  mutate(fill = case_when(row_number() %% 2 == 0 ~ "white", TRUE ~ "gray90"))
+#' Plot manually selected canonical cell type markers for each cluster.
+#' Oder cluster by manually assigned cell types.
+#'
+#' @param cluster_col Column of the cell metadata that contains cluster ids.
+#' @param filename Name of the output file.
+#'
+#' @return A ggplot2 object
+plot_canonical_markers <- function(cluster_col, filename = NULL) {
+  y_annotation_data <-
+    markers %>%
+    arrange(desc(row_number())) %>%
+    mutate(
+      super_type = case_when(
+        str_starts(cell_type, "l") ~ "leukocyte",
+        str_starts(cell_type, "T") ~ "T cell",
+        str_starts(cell_type, "m") ~ "myeloid",
+        TRUE ~ cell_type
+      ),
+      r = row_number()
+    ) %>%
+    group_by(label = super_type) %>%
+    summarise(
+      yintercept = first(r) - 0.5,
+      label_y = mean(r)
+    )
+  
+  cluster_info <- 
+    cluster_info %>%
+    arrange({{cluster_col}}, id) %>%
+    filter(!is.na({{cluster_col}}))
+  
+  x_annotation_data <-
+    cluster_info %>%
+    mutate(r = row_number()) %>%
+    group_by(label = {{cluster_col}}) %>%
+    summarize(
+      xmin = first(r) - 0.5,
+      xmax = last(r) + 0.5,
+      label_x = mean(r)
+    ) %>%
+    mutate(
+      fill = case_when(
+        row_number() %% 2 == 0 ~ "white",
+        TRUE                   ~ "gray90"
+      )
+    )
+  
+  p <-
+    plot_dots(
+      logcounts(nb),
+      rev(markers$gene),
+      fct_relevel(
+        colData(nb) %>% as_tibble() %>% pull({{cluster_col}}),
+        as.character(cluster_info$id)
+      ),
+      panel_annotation = x_annotation_data
+    ) +
+    geom_text(
+      data = x_annotation_data,
+      aes(x = label_x, y = length(markers$gene) + 2, label = label),
+      size = 4
+    ) +
+    geom_hline(
+      yintercept = y_annotation_data$yintercept,
+      linetype = "dashed",
+      size = 0.25
+    ) +
+    geom_text(
+      data = y_annotation_data,
+      aes(x = nrow(cluster_info) + 2, y = label_y, label = label),
+      size = 4,
+      hjust = 0
+    ) +
+    theme(legend.position = "left") +
+    NULL
 
-plot_dots(
-  nb$SCT@data,
-  rev(markers$gene),
-  fct_relevel(
-    nb@meta.data$cluster_50,
-    as.character(cluster_info$cluster)
-  ),
-  panel_annotation = x_annotation_data
-) +
-  geom_text(
-    data = x_annotation_data,
-    aes(x = label_x, y = length(markers$gene) + 2, label = label),
-    size = 4
-  ) +
-  geom_hline(
-    yintercept = y_annotation_data$yintercept,
-    linetype = "dashed",
-    size = 0.25
-  ) +
-  geom_text(
-    data = y_annotation_data,
-    aes(x = 22, y = label_y, label = label),
-    size = 4,
-    hjust = 0
-  ) +
-  theme(legend.position = "left") +
-  NULL
+  ggsave_default(filename, height = 297, width = 350)
+  p
+}
 
-
-ggsave_default("markers/overview",
-               height = 297, width = 250)
+plot_canonical_markers(cluster_50, filename = "markers/overview_50")
+plot_canonical_markers(cluster_20, filename = "markers/overview_20")
 
 
 
@@ -169,9 +198,9 @@ nb_markers <-
   pull(gene)
 
 plot_features(
-  nb$SCT@counts,
-  x = nb@meta.data$umap_1_monocle,
-  y = nb@meta.data$umap_2_monocle,
+  logcounts(nb),
+  x = colData(nb)$umap_1_monocle,
+  y = colData(nb)$umap_2_monocle,
   nb_markers,
   filename = "markers/neuroblastoma"
 )
@@ -186,7 +215,8 @@ panglaodb <-
   filter(
     str_detect(species, "Hs"),
     canonical_marker == 1
-  )
+  ) %>% 
+  mutate(cell_type = str_replace(cell_type, "/", " or "))
 
 panglaodb_cell_types <- 
   panglaodb %>%
@@ -194,21 +224,22 @@ panglaodb_cell_types <-
     organ %in% c("Immune system", "Blood", "Brain") |
     cell_type == "Hematopoietic stem cells"
   ) %>% 
-  count(organ, cell_type) %>% 
-  mutate(cell_type = str_replace(cell_type, "/", " or "))  
+  count(organ, cell_type)
 
 
 #' Plot canonical markers as defined by the PanglaoDB database in a dotplot
 #' and highlight manual cluster classifications.
 #'
 #' @param cell_type Cell type available in the database.
+#' @param cluster_col Column of the cell metadata that contains cluster ids.
 #' @param save_plot If `TRUE`, save the plot in an automatically derived folder.
 #'
 #' @return A ggplot object
-plot_panglaodb_markers <- function(cell_type, save_plot = TRUE) {
+plot_panglaodb_markers <- function(cell_type, cluster_col,
+                                   folder = "panglaodb", save_plot = TRUE) {
   info("Plotting markers for {cell_type}")
   
-  counts <- nb$SCT@data
+  counts <- logcounts(nb)
   
   markers <-
     panglaodb %>%
@@ -234,13 +265,34 @@ plot_panglaodb_markers <- function(cell_type, save_plot = TRUE) {
 
   figure_height <- max(6 * length(known_markers), 70)
 
+  cluster_info <- 
+    cluster_info %>%
+    arrange({{cluster_col}}, id) %>%
+    filter(!is.na({{cluster_col}}))
+  
+  x_annotation_data <-
+    cluster_info %>%
+    mutate(r = row_number()) %>%
+    group_by(label = {{cluster_col}}) %>%
+    summarize(
+      xmin = first(r) - 0.5,
+      xmax = last(r) + 0.5,
+      label_x = mean(r)
+    ) %>%
+    mutate(
+      fill = case_when(
+        row_number() %% 2 == 0 ~ "white",
+        TRUE                   ~ "gray90"
+      )
+    )
+  
   p <-
     plot_dots(
       counts,
       known_markers,
       fct_relevel(
-        nb@meta.data$cluster_50,
-        as.character(cluster_info$cluster)
+        colData(nb) %>% as_tibble() %>% pull({{cluster_col}}),
+        as.character(cluster_info$id)
       ),
       panel_annotation = x_annotation_data
     ) +
@@ -256,11 +308,24 @@ plot_panglaodb_markers <- function(cell_type, save_plot = TRUE) {
     )
 
   if (save_plot)
-    ggsave_default(str_glue("markers/panglaodb/{organ}/{cell_type}"),
+    ggsave_default(str_glue("markers/{folder}/{organ}/{cell_type}"),
                    height = figure_height, width = 250)
   p
 }
 
 
-plot_panglaodb_markers("B cells")
-walk(panglaodb_cell_types$cell_type, plot_panglaodb_markers)
+plot_panglaodb_markers("B cells", cluster_50, folder = "panglaodb_50")
+
+walk(
+  panglaodb_cell_types$cell_type,
+  plot_panglaodb_markers,
+  cluster_50,
+  folder = "panglaodb_50"
+)
+
+walk(
+  panglaodb_cell_types$cell_type,
+  plot_panglaodb_markers,
+  cluster_20,
+  folder = "panglaodb_20"
+)

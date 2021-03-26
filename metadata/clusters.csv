@@ -1,27 +1,42 @@
-# description: Cluster metadata, mainly for plotting purposes
+# description: Cluster metadata for plotting purposes
 # source: generated manually from scRNA-seq analyses
 # columns:
-#   cluster: cluster id
-#   cell_type: cell type abbreviation
-cluster,cell_type
-1,M
-2,M
-3,NK
-4,B
-5,T
-6,T
-7,B
-8,T
-9,NB
-10,B
-11,M
-12,D
-13,M
-14,E
-15,NK
-16,M
-17,T
-18,other
-19,other
-20,other
-21,B
+#   id: cluster ID
+#   other columns: cell type (abbreviation) associated with the cluster ID in the respective cell metadata column
+id,cluster_50,cluster_20
+1,M,T
+2,M,M
+3,B,M
+4,NK,B
+5,T,NB
+6,T,T
+7,B,T
+8,NB,B
+9,NK,B
+10,M,M
+11,B,T
+12,D,NK
+13,E,M
+14,other,B
+15,M,M
+16,M,NK
+17,B,NK
+18,T,M
+19,B,D
+20,other,M
+21,NA,NK
+22,NA,M
+23,NA,E
+24,NA,M
+25,NA,M
+26,NA,E
+27,NA,B
+28,NA,B
+29,NA,T
+30,NA,B
+31,NA,D
+32,NA,NB
+33,NA,other
+34,NA,other
+35,NA,other
+36,NA,other
