@@ -1,8 +1,8 @@
-# Integrate scRNA-seq datasets via SCTransform and Seurat.
+# Integrate scRNA-seq datasets Seurat (sctransform and reciprocal PCA).
 #
 # Generates rna_integrated_seurat.rds, containing the intrgrated dataset.
 #
-# @DEPI rna_merged.rds
+# @DEPI rna_qcpassed.rds
 # @DEPO rna_integrated_seurat.rds
 
 library(Seurat)
@@ -14,8 +14,8 @@ library(fs)
 
 # Parameters --------------------------------------------------------------
 
-# the merged dataset
-merged_dataset <- "data_generated/rna_merged.rds"
+# the QC-filtered datasets
+filtered_datasets <- "data_generated/rna_qcpassed.rds"
 
 # folder where results are saved
 out_dir <- "data_generated"
@@ -24,11 +24,8 @@ out_dir <- "data_generated"
 
 # Integrate data ----------------------------------------------------------
 
-nb_merged <- readRDS(merged_dataset)
-
 nb_list <-
-  nb_merged %>% 
-  SplitObject("sample") %>% 
+  readRDS(filtered_datasets) %>% 
   map(
     SCTransform,
     vars.to.regress = "percent_mito",

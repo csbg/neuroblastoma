@@ -2,10 +2,6 @@
 #
 # Metadata is exported to metadata_seurat.csv with columns
 # * cell – barcode as used by Seurat
-# * sample – patient ID
-# * percent_mito – percentage of mitochondrial genes
-# * library_size – number of molecules in RNA assay
-# * n_features – number of features in RNA assay
 # * cluster_[res] – cluster IDs at resolution [res]
 # * signature_[gs] – scores for gene signature [gs]
 # * umap_1 ↓
@@ -17,7 +13,6 @@
 #
 # @DEPI rna_integrated_seurat.rds
 # @DEPO metadata_seurat.csv
-# @DEPO assay_sct_seurat.rds
 
 
 library(Seurat)
@@ -63,10 +58,6 @@ nb_metadata <-
   as_tibble(rownames = "cell") %>%
   select(
     cell,
-    sample,
-    percent_mito,
-    library_size,
-    n_features,
     cluster_0.2 = integrated_snn_res.0.2,
     cluster_0.5 = integrated_snn_res.0.5,
     cluster_0.8 = integrated_snn_res.0.8,
@@ -77,26 +68,13 @@ nb_metadata <-
     .cols = matches("Cluster\\d+")
   ) %>% 
   bind_cols(
-    Embeddings(nb, "umap") %>% as_tibble() %>% rename_with(str_to_lower),
-    Embeddings(nb, "tsne") %>% as_tibble() %>% rename_with(str_to_lower)
+    Embeddings(nb, "umap") %>%
+      as_tibble() %>%
+      rename(umap_1_seurat = UMAP_1, umap_2_seurat = UMAP_2),
+    Embeddings(nb, "tsne") %>%
+      as_tibble() %>%
+      rename(tsne_1_seurat = tSNE_1, tsne_2_seurat = tSNE_2)
   )
 
 nb_metadata %>%
   write_csv(path_join(c(out_dir, str_glue("metadata_seurat.csv"))))
-
-
-
-# Export assays -----------------------------------------------------------
-
-export_assay <- function(assay) {
-  nb_assay <- 
-    Assays(nb, assay) %>% 
-    CreateSeuratObject(assay = assay)
-  nb_assay@reductions$umap <- nb@reductions$umap
-  saveRDS(
-    nb_assay,
-    path_join(c(out_dir, str_glue("assay_{str_to_lower(assay)}_seurat.rds")))
-  )
-}
-
-export_assay("SCT")

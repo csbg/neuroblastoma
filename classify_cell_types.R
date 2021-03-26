@@ -1,18 +1,16 @@
 # Cell type assignment via SingleR.
 #
-# Creates several CSV files named 'cell_types_singler_[ref]_[labels].csv', where
-# [ref] indicates the celldex reference dataset and [labels] denotes whether the
-# broad or fine labels from the reference dataset were used for classification.
-# Each file contains the dataframe returned by SingleR::SingleR(), with added
-# cell and sample information
+# Creates several CSV files named 'cell_types_[ref]_[labels].csv', where [ref]
+# indicates the celldex reference dataset and [labels] denotes whether the broad
+# or fine labels from the reference dataset were used for classification. Each
+# file contains the dataframe returned by SingleR::SingleR(), with added cell
+# and sample information
 #
-# @DEPI rna_merged.rds
-# @DEPO cell_types_singler_[ref]_[labels].csv
+# @DEPI rna_qcpassed.rds
+# @DEPO cell_types_[ref]_[labels].csv
 
 
 library(Seurat)
-library(monocle3)
-library(SingleCellExperiment)
 library(SingleR)
 library(celldex)
 library(tidyverse)
@@ -22,8 +20,8 @@ source("common_functions.R")
 
 # Parameters --------------------------------------------------------------
 
-# the merged dataset
-merged_data <- "data_generated/rna_merged.rds"
+# the QC-filtered datasets
+filtered_datasets <- "data_generated/rna_qcpassed.rds"
 
 # folder where results are saved
 out_dir <- "data_generated"
@@ -32,16 +30,12 @@ out_dir <- "data_generated"
 
 # Load data ---------------------------------------------------------------
 
-nb <- readRDS(merged_data)
+nb <- readRDS(filtered_datasets)
+count_matrix <- merge(nb[[1]], nb[-1])$RNA@counts
 
-if (inherits(nb, "Seurat")) {
-  count_matrix <- nb$RNA@counts
-} else {
-  count_matrix <- assay(nb, "soupx_counts")
-}
-  
+
 # subset cells for testing
-# count_matrix <- count_matrix[, sample(colnames(count_matrix), 20)]
+# count_matrix <- count_matrix[, sample(colnames(count_matrix), 10)]
 
 
 reference_cell_types <- list(
@@ -104,7 +98,7 @@ save_results <- function(results) {
 
   write_csv(
     df,
-    str_glue("{out_dir}/cell_types_singler_{results$ref}_{results$labels}.csv")
+    str_glue("{out_dir}/cell_types_{results$ref}_{results$labels}.csv")
   )
 }
 

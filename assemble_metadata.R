@@ -7,8 +7,7 @@
 #
 # @DEPI metadata_seurat.csv
 # @DEPI metadata_monocle.csv
-# @DEPI doublet_scores.csv
-# @DEPI cell_types_singler_[ref]_[labels].csv
+# @DEPI cell_types_[ref]_[labels].csv
 # @DEPO metadata.csv
 # @DEPO metadata.rds
 # @DEPO celltype_details.rds
@@ -74,30 +73,18 @@ load_singler_data <- function(file) {
 
 #' Load cell metadata from several CSV files.
 #' 
-#' @param folder Folder containing CSV files.
+#' @param files CSV files with metadata.
 #'
 #' @return A dataframe with metadata combined from several files.
-load_cell_metadata <- function(folder) {
-  files <- c(
-    "metadata_seurat.csv",
-    "metadata_monocle.csv",
-    "doublet_scores.csv"
-  )
-  
-  nb_groups <- 
-    read_csv("metadata/sample_groups.csv", comment = "#") %>%
-    distinct(sample, group)
-  
+load_cell_metadata <- function(files) {
   sample_order <-
-    nb_groups %>% 
+    read_csv("metadata/sample_groups.csv", comment = "#") %>%
     arrange(group, sample) %>% 
     pull(sample) %>% 
     unique()
   
-  str_glue("{folder}/{files}") %>% 
-    map(read_csv) %>% 
-    reduce(left_join, by = "cell", suffix = c("_seurat", "_monocle")) %>%
-    left_join(nb_groups, by = "sample") %>%
+  map(files, read_csv) %>% 
+    reduce(left_join, by = "cell") %>%
     mutate(
       group =
         as_factor(group) %>%
@@ -136,7 +123,7 @@ add_cell_types <- function(df_metadata,
     imap(
       singler_list,
       function(df, file) {
-        ref <- str_match(file, "cell_types_singler_(.*)_")[, 2]
+        ref <- str_match(file, "cell_types_(.*)_")[, 2]
         label <- ifelse(str_detect(file, "main"), "broad", "fine")
         type_name <- str_glue("cell_type_{ref}_{label}")
         
@@ -219,6 +206,7 @@ add_cell_types <- function(df_metadata,
 # Load data ---------------------------------------------------------------
 
 folder <- "data_generated"
+metadata_files <- c("metadata_monocle.csv", "metadata_seurat.csv")
 
 singler_data <- map(
   dir_ls(folder, regex = "cell_types"),
@@ -226,7 +214,7 @@ singler_data <- map(
 )
 
 nb_data <-
-  load_cell_metadata(folder) %>% 
+  load_cell_metadata(str_glue("{folder}/{metadata_files}")) %>% 
   add_cell_types(singler_data) %>%
   # add_refined_clusters(folder) %>% 
   # add_split_clusters(folder) %>% 
