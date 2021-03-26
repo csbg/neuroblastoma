@@ -9,7 +9,6 @@ library(patchwork)
 library(tidyverse)
 library(egg)
 library(fs)
-library(clustree)
 library(bluster)
 library(ggbeeswarm)
 source("common_functions.R")
@@ -247,13 +246,6 @@ plot_clusters_selected(nb_data, umap_1_monocle, umap_2_monocle, cluster_50,
 
 
 # Cluster diagnostics -----------------------------------------------------
-
-nb_data %>% 
-  select(cluster_20, cluster_50) %>% 
-  clustree(prefix = "cluster_", edge_arrow = FALSE)
-ggsave_default("monocle/cluster_correspondence")
-
-
 
 #' Plot silhouettes and neighborhood purity as calculated by `bluster`.
 #'
@@ -726,7 +718,7 @@ plot_cvt_bar_dataset <- function(data, clusters, ref, label,
     ) %>%
     wrap_plots()
 
-  ggsave_default(filename, width = 420, height = 297, ...)
+  ggsave_default(filename, width = 420, height = 297)
   p
 }
 
@@ -736,7 +728,7 @@ colnames(nb_data) %>%
   as_tibble() %>% 
   filter(!is.na(ref)) %>% 
   pwalk(
-    function(ref, label) {
+    function(match, ref, label) {
       info("Plotting {ref}, {label}")
       plot_cvt_bar_dataset(
         nb_data,
@@ -952,78 +944,14 @@ nb_data %>%
 
 # Quality control ---------------------------------------------------------
 
-## Mitochondrial genes ----
-
 plot_clusters_all(nb_data, umap_1_monocle, umap_2_monocle, percent_mito,
                   label_direct = FALSE,
                   color_scale = scale_color_viridis_c(),
                   filename = "qc/qc_mtgene_umap")
-
-
-
-## Doublets ----
-
-#' Plot doublet scores calculated by scds.
-#' 
-#' For each type of score, plot (1) a UMAP with points colored by score,
-#' (2) a histogram of scores, and (3) a boxplot of score vs cluster.
-#'
-#' @param data Metadata.
-#' @param x Column with x-axis data.
-#' @param y Column with y-axis data.
-#' @param filename Name of output file.
-#'
-#' @return A ggplot object.
-plot_doublet_scores <- function(data, x, y, clusters, filename = NULL) {
-  subplot_histogram <- function(doublet_score) {
-    ggplot(nb_data, aes({{doublet_score}})) +
-      geom_histogram(bins = 100)
-  }
-  
-  subplot_boxplot <- function(doublet_score) {
-    data %>% 
-      mutate(
-        cluster = fct_reorder(
-          {{clusters}}, {{doublet_score}}, .desc = TRUE
-        )
-      ) %>% 
-      ggplot(aes(cluster, {{doublet_score}})) +
-      geom_boxplot(
-        aes(fill = {{clusters}}),
-        outlier.shape = NA,
-        show.legend = FALSE
-      ) +
-      NULL
-  }
-  
-  p <- wrap_plots(
-    plot_clusters_all(data %>% arrange(cxds_score),
-                      {{x}}, {{y}}, cxds_score,
-                      label_direct = FALSE,
-                      color_scale = scale_color_viridis_c()),
-    plot_clusters_all(data %>% arrange(bcds_score),
-                      {{x}}, {{y}}, bcds_score,
-                      label_direct = FALSE,
-                      color_scale = scale_color_viridis_c()),
-    plot_clusters_all(data %>% arrange(hybrid_score),
-                      {{x}}, {{y}}, hybrid_score,
-                      label_direct = FALSE,
-                      color_scale = scale_color_viridis_c()),
-    subplot_histogram(cxds_score),
-    subplot_histogram(bcds_score),
-    subplot_histogram(hybrid_score),
-    subplot_boxplot(cxds_score),
-    subplot_boxplot(bcds_score),
-    subplot_boxplot(hybrid_score),
-    nrow = 3
-  )
-
-  ggsave_default(filename, width = 420, height = 300)
-  p
-}
-
-plot_doublet_scores(nb_data, umap_1_monocle, umap_2_monocle, cluster_50,
-                    filename = "qc/qc_doublet_scores")
+plot_clusters_all(nb_data, umap_1_monocle, umap_2_monocle, bcds_score,
+                  label_direct = FALSE,
+                  color_scale = scale_color_viridis_c(limits = c(0, 1)),
+                  filename = "qc/qc_doublets_umap")
 
 
 
@@ -1346,5 +1274,5 @@ plot_infiltration_rate <- function(data, filter_col, filter_values,
 
 plot_infiltration_rate(nb_data, cell_type_hpca_broad, "Neurons",
                        filename = "monocle/tif_neurons")
-plot_infiltration_rate(nb_data, cluster_50, "9",
+plot_infiltration_rate(nb_data, cluster_50, "8",
                        filename = "monocle/tif_clusters")
