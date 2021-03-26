@@ -82,7 +82,7 @@ assemble_markers <- function(data,
 #' @param data A monocle dataset.
 #' @param markers Results from `assemble_markers()`.
 #' @param group Cluster/partition that should be plotted.
-#' @param dotplot_groups colData column that contains all IDs.
+#' @param id_col colData column that contains all IDs.
 #' @param n_genes NUmber of genes to plot.
 #' @param pval_max Maximum allowed p value.
 #' @param pval_type Selects value for `pval.types` of `scran::findMarkers` for
@@ -93,7 +93,7 @@ assemble_markers <- function(data,
 plot_conserved_markers <- function(data,
                                    markers,
                                    group,
-                                   dotplot_groups = "cluster_50",
+                                   id_col,
                                    n_genes = 30,
                                    pval_max = 1e-6,
                                    pval_type = c("any", "some", "all"),
@@ -103,14 +103,15 @@ plot_conserved_markers <- function(data,
   prefix <- "t.logFC."
 
   cluster_info <-
-    read_csv("metadata/clusters.csv") %>%
+    read_csv("metadata/clusters.csv", comment = "#") %>%
+    filter(!is.na({{id_col}})) %>% 
     mutate(
       cell_type =
-        as_factor(cell_type) %>%
+        as_factor({{id_col}}) %>%
         fct_relevel("T", "NK", "B", "M", "D", "E", "NB", "other")
     ) %>%
-    arrange(cell_type, cluster) %>%
-    mutate(cluster = as_factor(cluster) %>% fct_inorder())
+    arrange(cell_type, id) %>%
+    mutate(id = as_factor(id) %>% fct_inorder())
 
   dge_df <-
     markers[[pval_type]][[group]] %>%
@@ -126,7 +127,7 @@ plot_conserved_markers <- function(data,
     mutate({{group}} := NA_real_) %>%
     column_to_rownames("gene") %>%
     as.matrix() %>%
-    magrittr::extract(, levels(cluster_info$cluster))
+    magrittr::extract(, levels(cluster_info$id))
 
   break_max <- quantile(dge_matrix, 0.95, na.rm = TRUE)
 
@@ -142,7 +143,7 @@ plot_conserved_markers <- function(data,
     top_annotation = HeatmapAnnotation(
       "cell type" =
         cluster_info %>%
-        filter(cluster %in% colnames(dge_matrix)) %>%
+        filter(id %in% colnames(dge_matrix)) %>%
         pull(cell_type),
       col = list("cell type" = c(
         "T" = "#1f78b4",
@@ -162,11 +163,15 @@ plot_conserved_markers <- function(data,
     plot_dots(
       logcounts(data),
       rownames(dge_matrix) %>% rev(),
-      colData(data)[[dotplot_groups]] %>%
-        fct_relevel(levels(cluster_info$cluster))
+      fct_relevel(
+        colData(data) %>% as_tibble() %>% pull({{id_col}}),
+        levels(cluster_info$id)
+      )
     )
   ) +
-    plot_annotation(str_glue("Group {group} in {dotplot_groups}"))
+    plot_annotation(
+      str_glue("Group {group} in {rlang::as_string(ensym(id_col))}")
+    )
   ggsave_default(filename)
   p
 }
@@ -181,8 +186,9 @@ conmarkers_clusters <- assemble_markers(
   pval_types = "any"
 )
 
-plot_conserved_markers(nb, conmarkers_clusters, group = "9",
-                       filename = "markers/conserved_markers_c9")
+plot_conserved_markers(nb, conmarkers_clusters,
+                       group = "8", id_col = cluster_50,
+                       filename = "markers/conserved_50/cluster_8")
 
 walk(
   levels(colData(nb)$cluster_50),
@@ -192,17 +198,16 @@ walk(
       nb,
       conmarkers_clusters,
       group = cluster,
-      filename = str_glue("markers/cluster_{cluster}")
+      id_col = cluster_50,
+      filename = str_glue("markers/conserved_50/cluster_{cluster}")
     )
     
-    fs::dir_create("plots/markers/tables")
+    fs::dir_create("plots/markers/conserved_50/tables")
     conmarkers_clusters$any[[cluster]] %>% 
       as_tibble(rownames = "gene") %>% 
       filter(p.value < 1e-6) %>%
       select(gene, Top, p.value, FDR, t.summary.logFC) %>% 
-      write_csv(str_glue("plots/markers/tables/cluster_{cluster}.csv"))
+      write_csv(str_glue("plots/markers/conserved_50/tables/cluster_{cluster}.csv"))
   }
 )
-
-
 
