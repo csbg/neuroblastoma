@@ -12,6 +12,7 @@ library(ggpmisc)
 library(ComplexHeatmap)
 library(enrichR)
 library(latex2exp)
+library(scico)
 library(fgsea)
 library(msigdbr)
 source("common_functions.R")
@@ -38,10 +39,11 @@ nb@colData <-
   as("DataFrame")
 rowData(nb)[["gene_short_name"]] <- rownames(nb)
 
-# TODO: remove this! find a way that cluster 9 only comprises nb cells
+# for k=50, cluster 8 comprises a few cells in group I
 ignored_barcodes <-
-  readRDS("data_generated/metadata.rds") %>%
-  filter(cluster_50 == "9", group == "I") %>%
+  colData(nb) %>%
+  as_tibble(rownames = "cell") %>% 
+  filter(cluster_50 == "8", group == "I") %>%
   pull(cell)
 nb <- nb[, !colnames(nb) %in% ignored_barcodes]
 
@@ -170,8 +172,6 @@ dge_results_filtered <- filter_dge_results(dge_results)
 #' @param max_p_adj see `filter_dge_results()`.
 #' @param min_abs_log_fc see `filter_dge_results()`.
 #' @param min_freq see `filter_dge_results()`.
-#' @param point_colors A named character vector specifying colors for different
-#'   classes of genes.
 #' @param filename Name of output file.
 #'
 #' @return A ggplot object.
@@ -194,13 +194,29 @@ plot_volcano <- function(data,
       is_frequent =
         !!sym(str_glue("{group_left}.frq")) > min_freq |
         !!sym(str_glue("{group_right}.frq")) > min_freq,
-      diff_expressed = is_significant & is_frequent
+      diff_expressed =
+        case_when(
+          is_significant & is_frequent & logFC > 0 ~ "up",  
+          is_significant & is_frequent & logFC < 0 ~ "down",
+          TRUE ~ "no change"
+        ) %>% 
+        fct_relevel("up", "no change", "down")
     )
   
   genes_count <- 
     data_filtered %>% 
     count(cluster_id, diff_expressed) %>% 
     pivot_wider(names_from = "diff_expressed", values_from = "n")
+  if (!"up" %in% colnames(genes_count))
+    genes_count$up <- 0
+  if (!"down" %in% colnames(genes_count))
+    genes_count$down <- 0
+  
+  dot_colors <- c(
+    `no change` = "gray80",
+    up = "red",
+    down = "blue"
+  )
 
   p <-
     ggplot(data_filtered, aes(logFC, -log10(p_val))) +
@@ -211,25 +227,35 @@ plot_volcano <- function(data,
     ) +
     geom_text_npc(
       data = genes_count,
-      aes(label = `TRUE`),
-      npcx = 0.05,
+      aes(label = down),
+      npcx = 0.2,
       npcy = 0.9,
       size = 3,
-      color = "black",
+      color = dot_colors["down"],
       na.rm = TRUE
     ) +
     geom_text_npc(
       data = genes_count,
-      aes(label = `FALSE`),
-      npcx = 0.05,
-      npcy = 0.8,
+      aes(label = `no change`),
+      npcx = 0.5,
+      npcy = 0.9,
       size = 3,
-      color = "gray80",
+      color = dot_colors["no change"],
+      na.rm = TRUE
+    ) +
+    geom_text_npc(
+      data = genes_count,
+      aes(label = up),
+      npcx = 0.8,
+      npcy = 0.9,
+      size = 3,
+      color = dot_colors["up"],
       na.rm = TRUE
     ) +
     scale_color_manual(
       "differentially\nexpressed",
-      values = c("gray80", "black")
+      values = dot_colors,
+      guide = guide_legend(override.aes = list(alpha = 1, size = 3))
     ) +
     facet_wrap(vars(cluster_id), ncol = 6, drop = FALSE) +
     labs(
@@ -252,7 +278,7 @@ plot_volcano <- function(data,
 
 plot_volcano(dge_results, "II_vs_I", filename = "dge/volcano_II")
 plot_volcano(dge_results, "III_vs_I", filename = "dge/volcano_III")
-plot_volcano(dge_results, "IV_vs_I", filename = "dge/volcano_IV")
+plot_volcano(dge_results, "IV_vs_I", filename = "dge/volcano_IV", min_freq = 0.05)
 
 
 
@@ -337,6 +363,20 @@ plot_violin(dge_results_filtered, "II_vs_I", cluster = "13",
 plot_violin(dge_results_filtered, "IV_vs_I", cluster = "13",
             filename = "dge/violin_IV_13")
 
+dge_results_filtered %>% 
+  distinct(contrast, cluster = as.character(cluster_id)) %>% 
+  pwalk(
+    function(contrast, cluster) {
+      info("Plotting cluster {cluster} in contrast {contrast}")
+      plot_violin(
+        dge_results_filtered,
+        contrast = contrast,
+        cluster = cluster,
+        filename = str_glue("dge/violin_{contrast}_{cluster}")
+      )
+    }
+  )
+
 
 
 ## Pseudo-bulk heatmap ----
@@ -388,7 +428,7 @@ plot_pbheatmap <- function(data,
   p <-
     Heatmap(
       mat,
-      col = viridis::viridis(10),
+      col = scico(9, palette = "roma", direction = -1),
       
       cluster_rows = FALSE,
       show_row_names = FALSE,
@@ -403,7 +443,7 @@ plot_pbheatmap <- function(data,
         logFC = top_genes$logFC,
         col = list(
           logFC = circlize::colorRamp2(
-            breaks = c(min(top_genes$logFC), 0, max(top_genes$logFC)),
+            breaks = c(min(data$logFC), 0, max(data$logFC)),
             colors = c("blue", "white", "red")
           )
         )
@@ -1050,7 +1090,6 @@ plot_enrichr_halfdots <- function(data,
       strip.text = element_text(face = "bold")
     ) +
     NULL
-  # {.}
   
   rlang::exec(ggsave_default, filename, !!!plot_params)
   p
