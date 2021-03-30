@@ -51,8 +51,6 @@ nb <- nb[, !colnames(nb) %in% ignored_barcodes]
 
 # DGE analysis ------------------------------------------------------------
 
-## Data preparation ----
-
 nb <- prepSCE(
   nb,
   kid = "cluster_50",
@@ -60,10 +58,6 @@ nb <- prepSCE(
   sid = "sample",
   drop = TRUE
 )
-
-
-
-## Approach 1: Pseudo-bulk ----
 
 pb <- aggregateData(
   nb,
@@ -104,20 +98,15 @@ dge_results <-
   )
 
 
-## Approach 2: Cell-level mixed model ----
-
-# TBD
-# dge_mm <- mmDS(nb)
-
-
 
 # Filter DGE results ------------------------------------------------------
 
-#' Filter DGE results
+#' Filter DGE results and add a column "direction".
 #'
 #' @param data A dataframe as returned by `muscat::resDS()`.
 #' @param max_p Maximum p value.
-#' @param max_p_adj Maximum adjusted p value.
+#' @param max_p_adj Maximum adjusted p value. Note: The FDR is calculated by
+#'   muscat/edgeR via p.adjust(method = "BH").
 #' @param min_abs_log_fc Minimum absolute log fold change.
 #' @param min_freq Minimum gene expression frequency (fracions of cells that
 #'   expresses a given gene.)
@@ -133,16 +122,17 @@ filter_dge_results <- function(data,
   res <-
     data %>%
     filter(
-      I.frq > min_freq |
-      (contrast == "II_vs_I" & II.frq > min_freq) |
-      (contrast == "III_vs_I" & III.frq > min_freq) |
-      (contrast == "IV_vs_I" & IV.frq > min_freq)
+      I.frq >= min_freq |
+      (contrast == "II_vs_I" & II.frq >= min_freq) |
+      (contrast == "III_vs_I" & III.frq >= min_freq) |
+      (contrast == "IV_vs_I" & IV.frq >= min_freq)
     ) %>%
     filter(
-      p_val < max_p,
-      p_adj.loc < max_p_adj,
-      abs(logFC) > min_abs_log_fc
-    )
+      p_val <= max_p,
+      p_adj.loc <= max_p_adj,
+      abs(logFC) >= min_abs_log_fc
+    ) %>% 
+    mutate(direction = if_else(logFC > 0, "up", "down"))
   
   if (remove_ribosomal) {
     ribo_proteins <-
@@ -200,18 +190,14 @@ plot_volcano <- function(data,
           is_significant & is_frequent & logFC < 0 ~ "down",
           TRUE ~ "no change"
         ) %>% 
-        fct_relevel("up", "no change", "down")
+        factor(levels = c("up", "no change", "down"))
     )
-  
+
   genes_count <- 
     data_filtered %>% 
-    count(cluster_id, diff_expressed) %>% 
+    count(cluster_id, diff_expressed, .drop = FALSE) %>% 
     pivot_wider(names_from = "diff_expressed", values_from = "n")
-  if (!"up" %in% colnames(genes_count))
-    genes_count$up <- 0
-  if (!"down" %in% colnames(genes_count))
-    genes_count$down <- 0
-  
+
   dot_colors <- c(
     `no change` = "gray80",
     up = "red",
@@ -255,7 +241,8 @@ plot_volcano <- function(data,
     scale_color_manual(
       "differentially\nexpressed",
       values = dot_colors,
-      guide = guide_legend(override.aes = list(alpha = 1, size = 3))
+      guide = guide_legend(override.aes = list(alpha = 1, size = 3)),
+      drop = FALSE
     ) +
     facet_wrap(vars(cluster_id), ncol = 6, drop = FALSE) +
     labs(
@@ -278,7 +265,7 @@ plot_volcano <- function(data,
 
 plot_volcano(dge_results, "II_vs_I", filename = "dge/volcano_II")
 plot_volcano(dge_results, "III_vs_I", filename = "dge/volcano_III")
-plot_volcano(dge_results, "IV_vs_I", filename = "dge/volcano_IV", min_freq = 0.05)
+plot_volcano(dge_results, "IV_vs_I", filename = "dge/volcano_IV")
 
 
 
@@ -325,16 +312,27 @@ plot_upset(dge_results_filtered, "IV_vs_I", filename = "dge/upset_IV")
 #' @param contrast A contrast and ...
 #' @param cluster ... cluster for which all samples should be plotted.
 #' @param top_n Plot the top differentially expressed genes.
+#' @param direction Plot up- or downregulated genes.
 #' @param filename Name of output file.
 #'
 #' @return A ggplot object.
-plot_violin <- function(data, contrast, cluster, top_n = 12, filename = NULL) {
+plot_violin <- function(data,
+                        contrast,
+                        cluster,
+                        top_n = 10,
+                        direction = c("up", "down"),
+                        filename = NULL) {
   group_left <- str_extract(contrast, "^[^_]+")
   group_right <- str_extract(contrast, "[^_]$")
+  direction <- match.arg(direction)
   
   top_genes <- 
     data %>%
-    filter(contrast == {{contrast}}, cluster_id == {{cluster}}) %>% 
+    filter(
+      contrast == {{contrast}},
+      cluster_id == {{cluster}},
+      direction == {{direction}}
+    ) %>% 
     slice_max(n = top_n, logFC, with_ties = FALSE) %>% 
     pull(gene)
   
@@ -345,34 +343,42 @@ plot_violin <- function(data, contrast, cluster, top_n = 12, filename = NULL) {
       top_genes,
       x = "sample_id",
       colour_by = "group_id",
-      ncol = 4,
-      point_size = 1
+      point_size = 1,
+      ncol = NULL
     ) +
-    ggtitle(str_glue("Top {top_n} upregulated genes in cluster {cluster} ",
-                     "of contrast {contrast}")) +
+    labs(
+      caption = str_glue(
+        "{direction}regulated genes, cluster {cluster}, contrast {contrast}"
+      )
+    ) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
   
-  ggsave_default(filename)
+  # calculate facet grid dimensions to ensure that all plots have the same size
+  n_facet <- wrap_dims(length(top_genes))
+  ggsave_default(
+    filename,
+    height = 30 + 60 * n_facet[1],
+    width = 20 + 70 * n_facet[2]
+  )
   p
 }
 
 plot_violin(dge_results_filtered, "II_vs_I", cluster = "1",
-            filename = "dge/violin_II_1")
-plot_violin(dge_results_filtered, "II_vs_I", cluster = "13",
-            filename = "dge/violin_II_13")
-plot_violin(dge_results_filtered, "IV_vs_I", cluster = "13",
-            filename = "dge/violin_IV_13")
+            filename = "dge/violin_II_vs_I_c1_up")
 
 dge_results_filtered %>% 
-  distinct(contrast, cluster = as.character(cluster_id)) %>% 
+  distinct(contrast, cluster = as.character(cluster_id), direction) %>% 
   pwalk(
-    function(contrast, cluster) {
-      info("Plotting cluster {cluster} in contrast {contrast}")
+    function(contrast, cluster, direction) {
+      info("Plotting {direction}regulated genes ",
+           "in cluster {cluster} in contrast {contrast}")
       plot_violin(
         dge_results_filtered,
+        top_n = Inf,
         contrast = contrast,
         cluster = cluster,
-        filename = str_glue("dge/violin_{contrast}_{cluster}")
+        direction = direction,
+        filename = str_glue("dge/violin_{contrast}_c{cluster}_{direction}")
       )
     }
   )
@@ -513,7 +519,7 @@ enrich_genes <- function(data,
     filter(
       cluster_id == {{cluster}},
       contrast == {{contrast}},
-      if (direction == "up") logFC > 0 else logFC < 0
+      direction == {{direction}}
     ) %>% 
     pull(gene)
   
@@ -540,7 +546,8 @@ enrich_all_genes <- function(data,
                                "GO_Cellular_Component_2018",
                                "GO_Molecular_Function_2018",
                                "KEGG_2019_Human",
-                               "WikiPathways_2019_Human"
+                               "WikiPathways_2019_Human",
+                               "MSigDB_Hallmark_2020"
                              )) {
   queries <- 
     data %>%
@@ -577,49 +584,60 @@ enrichr_results <- enrich_all_genes(dge_results_filtered)
 #'
 #' @param data Results from `enrich_all_genes()`.
 #' @param db Enrichr database for which results should be plotted.
-#' @param max_p_adj Maximum adjusted p value, and …
-#' @param min_odds_ratio … minimum odds ratio required for bordered dots.
-#' @param min_overlap_size Minimum overlap size of an included term.
-#' @param log_odds_cap Upper boundary of the color scale.
 #' @param direction Plot results for `"up"`- or `"down"`-regulated genes.
+#' @param top_n Only plot the terms with the highest odds ratio per cluster.
+#' @param max_p_adj Maximum adjusted p value, …
+#' @param min_odds_ratio … minimum odds ratio, and …
+#' @param min_overlap_size … minimum overlap size required for bordered dots.
+#' @param log_odds_cap Upper boundary of the color scale.
 #' @param filename Name of output file.
 #' @param ... Additional parameters passed to `ggsave_default()`.
 #'
 #' @return A ggplot object.
 plot_enrichr_dots <- function(data,
                               db,
-                              max_p_adj = 0.05,
-                              min_odds_ratio = 10,
-                              min_overlap_size = 2,
-                              log_odds_cap = 2,
                               direction = "up",
+                              top_n = 5,
+                              max_p_adj = 0.05,
+                              min_odds_ratio = 5,
+                              min_overlap_size = 1,
+                              log_odds_cap = 2,
                               filename = NULL,
                               ...) {
-  data_filtered <-
+  data_selected <-
     data %>% 
     filter(
       db == {{db}},
       direction == {{direction}},
-      overlap_size >= min_overlap_size
-    ) %>% 
-    group_by(Term) %>%
-    filter(
-      min(Adjusted.P.value) < max_p_adj,
-      max(Odds.Ratio) > min_odds_ratio
-    ) %>%
-    ungroup() %>%
-    select(contrast, cluster, Term, Odds.Ratio, Adjusted.P.value) %>% 
+      Odds.Ratio >= 1
+    )
+  
+  top_terms <- 
+    data_selected %>% 
+    group_by(contrast, cluster) %>%
+    slice_max(n = top_n, order_by = Odds.Ratio, with_ties = FALSE) %>%
+    pull(Term) %>% 
+    unique()
+  
+  data_vis <- 
+    data_selected %>%
+    filter(Term %in% top_terms) %>% 
     mutate(
-      Term = as_factor(Term) %>% fct_reorder(Odds.Ratio, max),
       is_significant =
-        Adjusted.P.value < max_p_adj & Odds.Ratio > min_odds_ratio
-    ) %>% 
-    mutate(Odds.Ratio = pmin(Odds.Ratio, 10^log_odds_cap))
-    
+        Adjusted.P.value < max_p_adj &
+        Odds.Ratio > min_odds_ratio &
+        overlap_size >= min_overlap_size,
+      Odds.Ratio = pmin(Odds.Ratio, 10^log_odds_cap),
+      Term =
+        as_factor(Term) %>%
+        fct_reorder(str_c(cluster, contrast), n_distinct)
+    )
+  
+  # make plot
   p <- 
-    ggplot(data_filtered, aes(cluster, Term, size = -log10(Adjusted.P.value))) +
+    ggplot(data_vis, aes(cluster, Term, size = -log10(Adjusted.P.value))) +
     geom_point(aes(color = log10(Odds.Ratio))) +
-    geom_point(data = data_filtered %>% filter(is_significant), shape = 1) +
+    geom_point(data = data_vis %>% filter(is_significant), shape = 1) +
     scale_color_distiller(
       palette = "Reds",
       direction = 1,
@@ -634,9 +652,10 @@ plot_enrichr_dots <- function(data,
       size = TeX("-log_{10} (p_{adj})"),
       title = str_glue( "Enrichr results ({db})"),
       caption = str_glue(
-        "minimum overlap size: {min_overlap_size}; ",
-        "bordered circles: adjusted p value < {max_p_adj}, ",
-        "odds ratio > {min_odds_ratio}; ",
+        "top {top_n} terms per cluster; ",
+        "bordered circles: adjusted p value <= {max_p_adj}, ",
+        "odds ratio >= {min_odds_ratio}, ",
+        "overlap size >= {min_overlap_size}; ",
         "color scale capped at {log_odds_cap}"
       )
     ) +
@@ -654,56 +673,32 @@ plot_enrichr_dots <- function(data,
 
 plot_enrichr_dots(enrichr_results,
                   db = "GO_Biological_Process_2018",
-                  min_odds_ratio = 50,
-                  filename = "dge/dots_bioproc",
-                  height = 840)
+                  filename = "dge/enrichr_GO_Biological_Process_2018",
+                  height = 400,
+                  width = 400)
 
 plot_enrichr_dots(enrichr_results,
-                  min_odds_ratio = 10,
                   db = "GO_Cellular_Component_2018",
-                  filename = "dge/dots_cellcomp")
+                  filename = "dge/enrichr_GO_Cellular_Component_2018")
 
 plot_enrichr_dots(enrichr_results,
                   db = "GO_Molecular_Function_2018",
-                  min_odds_ratio = 30,
-                  filename = "dge/dots_molfun",
+                  filename = "dge/enrichr_GO_Molecular_Function_2018",
                   width = 420)
 
 plot_enrichr_dots(enrichr_results,
                   db = "KEGG_2019_Human",
-                  min_odds_ratio = 10,
-                  filename = "dge/dots_kegg")
+                  filename = "dge/enrichr_KEGG_2019_Human")
 
 plot_enrichr_dots(enrichr_results,
                   db = "WikiPathways_2019_Human",
-                  min_odds_ratio = 30,
-                  filename = "dge/dots_wiki",
+                  filename = "dge/enrichr_WikiPathways_2019_Human",
                   width = 420,
                   height = 250)
 
-
-
-# TODO: select interesting genes from enrichment analysis
-enrichr_results %>% 
-  filter(
-    contrast == "II_vs_I",
-    db == "KEGG_2019_Human",
-    direction == "up",
-    # cluster == "1",
-    Adjusted.P.value < 0.05,
-    # Odds.Ratio > 10,
-    # overlap_size >= 2
-  ) %>% 
-  # pull(Genes) %>%
-  # str_split(";") %>%
-  # flatten_chr() %>%
-  # as_factor() %>%
-  # fct_count(sort = TRUE) %>%
-  View() %>% 
-  {.}
-
-
-
+plot_enrichr_dots(enrichr_results,
+                  db = "MSigDB_Hallmark_2020",
+                  filename = "dge/enrichr_MSigDB_Hallmark_2020")
 
 
 
@@ -914,206 +909,3 @@ shorten_go_term <- function(s, max_length = 30) {
     ) %>% 
     pull(result)
 }
-
-
-#' Plot enrichment results
-#'
-#' @param data Results from enrichtment analysis.
-#' @param contrast The selected contrast.
-#' @param direction Select results for up- or downregulated genes, respectively.
-#' @param n_bars Number of bars to plot per subchart.
-#' @param filename Name of output file.
-#'
-#' @return A ggplot object.
-plot_enrichr_bars <- function(data,
-                              contrast,
-                              direction = "up",
-                              n_bars = 10,
-                              filename = NULL) {
-  data <- 
-    data %>%
-    filter(contrast == {{contrast}}, direction == {{direction}}) %>%
-    mutate(Term = shorten_go_term(Term, 30)) %>% 
-    group_by(cluster, db) %>% 
-    slice_max(Combined.Score, n = n_bars, with_ties = FALSE) %>% 
-    ungroup()
-  
-  n_row <- n_distinct(data$db)
-  dbs <- unique(data$db)
-  clusters <-
-    unique(data$cluster) %>%
-    str_sort(numeric = TRUE)
-  
-  p <-
-    list(
-      cluster = clusters,
-      db = dbs
-    ) %>%
-    cross_df() %>%
-    mutate(
-      show_cluster = db == dbs[1],
-      show_db = cluster == clusters[1]
-    ) %>%
-    pmap(
-      function(cluster, db, show_db, show_cluster) {
-        data <-
-          data %>%
-          filter(cluster == {{cluster}}, db == {{db}})
-        
-        if (nrow(data) == 0L)
-          return(textGrob("no data", gp = gpar(fontsize = 20)))
-        
-        data %>%
-          mutate(
-            Term =
-              as_factor(Term) %>%
-              fct_reorder(Combined.Score)
-          ) %>%
-          ggplot(aes(Term, Combined.Score)) +
-          geom_col(aes(fill = Combined.Score), show.legend = FALSE) +
-          xlab(if (show_db) db else "") +
-          ylab(NULL) +
-          coord_flip() +
-          ggtitle(if (show_cluster) paste("cluster", cluster) else "") +
-          theme(
-            plot.title = element_text(hjust = 0.5, face = "bold"),
-            axis.title.y = element_text(hjust = 0.5, face = "bold"),
-            panel.grid.major.y = element_blank(),
-            panel.grid.minor.y = element_blank()
-          )
-      }
-    ) %>%
-    wrap_plots(nrow = n_row) +
-    plot_annotation(str_glue("Enrichment analysis for contrast {contrast}"))
-  ggsave_default(filename, width = 1000, height = 420)
-  p
-}
-
-plot_enrichr_bars(enrichr_results, "II_vs_I",
-                  filename = "dge/enrichr_bars_II")  
-plot_enrichr_bars(enrichr_results, "III_vs_I",
-                  filename = "dge/enrichr_bars_III")  
-plot_enrichr_bars(enrichr_results, "IV_vs_I",
-                  filename = "dge/enrichr_bars_IV")  
-
-
-
-
-
-plot_enrichr_halfdots <- function(data,
-                                  db,
-                                  max_p_adj = 0.05,
-                                  min_odds_ratio = 2,
-                                  filename = NULL,
-                                  plot_params = list()) {
-  data_filtered <-
-    data %>% 
-    filter(db == {{db}}) %>% 
-    group_by(Term) %>%
-    filter(
-      min(Adjusted.P.value) < max_p_adj,
-      max(Odds.Ratio) > min_odds_ratio
-    ) %>%
-    ungroup() %>%
-    select(contrast, cluster, Term, Odds.Ratio, Adjusted.P.value) %>% 
-    mutate(
-      cluster = 
-        cluster %>% 
-        fct_drop() %>%
-        {.},
-      Term =
-        as_factor(Term) %>%
-        fct_reorder(Odds.Ratio, max) %>% 
-        fct_drop() %>%
-        {.}
-    )
-  
-  scale_factor <- max(-log10(data_filtered$Adjusted.P.value)) / 2.5
-  
-  p <- 
-    ggplot(data_filtered) +
-    geom_arc_bar(
-      aes(
-        x0 = as.integer(cluster),
-        y0 = as.integer(Term),
-        fill = log10(Odds.Ratio),
-        r0 = 0,
-        r = sqrt(-log10(Adjusted.P.value)) / scale_factor,
-        start = 0,
-        end = pi
-      ),
-      color = NA
-    ) +
-    geom_arc_bar(
-      aes(
-        x0 = as.integer(cluster),
-        y0 = as.integer(Term),
-        fill = log10(Odds.Ratio),
-        r0 = 0,
-        r = sqrt(-log10(Adjusted.P.value)) / scale_factor,
-        start = pi,
-        end = 2*pi
-      ),
-      color = NA
-    ) +
-    scale_x_continuous(
-      breaks = seq(nlevels(data_filtered$cluster)),
-      labels = levels(data_filtered$cluster),
-      minor_breaks = NULL,
-      expand = c(0, 0)
-    ) +
-    scale_y_continuous(
-      breaks = seq(nlevels(data_filtered$Term)),
-      labels = levels(data_filtered$Term),
-      minor_breaks = NULL,
-      expand = c(0, 0)
-    ) +
-    scale_fill_distiller(palette = "Reds", direction = 1) +
-    coord_fixed(
-      xlim = c(0.5, nlevels(data_filtered$cluster) + 0.5),
-      ylim = c(0.5, nlevels(data_filtered$Term) + 0.5)
-    ) +
-    facet_wrap(vars(contrast), drop = FALSE) +
-    labs(
-      y = "",
-      fill = TeX("log_{10} (odds ratio)"),
-      size = TeX("-log_{10} (p_{adj})"),
-      title = str_glue( "Enrichr results ({db})"),
-      caption = str_glue(
-        "adjusted p value < {max_p_adj}, ",
-        "odds ratio > {min_odds_ratio}"
-      )
-    ) +
-    theme_bw() +
-    theme(
-      strip.background = element_blank(),
-      strip.text = element_text(face = "bold")
-    ) +
-    NULL
-  
-  rlang::exec(ggsave_default, filename, !!!plot_params)
-  p
-}
-
-plot_enrichr_halfdots(enrichr_results,
-                      db = "GO_Cellular_Component_2018",
-                      filename = "dge/dots_cellcomp_half")
-plot_enrichr_dots(enrichr_results,
-                  db = "GO_Cellular_Component_2018",
-                  filename = "dge/dots_cellcomp")
-
-
-
-
-enrichr_results %>% 
-  filter(
-    db == "GO_Cellular_Component_2018",
-  ) %>%
-  group_by(Term) %>%
-  filter(min(Adjusted.P.value) < 0.05, max(Odds.Ratio) > 2) %>%
-  ungroup() %>% 
-  # filter(
-  #   Adjusted.P.value < 0.05,
-  #   Odds.Ratio > 2,
-  # ) %>%
-  select(contrast, cluster, Term, Odds.Ratio, Adjusted.P.value)
