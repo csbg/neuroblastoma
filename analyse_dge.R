@@ -147,7 +147,15 @@ filter_dge_results <- function(data,
   res
 }
 
+# for visualization and EnrichR analysis, filter with default settings
 dge_results_filtered <- filter_dge_results(dge_results)
+
+# for GSEA, only remove low-frequent and ribosomal genes
+dge_results_filtered_fgsea <- filter_dge_results(
+  dge_results,
+  max_p_adj = Inf,
+  min_abs_log_fc = 0
+)
 
 
 
@@ -509,8 +517,7 @@ enrich_genes <- function(data,
                          cluster,
                          dbs,
                          direction = c("up", "down")) {
-  message("Cluster ", cluster, ", contrast ", contrast, ", ",
-          direction, "regulated genes")
+  info("Cluster {cluster}, contrast {contrast}, {direction}regulated genes")
   
   direction <- match.arg(direction)
   
@@ -524,7 +531,7 @@ enrich_genes <- function(data,
     pull(gene)
   
   if (length(top_genes) > 0) {
-    message("  genes for enrichr: ", str_c(top_genes, collapse = ", "))
+    info("genes for enrichr: {str_c(top_genes, collapse = ', ')}")
     enrichr(top_genes, dbs) %>% 
       keep(~nrow(.) > 0) %>% 
       bind_rows(.id = "db") 
@@ -540,15 +547,7 @@ enrich_genes <- function(data,
 #' @return A dataframe, which combines the dataframes returned by
 #'   `enrichR::enrichr()` (empty results are removed) by adding three columns
 #'   "contrast", "cluster", and "db".
-enrich_all_genes <- function(data,
-                             dbs = c(
-                               "GO_Biological_Process_2018",
-                               "GO_Cellular_Component_2018",
-                               "GO_Molecular_Function_2018",
-                               "KEGG_2019_Human",
-                               "WikiPathways_2019_Human",
-                               "MSigDB_Hallmark_2020"
-                             )) {
+enrich_all_genes <- function(data, dbs) {
   queries <- 
     data %>%
     distinct(contrast, cluster = cluster_id) %>% 
@@ -573,14 +572,22 @@ enrich_all_genes <- function(data,
     )
 }
 
-enrichr_results <- enrich_all_genes(dge_results_filtered)
+enrichr_dbs <- c(
+  "GO_Biological_Process_2018",
+  "GO_Cellular_Component_2018",
+  "GO_Molecular_Function_2018",
+  "KEGG_2019_Human",
+  "WikiPathways_2019_Human",
+  "MSigDB_Hallmark_2020"
+)
+enrichr_results <- enrich_all_genes(dge_results_filtered, enrichr_dbs)
 
 
 
 #' Generate a dotplot for enrichment terms.
 #' 
-#' Only enrichment terms with a minimum overlap size are included in the plot.
-#' Dots that meet given p value and odds ratio requirements are bordered.
+#' Dots that meet given limits of adjusted p value, overlap size, and odds ratio
+#' are bordered.
 #'
 #' @param data Results from `enrich_all_genes()`.
 #' @param db Enrichr database for which results should be plotted.
@@ -590,7 +597,7 @@ enrichr_results <- enrich_all_genes(dge_results_filtered)
 #' @param min_odds_ratio … minimum odds ratio, and …
 #' @param min_overlap_size … minimum overlap size required for bordered dots.
 #' @param log_odds_cap Upper boundary of the color scale.
-#' @param filename Name of output file.
+#' @param filename Name of output file. If `"auto"`, derive from database name.
 #' @param ... Additional parameters passed to `ggsave_default()`.
 #'
 #' @return A ggplot object.
@@ -602,7 +609,7 @@ plot_enrichr_dots <- function(data,
                               min_odds_ratio = 5,
                               min_overlap_size = 1,
                               log_odds_cap = 2,
-                              filename = NULL,
+                              filename = "auto",
                               ...) {
   data_selected <-
     data %>% 
@@ -624,8 +631,8 @@ plot_enrichr_dots <- function(data,
     filter(Term %in% top_terms) %>% 
     mutate(
       is_significant =
-        Adjusted.P.value < max_p_adj &
-        Odds.Ratio > min_odds_ratio &
+        Adjusted.P.value <= max_p_adj &
+        Odds.Ratio >= min_odds_ratio &
         overlap_size >= min_overlap_size,
       Odds.Ratio = pmin(Odds.Ratio, 10^log_odds_cap),
       Term =
@@ -633,7 +640,6 @@ plot_enrichr_dots <- function(data,
         fct_reorder(str_c(cluster, contrast), n_distinct)
     )
   
-  # make plot
   p <- 
     ggplot(data_vis, aes(cluster, Term, size = -log10(Adjusted.P.value))) +
     geom_point(aes(color = log10(Odds.Ratio))) +
@@ -666,6 +672,9 @@ plot_enrichr_dots <- function(data,
     ) +
     NULL
   
+  if (filename == "auto") {
+    filename <- str_glue("dge/enrichr_{db}")
+  }
   ggsave_default(filename, ...)
   p
 }
@@ -673,42 +682,43 @@ plot_enrichr_dots <- function(data,
 
 plot_enrichr_dots(enrichr_results,
                   db = "GO_Biological_Process_2018",
-                  filename = "dge/enrichr_GO_Biological_Process_2018",
                   height = 400,
                   width = 400)
 
 plot_enrichr_dots(enrichr_results,
-                  db = "GO_Cellular_Component_2018",
-                  filename = "dge/enrichr_GO_Cellular_Component_2018")
+                  db = "GO_Cellular_Component_2018")
 
 plot_enrichr_dots(enrichr_results,
                   db = "GO_Molecular_Function_2018",
-                  filename = "dge/enrichr_GO_Molecular_Function_2018",
                   width = 420)
 
 plot_enrichr_dots(enrichr_results,
-                  db = "KEGG_2019_Human",
-                  filename = "dge/enrichr_KEGG_2019_Human")
+                  db = "KEGG_2019_Human")
 
 plot_enrichr_dots(enrichr_results,
                   db = "WikiPathways_2019_Human",
-                  filename = "dge/enrichr_WikiPathways_2019_Human",
                   width = 420,
                   height = 250)
 
 plot_enrichr_dots(enrichr_results,
-                  db = "MSigDB_Hallmark_2020",
-                  filename = "dge/enrichr_MSigDB_Hallmark_2020")
+                  db = "MSigDB_Hallmark_2020")
 
 
 
 # GSEA --------------------------------------------------------------------
 
+#' Download enrichr databases in a format that can be used by fgsea.
+#'
+#' @param dbs Databases to download.
+#'
+#' @return A named list with names deriving from values in `dbs`. Each element
+#'   is a named list. Names correspond to enrichr terms, values are character
+#'   vectors that comprise all genes associated with the respective term.
 get_enrichr_genesets <- function(dbs) {
   dbs %>% 
     map(
       function(db) {
-        message("Downloading ", db)
+        info("Downloading {db}")
         url <- paste0(
           "https://maayanlab.cloud/Enrichr/geneSetLibrary",
           "?mode=text&libraryName=",
@@ -730,18 +740,21 @@ get_enrichr_genesets <- function(dbs) {
     )
 }
 
-enrichr_genesets <- get_enrichr_genesets(c("GO_Molecular_Function_2018",
-                                           "WikiPathways_2019_Human"))
 
-
-
-do_gsea <- function(data, gene_sets) {
+#' Perform gene set enrichment analysis.
+#'
+#' @param data DGE data as returned by `filter_dge_results()`.
+#' @param gene_sets Gene set as returned by `get_enrichr_genesets()`.
+#'
+#' @return A dataframe, comprising columns "db", "contrast", "cluster", as well
+#'   as all columns in the result of `fgseaMultilevel()`.
+perform_gsea <- function(data, gene_sets) {
   data %>% 
     distinct(contrast, cluster_id) %>% 
-    mutate(gene_set = list(names(gene_sets))) %>% 
-    unnest_longer(gene_set) %>% 
+    mutate(db = list(names(gene_sets))) %>% 
+    unnest_longer(db) %>% 
     pmap_dfr(
-      function(contrast, cluster_id, gene_set) {
+      function(contrast, cluster_id, db) {
         ranked_genes <-
           data %>% 
           filter(contrast == {{contrast}}, cluster_id == {{cluster_id}}) %>%
@@ -749,17 +762,18 @@ do_gsea <- function(data, gene_sets) {
           deframe()
         ranked_genes <- ranked_genes[!is.na(ranked_genes)]
         
-        message("GSEA of contrast ", contrast, ", cluster ", cluster_id,
-                ", gene set ", gene_set, " (", length(ranked_genes), " genes)")
+        info("GSEA of contrast {contrast}, cluster {cluster_id}, ",
+             "db {db} ({length(ranked_genes)} genes)")
         
         fgseaMultilevel(
-          gene_sets[[gene_set]],
+          gene_sets[[db]],
           ranked_genes,
-          eps = 0
+          eps = 0,
+          nPermSimple = 10000
         ) %>%
           as_tibble() %>%
           mutate(
-            gene_set = {{gene_set}},
+            db = {{db}},
             contrast = {{contrast}},
             cluster = {{cluster_id}},
             .before = 1
@@ -769,58 +783,86 @@ do_gsea <- function(data, gene_sets) {
 }
 
 
-gsea_results <-
-  dge_results %>%
-  filter_dge_results(min_abs_log_fc = 0, min_freq = 0.05) %>%
-  do_gsea(enrichr_genesets)
-  
+enrichr_genesets <- get_enrichr_genesets(enrichr_dbs)
+gsea_results <- perform_gsea(dge_results_filtered_fgsea, enrichr_genesets)
 
-
-
-gsea_results %>% 
+gsea_results %>%
   ggplot(aes(NES, -log10(padj))) +
   geom_point(alpha = .1)
 
 
 
-
+#' Generate a dotplot for terms enriched by GSEA.
+#' 
+#' Dots that meet given limits of adjusted p value and normalized enrichment
+#' score (NES) are bordered.
+#'
+#' @param data Results from `perform_gsea()`.
+#' @param db Enrichr database for which results should be plotted.
+#' @param top_n Only plot the terms with the highest NES per cluster.
+#' @param direction Include positively or negatively enriched terms.
+#' @param max_p_adj Maximum adjusted p value and …
+#' @param min_NES minimum absolute NES required for bordered dots.
+#' @param filename Name of output file. If `"auto"`, derive from database name.
+#' @param ... Additional parameters passed to `ggsave_default()`.
+#'
+#' @return A ggplot object.
 plot_gsea_dots <- function(data,
                            db,
+                           top_n = 5,
+                           direction = c("positive", "negative"),
                            max_p_adj = 0.05,
-                           min_NES = 1,
-                           filename = NULL,
-                           plot_params = list()) {
-  data_filtered <-
+                           min_abs_NES = 1,
+                           filename = "auto",
+                           ...) {
+  direction <- match.arg(direction)
+  
+  data_selected <-
     data %>% 
-    filter(db == {{db}}) %>% 
-    group_by(pathway) %>%
-    filter(
-      min(padj) < max_p_adj,
-      max(NES) > min_NES
-    ) %>%
-    ungroup() %>%
-    select(contrast, cluster, pathway, NES, padj) %>% 
+    mutate(direction = if_else(NES > 0, "positive", "negative")) %>% 
+    filter(db == {{db}}, direction == {{direction}})
+  
+  top_terms <- 
+    data_selected %>% 
+    filter(padj <= max_p_adj & abs(NES) >= min_abs_NES) %>% 
+    group_by(contrast, cluster) %>%
+    slice_max(n = top_n, order_by = abs(NES), with_ties = FALSE) %>%
+    pull(pathway) %>% 
+    unique()
+  
+  data_vis <- 
+    data_selected %>%
+    filter(pathway %in% top_terms) %>% 
     mutate(
-      pathway = as_factor(pathway) %>% fct_reorder(NES, max),
       is_significant =
-        padj < max_p_adj & NES > min_NES
+        padj <= max_p_adj &
+        abs(NES) >= min_abs_NES,
+      pathway =
+        as_factor(pathway) %>%
+        fct_reorder(abs(NES), max, na.rm = TRUE)
     )
   
   p <- 
-    ggplot(data_filtered, aes(cluster, pathway, size = -log10(padj))) +
-    geom_point(aes(color = NES)) +
-    geom_point(data = data_filtered %>% filter(is_significant), shape = 1) +
-    scale_color_distiller(palette = "Reds", direction = 1) +
+    ggplot(data_vis, aes(cluster, pathway, size = -log10(padj))) +
+    geom_point(aes(color = abs(NES))) +
+    geom_point(data = data_vis %>% filter(is_significant), shape = 1) +
+    scale_color_distiller(
+      palette = "Purples",
+      direction = 1,
+      limits = c(0, NA)
+    ) +
     scale_size_area() +
     coord_fixed() +
     facet_wrap(vars(contrast), drop = FALSE) +
     labs(
       y = "",
+      color = "normalized\nenrichment\nscore",
       size = TeX("-log_{10} (p_{adj})"),
-      title = str_glue( "GSEA results ({db})"),
+      title = str_glue("FGSEA results ({db})"),
       caption = str_glue(
-        "bordered circles: adjusted p value < {max_p_adj}, ",
-        "normalized enrichment score > {min_NES}"
+        "top {top_n} {direction}ly enriched terms per cluster; ",
+        "bordered circles: adjusted p value <= {max_p_adj}, ",
+        "absolute NES >= {min_abs_NES}"
       )
     ) +
     theme_bw() +
@@ -830,82 +872,87 @@ plot_gsea_dots <- function(data,
     ) +
     NULL
   
-  rlang::exec(ggsave_default, filename, !!!plot_params)
+  if (filename == "auto") {
+    filename <- str_glue("dge/gsea_{db}_{direction}")
+  }
+  ggsave_default(filename, ...)
   p
 }
 
-gsea_results %>% 
-  plot_gsea_dots("GO_Molecular_Function_2018",
-                 filename = "dge/gsea_molfun")
+
+plot_gsea_dots(gsea_results,
+               db = "GO_Biological_Process_2018",
+               width = 400,
+               height = 350)
+plot_gsea_dots(gsea_results,
+               db = "GO_Biological_Process_2018",
+               direction = "negative",
+               width = 400,
+               height = 350)
+
+plot_gsea_dots(gsea_results,
+               db = "GO_Cellular_Component_2018",
+               width = 400)
+
+plot_gsea_dots(gsea_results,
+               db = "GO_Molecular_Function_2018",
+               width = 420)
+
+plot_gsea_dots(gsea_results,
+               db = "KEGG_2019_Human",
+               width = 400,
+               height = 350)
+
+plot_gsea_dots(gsea_results,
+               db = "WikiPathways_2019_Human",
+               width = 420,
+               height = 250)
+
+plot_gsea_dots(gsea_results,
+               db = "MSigDB_Hallmark_2020")
 
 
 
 
-
-
-top_terms <- 
-  gsea_molfun_II_1 %>% 
-  arrange(padj) %>% 
-  head(20) %>% 
-  pull(pathway)
-
-plotEnrichment(
-  pathways$GO_Molecular_Function_2018[[
-    gsea_molfun_II_1 %>% 
-      arrange(padj) %>% 
-      magrittr::extract2(1, 1)
-  ]],
-  dge_results %>%
-    filter_dge_results(min_abs_log_fc = 0, min_freq = 0.05, max_p_adj = 0.05) %>%
-    filter(contrast == "II_vs_I", cluster_id == "1") %>%
-    select(gene, logFC) %>% 
-    deframe(),
-)
-
-plotGseaTable(
-  pathways$GO_Molecular_Function_2018[top_terms],
-  dge_results %>%
-    filter_dge_results(min_abs_log_fc = 0, min_freq = 0.05, max_p_adj = 0.05) %>%
-    filter(contrast == "II_vs_I", cluster_id == "1") %>%
-    select(gene, logFC) %>% 
-    deframe(),
-  gsea_molfun_II_1,
-  gseaParam = 0.5
-)
-
-
-read_lines("http://amp.pharm.mssm.edu/Enrichr/geneSetLibrary?mode=text&libraryName=GO_Molecular_Function_2018")
-
-
-
-# Unused ------------------------------------------------------------------
-
-
-#' Shorten enrichment terms.
-#' 
-#' Enrichment terms are shortened depending on their type:
-#' * For GO terms, the part preceding the GO identifier is truncated
-#'   to at most `max_length` characters.
-#' * For other terms, the complete term is truncated to at most `max_length`
-#'   characters. The function ensures that truncated terms are unique.
+#' List genes that influence GSEA the most, for all databases and separately for
+#' positively and negatively enriched terms.
 #'
-#' @param s A character vector containing enrichment terms.
-#' @param max_length Maximum length of the shortened term.
+#' @param data Results from `perform_gsea()`.
+#' @param top_n Only select the terms with the highest NES per cluster.
+#' @param max_p_adj Maximum adjusted p value and …
+#' @param min_abs_NES minimum absolute NES required for selecting a term.
 #'
-#' @return A character vector containing truncated terms.
-shorten_go_term <- function(s, max_length = 30) {
-  str_match(s, "(.*)( \\(GO:\\d+\\))") %>% 
-    magrittr::set_colnames(c("match", "description", "goid")) %>% 
-    as_tibble() %>% 
-    mutate(
-      description = coalesce(description, s),
-      short = case_when(
-        str_length(description) > max_length ~
-          description %>% str_sub(end = max_length - 1) %>% paste0("…"),
-        TRUE ~ description
-      ),
-      goid = coalesce(goid, ""),
-      result = str_c(short, goid) %>% make.unique(sep = "")
-    ) %>% 
-    pull(result)
+#' @return A dataframe with columns "db", "direction", "gene", and "count".
+get_gsea_genes <- function(data,
+                           top_n = 5,
+                           max_p_adj = 0.05,
+                           min_abs_NES = 1) {
+  data <- 
+    data %>%
+    mutate(direction = if_else(NES > 0, "positive", "negative"))
+  
+  params <-
+    data %>% 
+    distinct(db, direction)
+  
+  pmap_dfr(
+    params,
+    function(db, direction) {
+      data %>% 
+        filter(db == {{db}}, direction == {{direction}}) %>% 
+        filter(padj <= max_p_adj & abs(NES) >= min_abs_NES) %>%
+        group_by(contrast, cluster) %>%
+        slice_max(n = top_n, order_by = abs(NES), with_ties = FALSE) %>%
+        pull(leadingEdge) %>%
+        flatten_chr() %>%
+        fct_count() %>%
+        arrange(desc(n)) %>% 
+        rename(gene = f, count = n) %>% 
+        mutate(db = db, direction = direction, .before = 1)
+    }
+  )
 }
+
+get_gsea_genes(gsea_results)
+
+
