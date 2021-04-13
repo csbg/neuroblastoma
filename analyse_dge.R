@@ -15,6 +15,7 @@ library(latex2exp)
 library(scico)
 library(fgsea)
 library(msigdbr)
+library(openxlsx)
 source("common_functions.R")
 
 
@@ -893,13 +894,26 @@ plot_gsea_dots(gsea_results,
 plot_gsea_dots(gsea_results,
                db = "GO_Cellular_Component_2018",
                width = 400)
+plot_gsea_dots(gsea_results,
+               db = "GO_Cellular_Component_2018",
+               direction = "negative",
+               width = 400)
 
 plot_gsea_dots(gsea_results,
                db = "GO_Molecular_Function_2018",
                width = 420)
+plot_gsea_dots(gsea_results,
+               db = "GO_Molecular_Function_2018",
+               direction = "negative",
+               width = 420)
 
 plot_gsea_dots(gsea_results,
                db = "KEGG_2019_Human",
+               width = 400,
+               height = 350)
+plot_gsea_dots(gsea_results,
+               db = "KEGG_2019_Human",
+               direction = "negative",
                width = 400,
                height = 350)
 
@@ -907,9 +921,17 @@ plot_gsea_dots(gsea_results,
                db = "WikiPathways_2019_Human",
                width = 420,
                height = 250)
+plot_gsea_dots(gsea_results,
+               db = "WikiPathways_2019_Human",
+               direction = "negative",
+               width = 420,
+               height = 250)
 
 plot_gsea_dots(gsea_results,
                db = "MSigDB_Hallmark_2020")
+plot_gsea_dots(gsea_results,
+               db = "MSigDB_Hallmark_2020",
+               direction = "negative",)
 
 
 
@@ -953,6 +975,64 @@ get_gsea_genes <- function(data,
   )
 }
 
-get_gsea_genes(gsea_results)
+gsea_genes <- get_gsea_genes(gsea_results)
+gsea_genes
 
 
+
+# Export tables -----------------------------------------------------------
+
+# create Excel sheet
+header_style <- createStyle(textDecoration = "bold")
+wb <- createWorkbook()
+
+# workbook with DE genes
+table_data <- 
+  dge_results_filtered %>% 
+  select(contrast, cluster = cluster_id, gene, logFC,
+         p_value = p_val, FDR = p_adj.loc, I.frq:IV.frq)
+
+addWorksheet(wb, "de_genes")
+writeData(wb, "de_genes", table_data, headerStyle = header_style)
+freezePane(wb, "de_genes", firstRow = TRUE)
+
+# workbook with enrichr results
+table_data <- 
+  enrichr_results %>% 
+  filter(direction == "up", Odds.Ratio >= 1) %>%
+  select(
+    db, contrast, cluster, term = Term, FDR = Adjusted.P.value,
+    odds_ratio = Odds.Ratio, genes = Genes, overlap_size, geneset_size
+  ) %>%
+  arrange(db, contrast, cluster, desc(odds_ratio)) %>% 
+  mutate(odds_ratio = pmin(odds_ratio, 1e99))
+
+addWorksheet(wb, "enrichr")
+writeData(wb, "enrichr", table_data, headerStyle = header_style)
+freezePane(wb, "enrichr", firstRow = TRUE)
+
+
+# workbook with fgsea results
+table_data <- 
+  gsea_results %>% 
+  select(
+    db, contrast, cluster, term = pathway, FDR = padj, NES,
+    genes = leadingEdge
+  ) %>% 
+  rowwise() %>% 
+  mutate(genes = str_c(genes, collapse = ";")) %>%
+  ungroup() %>% 
+  filter(abs(NES) >= 1) %>%
+  arrange(db, contrast, cluster, desc(NES))
+addWorksheet(wb, "fgsea")
+writeData(wb, "fgsea", table_data, headerStyle = header_style)
+freezePane(wb, "fgsea", firstRow = TRUE)
+
+
+# workbook with leading edge genes from FGSEA
+# addWorksheet(wb, "gsea_genes")
+# writeData(wb, "gsea_genes", gsea_genes, headerStyle = header_style)
+# freezePane(wb, "gsea_genes", firstRow = TRUE)
+
+# save file
+saveWorkbook(wb, "plots/dge/dge_data.xlsx", overwrite = TRUE)

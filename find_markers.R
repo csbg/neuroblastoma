@@ -11,6 +11,7 @@ library(ComplexHeatmap)
 library(tidyverse)
 library(patchwork)
 library(scico)
+library(openxlsx)
 source("common_functions.R")
 
 
@@ -139,7 +140,7 @@ plot_conserved_markers <- function(data,
     ),
     cluster_columns = FALSE,
     cluster_rows = FALSE,
-    name = "expression",
+    name = "log FC",
     top_annotation = HeatmapAnnotation(
       "cell type" =
         cluster_info %>%
@@ -170,7 +171,7 @@ plot_conserved_markers <- function(data,
     )
   ) +
     plot_annotation(
-      str_glue("Group {group} in {rlang::as_string(ensym(id_col))}")
+      str_glue("Cluster {group} in {rlang::as_string(ensym(id_col))}")
     )
   ggsave_default(filename)
   p
@@ -186,10 +187,12 @@ conmarkers_clusters <- assemble_markers(
   pval_types = "any"
 )
 
+# test plotting function
 plot_conserved_markers(nb, conmarkers_clusters,
                        group = "8", id_col = cluster_50,
                        filename = "markers/conserved_50/cluster_8")
 
+# make all plots
 walk(
   levels(colData(nb)$cluster_50),
   function(cluster) {
@@ -201,13 +204,26 @@ walk(
       id_col = cluster_50,
       filename = str_glue("markers/conserved_50/cluster_{cluster}")
     )
-    
-    fs::dir_create("plots/markers/conserved_50/tables")
-    conmarkers_clusters$any[[cluster]] %>% 
-      as_tibble(rownames = "gene") %>% 
-      filter(p.value < 1e-6) %>%
-      select(gene, Top, p.value, FDR, t.summary.logFC) %>% 
-      write_csv(str_glue("plots/markers/conserved_50/tables/cluster_{cluster}.csv"))
   }
 )
 
+
+# create tables
+header_style <- createStyle(textDecoration = "bold")
+wb <- createWorkbook()
+
+walk(
+  levels(colData(nb)$cluster_50),
+  function(cluster) {
+    table_data <-
+      conmarkers_clusters$any[[cluster]] %>% 
+      as_tibble(rownames = "gene") %>% 
+      filter(p.value < 1e-6) %>%
+      select(gene, top = Top, p_value = p.value, FDR, logFC = t.summary.logFC)
+    addWorksheet(wb, cluster)
+    writeData(wb, cluster, table_data, headerStyle = header_style)
+    freezePane(wb, cluster, firstRow = TRUE)
+  }
+)
+
+saveWorkbook(wb, "plots/markers/conserved_50/genes.xlsx", overwrite = TRUE)
