@@ -320,6 +320,71 @@ plot_clusters_all(nb_data,
 
 
 
+# Subclustering -----------------------------------------------------------
+
+#' Plot all sub clusters.
+#'
+#' @param data Metadata.
+#' @param x Column with x-axis data.
+#' @param y Column with y-axis data.
+#' @param superclusters Column with supercluster IDs.
+#' @param subclusters Column with subcluster IDs.
+#' @param label_direct If `TRUE`, print cluster labels at cluster mean.
+#' @param color_scale A ggplot2 color scale used for coloring the points.
+#'   If `NULL`, use the default discrete color scale.
+#' @param filename Name of output file.
+#'
+#' @return A ggplot object.
+plot_subclusters <- function(data, x, y, superclusters, subclusters,
+                             label_direct = TRUE, color_scale = NULL,
+                             filename = NULL) {
+  cluster_labels <-
+    data %>%
+    group_by({{superclusters}}, label = {{subclusters}}) %>%
+    summarise({{x}} := mean({{x}}), {{y}} := mean({{y}}))
+  
+  color_scale <-
+    color_scale %||%
+    scale_color_hue(guide = guide_legend(override.aes = list(size = 5)))
+  
+  p <-
+    data %>%
+    ggplot(aes({{x}}, {{y}})) +
+    geom_point(
+      aes(color = {{subclusters}}),
+      size = .01,
+      shape = 20,
+      show.legend = !label_direct
+    ) +
+    {
+      if (label_direct)
+        geom_text(data = cluster_labels, aes(label = label), size = 3)
+    } +
+    color_scale +
+    facet_wrap(vars({{superclusters}})) +
+    coord_fixed() +
+    theme_classic() +
+    theme(
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+    NULL
+  
+  ggsave_default(filename, width = 420, height = 297)
+  p
+}
+
+
+plot_subclusters(nb_data, umap_1_subcluster, umap_2_subcluster,
+                 cluster_50, subcluster_20,
+                 filename = "monocle/subclusters_50_20")
+
+plot_subclusters(nb_data, umap_1_subcluster, umap_2_subcluster,
+                 cluster_50, subcluster_50,
+                 filename = "monocle/subclusters_50_50")
+
+
+
 # Cell types --------------------------------------------------------------
 
 #' Preprocess cell types: Convert to factor, order by frequency, possibly lump.
@@ -742,6 +807,118 @@ colnames(nb_data) %>%
 
 
 
+#' Count cell types in all subclusters of a given cluster and plot (a, right)
+#' results in bar charts for all cell type reference datasets. Also plot (b,
+#' upper left) a UMAP with subclusters highlighted, and (c, lower left) up to
+#' four UMAPs, each of which highlights cells from a different group.
+#'
+#' @param data Metadata.
+#' @param clusters Column with cluster IDs.
+#' @param subclusters Column with subcluster IDs.
+#' @param selected_cluster Cluster whose cell types should be counted.
+#' @param filename Name of output file.
+#'
+#' @return A ggplot object.
+plot_cvt_bar_subcluster <- function(data, clusters, subclusters,
+                                    selected_cluster,
+                                    filename = NULL) {
+  subcluster_data <- 
+    data %>% 
+    filter({{clusters}} == {{selected_cluster}})
+  
+  ref <-
+    colnames(data) %>%
+    str_match("cell_type_(.+)_fine") %>% 
+    magrittr::extract(, 2) %>% 
+    magrittr::extract(!is.na(.))
+  
+  subcluster_ids <-
+    subcluster_data %>% 
+    pull({{subclusters}}) %>% 
+    unique() %>% 
+    str_sort()
+  
+  p1 <- 
+    plot_subclusters(
+      subcluster_data,
+      umap_1_subcluster,
+      umap_2_subcluster,
+      {{clusters}},
+      {{subclusters}}
+    ) +
+    theme(strip.text = element_blank())
+  
+  p2 <- 
+    ggplot(subcluster_data, aes(umap_1_subcluster, umap_2_subcluster)) +
+    geom_point(
+      data = subcluster_data %>% select(!group),
+      color = "gray90",
+      size = 0.01,
+      shape = 20
+    ) +
+    geom_point(color = "black", size = 0.01, shape = 20) +
+    facet_wrap(vars(group), ncol = 1) +
+    coord_fixed() +
+    theme_classic() +
+    theme(
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+    NULL
+  
+  p3 <-
+    list(ref = ref, subcluster = subcluster_ids) %>%
+    cross_df() %>%
+    pmap(
+      function(ref, subcluster) {
+        plot_cvt_bar_single(
+          subcluster_data,
+          clusters = {{subclusters}},
+          selected_cluster = subcluster,
+          ref = ref,
+          label = "fine",
+          max_bars = 15L
+        ) +
+          {if (subcluster == "a") xlab(ref) else NULL} +
+          {if (ref == ref[length(ref)]) ylab(subcluster) else NULL}
+      }
+    ) %>%
+    wrap_plots(ncol = length(subcluster_ids), byrow = FALSE)
+  
+  p <-
+    wrap_plots(
+      p1, p2, p3,
+      widths = c(1, length(subcluster_ids)),
+      heights = c(1, 4),
+      design = "AC\nBC"
+    ) +
+    plot_annotation(
+      title = str_glue(
+        "Cell types in subclusters of cluster {selected_cluster}"
+      )
+    )
+
+  ggsave_default(filename, height = 297,
+                 width = 100 * (length(subcluster_ids) + 1))
+  p
+}
+
+# plot_cvt_bar_subcluster(nb_data, cluster_50, subcluster_50, "1",
+#                         filename = "scvt")
+
+walk(
+  levels(nb_data$cluster_50),
+  ~plot_cvt_bar_subcluster(
+    data = nb_data,
+    clusters = cluster_50,
+    subclusters = subcluster_20,
+    selected_cluster = .,
+    filename = str_glue("cell_types/cvt_bar_subcluster_{.}")
+  )
+)
+
+
+
 # Cluster sizes -----------------------------------------------------------
 
 #' Plot a heatmap of cluster size vs sample (top) and group (bottom).
@@ -952,247 +1129,6 @@ plot_clusters_all(nb_data, umap_1_monocle, umap_2_monocle, bcds_score,
                   label_direct = FALSE,
                   color_scale = scale_color_viridis_c(limits = c(0, 1)),
                   filename = "qc/qc_doublets_umap")
-
-
-
-#' TODO: currently, subclustering is not done
-#' # Subclustering -----------------------------------------------------------
-#' 
-#' #' Plot all sub clusters.
-#' #'
-#' #' @param data Metadata.
-#' #' @param x Column with x-axis data.
-#' #' @param y Column with y-axis data.
-#' #' @param superclusters Column with supercluster IDs.
-#' #' @param subclusters Column with subcluster IDs.
-#' #' @param label_direct If `TRUE`, print cluster labels at cluster mean.
-#' #' @param color_scale A ggplot2 color scale used for coloring the points.
-#' #'   If `NULL`, use the default discrete color scale.
-#' #' @param filename Name of output file.
-#' #'
-#' #' @return A ggplot object.
-#' plot_subclusters <- function(data, x, y, superclusters, subclusters,
-#'                              label_direct = TRUE, color_scale = NULL,
-#'                              filename = NULL) {
-#'   cluster_labels <-
-#'     data %>%
-#'     group_by({{superclusters}}, label = {{subclusters}}) %>%
-#'     summarise({{x}} := mean({{x}}), {{y}} := mean({{y}}))
-#' 
-#'   color_scale <-
-#'     color_scale %||%
-#'     scale_color_hue(guide = guide_legend(override.aes = list(size = 5)))
-#' 
-#'   p <-
-#'     data %>%
-#'     ggplot(aes({{x}}, {{y}})) +
-#'     geom_point(
-#'       aes(color = {{subclusters}}),
-#'       size = .01,
-#'       shape = 20,
-#'       show.legend = !label_direct
-#'     ) +
-#'     {
-#'       if (label_direct)
-#'         geom_text(data = cluster_labels, aes(label = label), size = 3)
-#'     } +
-#'     color_scale +
-#'     facet_wrap(vars({{superclusters}})) +
-#'     coord_fixed() +
-#'     theme_classic() +
-#'     theme(
-#'       strip.background = element_blank(),
-#'       strip.text = element_text(face = "bold")
-#'     ) +
-#'     NULL
-#' 
-#'   ggsave_default(filename, width = 420, height = 297)
-#'   p
-#' }
-#' 
-#' 
-#' #' For each subcluster, plot a bar chart that counts the most frequent cell
-#' #' types. All barch charts that belong to a single supercluster are printed in
-#' #' one row.
-#' #'
-#' #' @param data Metadata.
-#' #' @param cell_types Column with cell types.
-#' #' @param superclusters Column with supercluster IDs.
-#' #' @param subclusters Column with subcluster IDs.
-#' #' @param lump_n Preserve the `lump_n` most common cell types, lump the
-#' #'   remaining ones as "other".
-#' #' @param filename Name of output file.
-#' #'
-#' #' @return A ggplot object.
-#' plot_scvt_bar <- function(data, cell_types, superclusters, subclusters,
-#'                           lump_n = 10, filename = NULL) {
-#'   pdata <-
-#'     data %>%
-#'     transmute(
-#'       cell_type = {{cell_types}},
-#'       supercluster = {{superclusters}},
-#'       subcluster = {{subclusters}}
-#'     )
-#' 
-#'   plot_single <- function(supercluster, subcluster) {
-#'     bar_data <-
-#'       pdata %>%
-#'       filter(supercluster == {{supercluster}}, subcluster == {{subcluster}})
-#' 
-#'     if (nrow(bar_data) == 0)
-#'       return(plot_spacer())
-#' 
-#'     bar_data %>%
-#'       mutate(cell_type = fct_lump_n(cell_type, lump_n)) %>%
-#'       count(cell_type) %>%
-#'       mutate(
-#'         cell_type = cell_type %>%
-#'           fct_reorder(n) %>%
-#'           fct_relevel("Other"),
-#'         n_rel = n / sum(n) * 100
-#'       ) %>%
-#'       ggplot(aes(cell_type, n)) +
-#'       geom_col(aes(fill = n_rel), show.legend = FALSE) +
-#'       annotate("text_npc", npcx = 0.1, npcy = 0.9,
-#'                label = str_glue("{supercluster}-{subcluster}")) +
-#'       xlab("") +
-#'       ylab("") +
-#'       scale_fill_distiller(
-#'         palette = "YlOrRd",
-#'         direction = 1,
-#'         limits = c(0, 100)
-#'       ) +
-#'       coord_flip() +
-#'       theme_classic() +
-#'       theme(
-#'         axis.text.x = element_text(angle = 270, vjust = 0.5),
-#'         strip.background = element_blank(),
-#'         strip.text = element_text(face = "bold")
-#'       ) +
-#'       NULL
-#'   }
-#' 
-#'   p <-
-#'     list(
-#'       supercluster = as.integer(levels(pdata$supercluster)),
-#'       subcluster = as.integer(levels(pdata$subcluster))
-#'     ) %>%
-#'     cross_df() %>%
-#'     arrange(supercluster) %>%
-#'     pmap(plot_single) %>%
-#'     wrap_plots(nrow = nlevels(pdata$supercluster))
-#'   set_last_plot(p)
-#' 
-#'   ggsave_default(filename, width = 420, height = 840, crop = FALSE)
-#'   p
-#' }
-#' 
-#' 
-#' ## of clusters ------------------------------------------------------------
-#' 
-#' plot_subclusters(nb_data, subcluster_mid_UMAP_1, subcluster_mid_UMAP_2,
-#'                  integrated_snn_res.0.5, subcluster_mid_0.2,
-#'                  filename = "subcluster_mid_0.2")
-#' 
-#' plot_subclusters(nb_data, subcluster_mid_UMAP_1, subcluster_mid_UMAP_2,
-#'                  integrated_snn_res.0.5, cell_type_broad_lumped,
-#'                  label_direct = FALSE, filename = "subcluster_mid_ctb")
-#' 
-#' plot_subclusters(nb_data, subcluster_mid_UMAP_1, subcluster_mid_UMAP_2,
-#'                  integrated_snn_res.0.5, percent.mt,
-#'                  color_scale = scale_color_viridis_c(),
-#'                  label_direct = FALSE, filename = "subcluster_mid_mtgenes")
-#' 
-#' plot_subclusters(nb_data, subcluster_mid_UMAP_1, subcluster_mid_UMAP_2,
-#'                  integrated_snn_res.0.5, nFeature_SCT,
-#'                  color_scale = scale_color_viridis_c(),
-#'                  label_direct = FALSE, filename = "subcluster_mid_nFeature")
-#' 
-#' plot_subclusters(nb_data, subcluster_mid_UMAP_1, subcluster_mid_UMAP_2,
-#'                  integrated_snn_res.0.5, nCount_SCT,
-#'                  color_scale = scale_color_viridis_c(),
-#'                  label_direct = FALSE, filename = "subcluster_mid_nCount")
-#' 
-#' plot_scvt_bar(nb_data, cell_type_fine,
-#'               integrated_snn_res.0.5, subcluster_mid_0.2,
-#'               lump_n = 4, filename = "subcluster_mid_bars")
-#' 
-#' 
-#' 
-#' ## of cell types ----------------------------------------------------------
-#' 
-#' plot_subclusters(nb_data, subcluster_ctb_UMAP_1, subcluster_ctb_UMAP_2,
-#'                  cell_type_broad, subcluster_ctb_0.2,
-#'                  filename = "subcluster_ctb_0.2")
-#' 
-#' plot_subclusters(nb_data, subcluster_ctb_UMAP_1, subcluster_ctb_UMAP_2,
-#'                  cell_type_broad, integrated_snn_res.0.5,
-#'                  label_direct = FALSE, filename = "subcluster_ctb_mid")
-#' 
-#' 
-#' 
-#' # Refined clusters --------------------------------------------------------
-#' 
-#' plot_clusters_all(nb_data, UMAP_1, UMAP_2, refined_cluster,
-#'                   show_resolution = FALSE,
-#'                   filename = "clusters_all_UMAP_refined")
-#' 
-#' plot_clusters_selected(nb_data, UMAP_1, UMAP_2, refined_cluster,
-#'                        folder = "clusters_highlighted_UMAP_refined")
-#' 
-#' 
-#' 
-#' # Cluster splitting -------------------------------------------------------
-#' 
-#' plot_splitcluster_bar <- function(data, limit = 10, filename = NULL) {
-#'   plot_data <- 
-#'     data %>% 
-#'     group_by(integrated_snn_res.0.5, cell_type_broad_lumped) %>% 
-#'     summarise(count = n()) %>%
-#'     mutate(prop = count / sum(count) * 100, is_selected = prop > limit)
-#'   
-#'   p <-
-#'     ggplot(plot_data, aes(cell_type_broad_lumped, prop)) +
-#'     geom_hline(yintercept = limit, linetype = "dashed", size = 0.25) +
-#'     geom_col(aes(fill = is_selected), show.legend = FALSE) +
-#'     xlab(NULL) +
-#'     ylab("Relative abundance") +
-#'     scale_fill_manual(values = c("TRUE" = "#006d2c", "FALSE" = "#a1d99b")) +
-#'     coord_flip() +
-#'     facet_wrap(vars(integrated_snn_res.0.5), nrow = 4) +
-#'     labs(caption = str_glue("Split clusters by cell type ",
-#'                             "with abundance >{limit}% ",
-#'                             "→ {sum(plot_data$is_selected)} subclusters")) +
-#'     theme(panel.grid = element_blank()) +
-#'     NULL
-#'   ggsave_default(filename)
-#'   p
-#' }
-#' 
-#' plot_splitcluster_bar(nb_data, limit = 10)
-#' plot_splitcluster_bar(nb_data, limit = 20, filename = "splitcluster_celltypes")
-#' 
-#' 
-#' nb_data %>% 
-#'   inner_join(
-#'     nb_data %>% 
-#'       group_by(integrated_snn_res.0.5, cell_type_broad_lumped) %>% 
-#'       summarise(count = n()) %>%
-#'       filter(count / sum(count) > 0.2) %>% 
-#'       mutate(
-#'         split_cluster = str_c(
-#'           integrated_snn_res.0.5,
-#'           case_when(
-#'             n() > 1 ~ letters[row_number()],
-#'             TRUE ~ ""
-#'           )
-#'         )
-#'       ) %>% 
-#'       select(!count)
-#'   ) %>% 
-#'   plot_clusters_all(UMAP_1, UMAP_2, integrated_snn_res.0.5,
-#'                     show_resolution = FALSE,
-#'                     filename = "clusters_all_UMAP_0.5_split")
 
 
 
