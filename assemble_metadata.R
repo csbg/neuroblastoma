@@ -8,6 +8,7 @@
 # @DEPI metadata_seurat.csv
 # @DEPI metadata_monocle.csv
 # @DEPI cell_types_[ref]_[labels].csv
+# @DEPI subclusters.csv
 # @DEPO metadata.csv
 # @DEPO metadata.rds
 # @DEPO celltype_details.rds
@@ -70,7 +71,6 @@ load_singler_data <- function(file) {
 }
 
 
-
 #' Load cell metadata from several CSV files.
 #' 
 #' @param files CSV files with metadata.
@@ -98,7 +98,6 @@ load_cell_metadata <- function(files) {
       )
     )
 }
-
 
 
 #' Combine general metadata and cell types.
@@ -149,57 +148,20 @@ add_cell_types <- function(df_metadata,
   left_join(df_metadata, df_cell_types, by = "cell")
 }
 
-#' #' Add clusters obtained by subclustering.
-#' #'
-#' #' @param df_seurat Dataframe returned by `load_seurat_data()`
-#' #' @param folder Dataset folder
-#' #'
-#' #' @return `df_seurat` with an additional column `refined_cluster`.
-#' add_refined_clusters <- function(df_seurat, folder) {
-#'   refined_cluster_file <- str_glue("{folder}/manual/subcluster_mapping.csv")
-#'   
-#'   df_seurat %>% 
-#'     mutate(
-#'       supercluster = as.character(integrated_snn_res.0.5),
-#'       subcluster = as.character(subcluster_mid_0.2)
-#'     ) %>% 
-#'     left_join(
-#'       read_csv(refined_cluster_file, col_types = "ccc"),
-#'       by = c("supercluster", "subcluster")
-#'     ) %>% 
-#'     select(!c(supercluster, subcluster)) %>% 
-#'     mutate(
-#'       refined_cluster =
-#'         refined_cluster %>% 
-#'         coalesce(integrated_snn_res.0.5) %>% 
-#'         as_factor() %>% 
-#'         fct_relevel(function(l) str_sort(l, numeric = TRUE))
-#'     )
-#' }
-#' 
-#' #' Add clusters obtained by discarding rare cell types within each original
-#' #' cluster and splitting them by more common cell types.
-#' #'
-#' #' @param df_seurat Dataframe returned by `load_seurat_data()`
-#' #' @param folder Dataset folder
-#' #'
-#' #' @return `df_seurat` with an additional column `split_cluster`.
-#' add_split_clusters <- function(df_seurat, folder) {
-#'   split_cluster_file <- str_glue("{folder}/manual/splitcluster_mapping.csv")
-#'   df_seurat %>% 
-#'     mutate(tmp_col = as.character(cell_type_broad_lumped)) %>% 
-#'     left_join(
-#'       read_csv(split_cluster_file, col_types = "ccc"),
-#'       by = c("integrated_snn_res.0.5", tmp_col = "cell_type_broad_lumped")
-#'     ) %>% 
-#'     mutate(
-#'       split_cluster =
-#'         split_cluster %>%
-#'         as_factor() %>% 
-#'         fct_relevel(function(l) str_sort(l, numeric = TRUE))
-#'     ) %>% 
-#'     select(!tmp_col)
-#' }
+
+#' Add subclusters.
+#'
+#' @param df_metadata Dataframe returned by `load_cell_metadata()`.
+#' @param subcluster_file CSV file with subclustering results.
+#'
+#' @return The dataframe provided by `df_metadata`, with additional columns.
+add_subclusters <- function(df_metadata, subcluster_file) {
+  df_metadata %>%
+    left_join(
+      read_csv(subcluster_file),
+      by = "cell"
+    )
+}
 
 
 
@@ -207,6 +169,7 @@ add_cell_types <- function(df_metadata,
 
 folder <- "data_generated"
 metadata_files <- c("metadata_monocle.csv", "metadata_seurat.csv")
+subcluster_file <- "subclusters.csv"
 
 singler_data <- map(
   dir_ls(folder, regex = "cell_types"),
@@ -216,9 +179,7 @@ singler_data <- map(
 nb_data <-
   load_cell_metadata(str_glue("{folder}/{metadata_files}")) %>% 
   add_cell_types(singler_data) %>%
-  # add_refined_clusters(folder) %>% 
-  # add_split_clusters(folder) %>% 
-  {.}
+  add_subclusters(path_join(c(folder, subcluster_file)))
 
 
 

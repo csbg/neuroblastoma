@@ -1,98 +1,92 @@
 # Perform subclustering on existing clusters.
 # 
-# For each given cluster in the complete dataset, this script performs
-# dimensionality reduction (PCA, UMAP) followed by clustering (at two
-# resolutions).
+# For each given cluster_50 in the complete dataset, this script performs
+# PCA, alignment, UMAP, and clustering at two resolutions.
 #
-# Results are stored in a CSV file `nb_subclusters.csv` with columns
-# * `cell`, `sample
-# * `subcluster_0.2`, `subcluster_0.5` (subcluster assignments)
-# * `subcluster_UMAP_1`, `subcluster_UMAP_2` (UMAP coordinates)
+# Results are stored in a CSV file `subclusters.csv` with columns
+# * `cell`
+# * `umap_1_subcluster`
+# * `umap_2_subcluster` (UMAP coordinates)
+# * `subcluster_20`
+# * `subcluster_50` (subcluster assignments, lowercase letters)
+#
+# @DEPI rna_integrated_monocle.rds
+# @DEPO subclusters.csv
 
-library(Seurat)
+library(monocle3)
 library(tidyverse)
-library(fs)
+source("common_functions.R")
+
+
+
+# Parameters --------------------------------------------------------------
+
+# integrated dataset
+in_file <- "data_generated/rna_integrated_monocle.rds"
+
+# folder where results are saved
+out_file <- "data_generated/subclusters.csv"
 
 
 
 # Load data ---------------------------------------------------------------
 
-metadata_superclusters <-
-  left_join(
-    read_csv("data_generated/all_datasets_current/nb_clusters_0.5.csv") %>% 
-      select(cell, mid = integrated_snn_res.0.5),
-    read_csv("data_generated/all_datasets_current/nb_singler.csv") %>% 
-      extract(
-        pruned.labels,
-        into = "ctb",
-        regex = "([^:]*)",
-        remove = FALSE
-      ) %>%
-      mutate(
-        ctb =
-          as_factor(ctb) %>%
-          fct_lump_prop(0.01) %>%
-          fct_explicit_na()
-      ) %>% 
-      select(cell, sample, ctb),
-    by = "cell"
-  ) %>% 
-  column_to_rownames("cell")
-
-nb <- readRDS("data_generated/all_datasets_current/nb_integrated.rds")
-
-outdir <- "data_generated/all_datasets_current"
+nb <- readRDS(in_file)
 
 
 
 # Subclustering -----------------------------------------------------------
 
-make_subcluster <- function(df, selected_cluster) {
-  message("Subclustering cluster ", selected_cluster)
-  nb_subset <-
-    df %>%
-    subset(subset = cluster == selected_cluster) %>% 
-    RunPCA(verbose = FALSE) %>%
-    RunUMAP(dims = 1:30, verbose = FALSE) %>% 
-    FindNeighbors(verbose = FALSE) %>%
-    FindClusters(resolution = 0.2, verbose = FALSE) %>%
-    FindClusters(resolution = 0.5, verbose = FALSE)
+#' Perform subclustering.
+#'
+#' @param data A monocle object.
+#' @param selected_cluster Cluster in `clusters(data)`
+#'                         that should be subclustered.
+#'
+#' @return A dataframe.
+make_subcluster <- function(data, selected_cluster) {
+  info("Subclustering cluster {selected_cluster}")
   
-  bind_cols(
-    nb_subset@meta.data %>%
-      as_tibble(rownames = "cell") %>% 
-      select(cell, sample, starts_with("integrated")),
-    Embeddings(nb_subset, "umap") %>%
-      as_tibble()
-  )
-}
-
-make_all_subclusters <- function(supercluster) {
-  nb@meta.data <- 
-    metadata_superclusters %>% 
-    select(sample, cluster = {{supercluster}})
+  barcodes <- 
+    clusters(nb) %>%
+    enframe("cell", "id") %>%
+    filter(id == {{selected_cluster}}) %>%
+    pull(cell)
   
-  subclusters <-
-    map_dfr(
-      unique(nb@meta.data$cluster),
-      ~make_subcluster(nb, .x)
+  subdata_k20 <-
+    data[, barcodes] %>% 
+    preprocess_cds() %>% 
+    reduce_dimension(preprocess_method = "PCA") %>% 
+    align_cds(alignment_group = "sample") %>% 
+    reduce_dimension(
+      reduction_method = "UMAP",
+      preprocess_method = "Aligned"
     ) %>% 
-    rename_with(
-      ~c("subcluster_{s}_0.2",
-         "subcluster_{s}_0.5",
-         "subcluster_{s}_UMAP_1",
-         "subcluster_{s}_UMAP_2") %>%
-        map_chr(~str_glue_data(list(s = supercluster), .x)),
-      .cols = !c(cell, sample)
+    cluster_cells(k = 20, random_seed = 42)
+  
+  subdata_k50 <- cluster_cells(subdata_k20, k = 50, random_seed = 42)
+  
+  list(
+    reducedDim(subdata_k20, "UMAP") %>%
+      magrittr::set_colnames(c("umap_1_subcluster", "umap_2_subcluster")) %>% 
+      as_tibble(rownames = "cell"),
+    clusters(subdata_k20) %>%
+      enframe(name = "cell", value = "subcluster_20"),
+    clusters(subdata_k50) %>%
+      enframe(name = "cell", value = "subcluster_50")
+  ) %>%
+    reduce(left_join, by = "cell") %>% 
+    mutate(
+      across(where(is.factor), ~fct_relabel(., ~letters[as.integer(.x)]))
     )
 }
 
-all_subclusters <- 
-  colnames(metadata_superclusters) %>% 
-  setdiff("sample") %>% 
-  map(make_all_subclusters) %>% 
-  reduce(left_join, by = c("cell", "sample"))
+# make_subcluster(nb, "1")
 
-all_subclusters %>%
-  write_csv(path_join(c(outdir, str_glue("nb_subclusters.csv"))))
+subclusters <- map_dfr(
+  levels(clusters(nb)),
+  make_subcluster,
+  data = nb
+)
 
+subclusters %>% write_csv(out_file)
