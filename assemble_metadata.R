@@ -13,6 +13,9 @@
 # @DEPO metadata.rds
 # @DEPO celltype_details.rds
 
+library(ontoProc)
+library(igraph)
+library(celldex)
 library(tidyverse)
 library(fs)
 source("common_functions.R")
@@ -165,11 +168,96 @@ add_subclusters <- function(df_metadata, subcluster_file) {
 
 
 
+#' Label all cells in a cluster with the same cell type. To this end, perform a
+#' majority vote on cell ontology IDs associated with all cell type labels in
+#' the respective cluster. Use a set of top-level CO IDs to which all fine cell
+#' type labels are assigned.
+#'
+#' @param df_metadata Dataframe returned by `load_cell_metadata()`.
+#' @param clusters Column with cluster IDs.
+#' @param ancestors Character vector with cell ontology IDs.
+#'
+#' @return The dataframe provided by `df_metadata`, with two additional columns
+#'   `cellont_name` and `cellont_id`.
+add_unified_labels <- function(df_metadata, clusters, ancestors) {
+  # get cell ontology IDs for cell type reference datasets
+  reference_cell_types <-
+    list(
+      hpca = HumanPrimaryCellAtlasData(),
+      blueprint = BlueprintEncodeData(),
+      dice = DatabaseImmuneCellExpressionData(),
+      dmap = NovershternHematopoieticData(),
+      monaco = MonacoImmuneData()
+    ) %>% 
+    map_dfr(~as_tibble(colData(.)), .id = "ref") %>% 
+    select(ref, cell_type = label.fine, coid = label.ont) %>% 
+    distinct()
+  
+  # add CO IDs of assigned cell types to each cell
+  data_cellont <-
+    df_metadata %>% 
+    select(cell, {{clusters}}, ends_with("fine")) %>%
+    pivot_longer(
+      !c(cell, {{clusters}}),
+      names_to = "ref",
+      values_to = "cell_type",
+      names_pattern = "type_(.*)_fine"
+    ) %>%
+    left_join(reference_cell_types, by = c("ref", "cell_type"))
+  
+  # make DAG from cell ontology and assemble all childs of selected ancestors
+  cell_ontology <- getCellOnto()
+  
+  cell_ontology_graph <- 
+    cell_ontology$children %>% 
+    imap_dfr(~tibble(from = .y, to = .x)) %>% 
+    graph_from_data_frame()
+  
+  common_ancestors <-
+    tibble(ancestor = ancestors) %>% 
+    rowwise() %>% 
+    mutate(
+      cellont_name = cell_ontology$name[ancestor],
+      child =
+        cell_ontology_graph %>%
+        subcomponent(ancestor, mode = "out") %>% 
+        magrittr::use_series("name") %>% 
+        list()
+    ) %>% 
+    unnest_longer(child)
+  
+  # unify labels by cluster-wise majority vote
+  unified_labels <- 
+    data_cellont %>% 
+    left_join(common_ancestors, by = c(coid = "child")) %>% 
+    replace_na(list(cellont_name = "other")) %>%
+    group_by({{clusters}}, cellont_name) %>%
+    summarise(cellont_id = first(ancestor), n = n()) %>%
+    slice_max(n, n = 1) %>% 
+    select(!n)
+  
+  df_metadata %>%
+    left_join(unified_labels, by = rlang::as_string(rlang::enexpr(clusters)))
+}
+
+
+
 # Load data ---------------------------------------------------------------
 
 folder <- "data_generated"
 metadata_files <- c("metadata_monocle.csv", "metadata_seurat.csv")
 subcluster_file <- "subclusters.csv"
+
+ancestors <- c(
+  "CL:0000576",
+  "CL:0000084",
+  "CL:0000236",
+  "CL:0000784",
+  "CL:0000764",
+  "CL:0000623",
+  "CL:0000540",
+  "CL:0008001"
+)
 
 singler_data <- map(
   dir_ls(folder, regex = "cell_types"),
@@ -179,7 +267,8 @@ singler_data <- map(
 nb_data <-
   load_cell_metadata(str_glue("{folder}/{metadata_files}")) %>% 
   add_cell_types(singler_data) %>%
-  add_subclusters(path_join(c(folder, subcluster_file)))
+  add_subclusters(path_join(c(folder, subcluster_file))) %>% 
+  add_unified_labels(cluster_50, ancestors)
 
 
 
