@@ -25,6 +25,8 @@
   and extract resulting metadata
 * [correct_ambiance.R](correct_ambiance.R) –
   remove cell-free RNA contamination
+* [make_subclusters.R](make_subclusters.R) -
+  perform subclustering
 * [classify_cell_types.R](classify_cell_types.R) -
   perform cell type classification via SingleR;
   invoke via [sge_classify_cell_types.sh](sge_classify_cell_types.sh)
@@ -55,9 +57,3 @@
   generate summary plots of Cell Ranger QC metrics
 * [summarize_cellranger_tsne.R](summarize_cellranger_tsne.R) -
   generate overview of tSNEs calculated by Cell Ranger
-
-
-## Currently unused
-
-* [make_subclusters.R](make_subclusters.R) -
-  perform subclustering
