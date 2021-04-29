@@ -242,6 +242,29 @@ add_unified_labels <- function(df_metadata, clusters, ancestors) {
 
 
 
+#' Split cluster 8 into two clusters, denoted 8 and 21.
+#' 
+#' This occurs at higher resolution (cluster_20), where cluster 8 splits into
+#' 5+32 (NB cells, only groups II-IV) and 36 (other cells, also group I).
+#'
+#' @param df_metadata Dataframe returned by `load_cell_metadata()`.
+#'
+#' @return Modified dataframe.
+modify_clusters <- function(df_metadata) {
+  df_metadata %>% 
+    mutate(
+      cluster_50 =
+        case_when(
+          cluster_20 == "36" ~ "21",
+          TRUE ~ as.character(cluster_50)
+        ) %>% 
+        as_factor() %>% 
+        fct_inseq()
+    )
+}
+
+
+
 # Load data ---------------------------------------------------------------
 
 folder <- "data_generated"
@@ -266,6 +289,7 @@ singler_data <- map(
 
 nb_data <-
   load_cell_metadata(str_glue("{folder}/{metadata_files}")) %>% 
+  modify_clusters() %>% 
   add_cell_types(singler_data) %>%
   add_subclusters(path_join(c(folder, subcluster_file))) %>% 
   add_unified_labels(cluster_50, ancestors)
