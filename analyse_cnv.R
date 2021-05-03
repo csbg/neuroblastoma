@@ -5,30 +5,46 @@ library(biomaRt)
 library(tidyverse)
 
 
-nb <- readRDS("data_generated/rna_integrated_monocle.rds")
+# Load data ---------------------------------------------------------------
 
+nb <- readRDS("data_generated/rna_integrated_monocle.rds")
+nb_data <- readRDS("data_generated/metadata.rds")
+
+
+
+# Prepare input data ------------------------------------------------------
+
+# annotation of cells as reference or malignant
 annotation_data <-
-  readRDS("data_generated/metadata.rds") %>%
+  nb_data %>%
   transmute(
     cell = cell,
     cell_type = case_when(
-      cluster_20 %in% c("5", "32") ~ str_glue("malignant_{group}"),
-      TRUE ~ as.character(cell_type_hpca_broad)
+      cluster_50 == "8" ~ str_glue("malignant_{sample}_{group}"),
+      TRUE              ~ as.character(cellont_name)
     )
   ) %>% 
   column_to_rownames("cell")
+
 expect_length(
-  intersect(colnames(counts(nb)), annotation_data$cell),
+  intersect(colnames(counts(nb)), rownames(annotation_data)),
   ncol(counts(nb))
 )
 
+# reference names
 ref_group_names <-
   annotation_data %>% 
   filter(!cell_type %>% str_starts("malignant")) %>% 
   pull(cell_type) %>% 
   unique()
 
-ensembl <- useEnsembl(biomart = "genes", dataset = "hsapiens_gene_ensembl")
+# order of genes on chromosome
+ensembl <- useEnsembl(
+  biomart = "genes",
+  dataset = "hsapiens_gene_ensembl",
+  version = 103
+)
+
 gene_order <-
   getBM(
     attributes = c(
@@ -46,20 +62,24 @@ gene_order <-
 
 
 
-infercnv_obj <- CreateInfercnvObject(
-  raw_counts_matrix = counts(nb),
-  annotations_file = annotation_data,
-  gene_order_file = gene_order,
-  ref_group_names = ref_group_names,
-  max_cells_per_group = 50  # for testing
-)
+# Analysis ----------------------------------------------------------------
 
+infercnv_obj <- CreateInfercnvObject(
+  raw_counts_matrix = counts(nb),            # |
+  annotations_file = annotation_data,        # | inputs calculated above
+  ref_group_names = ref_group_names,         # |
+  gene_order_file = gene_order,              # |
+  chr_exclude = c("chrX", "chrY", "chrMT"),  # excluded chromosomes
+  # max_cells_per_group = 50                 # for testing
+)
 
 infercnv_obj <- infercnv::run(
   infercnv_obj,
   cutoff = 0.1,
-  out_dir = "infercnv_output",
+  out_dir = "data_generated/infercnv_output_v2",
   cluster_by_groups = TRUE,
   denoise = TRUE,
-  HMM = TRUE
+  HMM = TRUE,
+  plot_steps = TRUE,
+  diagnostics = TRUE
 )
