@@ -361,7 +361,7 @@ plot_subclusters <- function(data, x, y, superclusters, subclusters,
         geom_text(data = cluster_labels, aes(label = label), size = 3)
     } +
     color_scale +
-    facet_wrap(vars({{superclusters}})) +
+    facet_wrap(vars({{superclusters}}), ncol = 6) +
     coord_fixed() +
     theme_classic() +
     theme(
@@ -379,9 +379,16 @@ plot_subclusters(nb_data, umap_1_subcluster, umap_2_subcluster,
                  cluster_50, subcluster_20,
                  filename = "monocle/subclusters_50_20")
 
-plot_subclusters(nb_data, umap_1_subcluster, umap_2_subcluster,
-                 cluster_50, subcluster_50,
-                 filename = "monocle/subclusters_50_50")
+nb_data %>% 
+  mutate(
+    cluster_label =
+      str_glue("{cluster_50} ({cellont_name})") %>%
+      as_factor() %>% 
+      fct_reorder(as.integer(cluster_50))
+  ) %>% 
+  plot_subclusters(umap_1_subcluster, umap_2_subcluster,
+                   cluster_label, subcluster_20,
+                   filename = "monocle/subclusters_50_20")
 
 
 
@@ -915,6 +922,75 @@ walk(
     selected_cluster = .,
     filename = str_glue("cell_types/cvt_bar_subcluster_{.}")
   )
+)
+
+
+
+# Unified cell labels -----------------------------------------------------
+
+#' Plot cell types with cluster IDs.
+#'
+#' @param data Metadata.
+#' @param x Column with x-axis data.
+#' @param y Column with y-axis data.
+#' @param label_by Column with cluster IDs.
+#' @param color_by Column with cell types.
+#' @param filename Name of output file.
+#'
+#' @return A ggplot object.
+plot_unified_cell_label <- function(data, x, y, label_by, color_by,
+                                    filename = NULL) {
+  color_scale <- scale_color_manual(
+    name = "cell type",
+    values = list(
+      "T cell" = "#1f78b4",
+      # T8 = "#62a3cb",
+      "natural killer cell" = "#a6cee3",
+      "B cell" = "#33a02c",
+      # B_prec = "#b2df8a",
+      "monocyte" = "#ff7f00",
+      "neuron" = "#e31a1c",
+      "erythroid lineage cell" = "#b15928",
+      "hematopoietic precursor cell" = "#6a3d9a",
+      # gran = "#cab2d6",
+      "plasmacytoid dendritic cell" = "#fdbf6f",
+      "other" = "black",
+      na = "gray80"
+    ),
+    guide = guide_legend(override.aes = list(size = 5))
+  )
+  
+  cluster_labels <- 
+    data %>% 
+    group_by(label = {{label_by}}) %>% 
+    summarise({{x}} := mean({{x}}), {{y}} := mean({{y}}))
+  
+  p <- 
+    data %>%
+    ggplot(aes({{x}}, {{y}})) +
+    geom_point(
+      aes(color = {{color_by}}),
+      size = .1,
+      show.legend = TRUE
+    ) +
+    geom_text(data = cluster_labels, aes(label = label)) +
+    color_scale +
+    coord_fixed() +
+    theme_classic() +
+    theme(
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+    NULL
+  
+  ggsave_default(filename)
+  p
+}
+
+plot_unified_cell_label(
+  nb_data, umap_1_monocle, umap_2_monocle,
+  label_by = cluster_50, color_by = cellont_name,
+  filename = "cell_types/unified"
 )
 
 
