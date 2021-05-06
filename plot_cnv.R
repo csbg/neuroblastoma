@@ -1,3 +1,7 @@
+# Plot copy number variations.
+#
+# @DEPI infercnv_output
+
 library(GenomeInfoDb)
 library(infercnv)
 library(RColorBrewer)
@@ -30,7 +34,7 @@ read_infercnv_data <- function(folder) {
   )
 }
 
-infercnv_data <- read_infercnv_data("data_generated/infercnv_output_v4")
+infercnv_data <- read_infercnv_data("data_generated/infercnv_output")
 nb_data <- readRDS("data_generated/metadata.rds")
 
 

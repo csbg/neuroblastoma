@@ -1,3 +1,11 @@
+# Analysis of copy number variations.
+#
+# Creates a folder `infercnv_output` with a range of output files. 
+#
+# @DEPI rna_integrated_monocle.rds
+# @DEPI metadata.rds
+# @DEPO infercnv_output
+
 library(monocle3)
 library(infercnv)
 library(testthat)
@@ -14,7 +22,7 @@ library(fs)
 root_dir <- "/media/AGFORTELNY/PROJECTS/Neuroblastoma/analysis/wolfgang/data_generated"
 
 # folder where infercnv results are saved
-out_dir <- path_join(c(root_dir, "infercnv_output_v4"))
+out_dir <- path_join(c(root_dir, "infercnv_output"))
 
 # posterior probabilities for filtering normal regions
 post_probs <- c(0.5, 0.4, 0.3, 0.2, 0.1)
