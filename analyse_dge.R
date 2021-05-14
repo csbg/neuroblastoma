@@ -599,7 +599,7 @@ plot_enrichr_dots <- function(data,
     )
   
   p <- 
-    ggplot(data_vis, aes(cluster, Term, size = -log10(Adjusted.P.value))) +
+    ggplot(data_vis, aes(contrast, Term, size = -log10(Adjusted.P.value))) +
     geom_point(aes(color = log10(Odds.Ratio))) +
     geom_point(data = data_vis %>% filter(is_significant), shape = 1) +
     scale_color_distiller(
@@ -609,7 +609,7 @@ plot_enrichr_dots <- function(data,
     ) +
     scale_size_area() +
     coord_fixed() +
-    facet_wrap(vars(contrast), drop = FALSE) +
+    facet_wrap(vars(cluster), drop = FALSE, nrow = 1) +
     labs(
       y = "",
       color = TeX("log_{10} (odds ratio)"),
@@ -625,6 +625,7 @@ plot_enrichr_dots <- function(data,
     ) +
     theme_bw() +
     theme(
+      axis.text.x = element_text(angle = 90),
       strip.background = element_blank(),
       strip.text = element_text(face = "bold")
     ) +
@@ -659,7 +660,8 @@ plot_enrichr_dots(enrichr_results,
                   height = 250)
 
 plot_enrichr_dots(enrichr_results,
-                  db = "MSigDB_Hallmark_2020")
+                  db = "MSigDB_Hallmark_2020",
+                  width = 420)
 
 
 
@@ -743,6 +745,8 @@ perform_gsea <- function(data, gene_sets) {
 
 enrichr_genesets <- get_enrichr_genesets(enrichr_dbs)
 gsea_results <- perform_gsea(dge_results_filtered_fgsea, enrichr_genesets)
+# gsea_results %>% saveRDS("~/Desktop/gsea_results.rds")
+# gsea_results <- readRDS("~/Desktop/gsea_results.rds")
 
 gsea_results %>%
   ggplot(aes(NES, -log10(padj))) +
@@ -757,8 +761,8 @@ gsea_results %>%
 #'
 #' @param data Results from `perform_gsea()`.
 #' @param db Enrichr database for which results should be plotted.
-#' @param top_n Only plot the terms with the highest NES per cluster.
-#' @param direction Include positively or negatively enriched terms.
+#' @param top_n_positive Only plot n terms with the highest NES per cluster.
+#' @param top_n_negative Only plot n terms with the lowest NES per cluster.
 #' @param max_p_adj Maximum adjusted p value and …
 #' @param min_NES minimum absolute NES required for bordered dots.
 #' @param filename Name of output file. If `"auto"`, derive from database name.
@@ -767,71 +771,79 @@ gsea_results %>%
 #' @return A ggplot object.
 plot_gsea_dots <- function(data,
                            db,
-                           top_n = 5,
-                           direction = c("positive", "negative"),
+                           top_n_positive = 5,
+                           top_n_negative = 5,
                            max_p_adj = 0.05,
                            min_abs_NES = 1,
                            filename = "auto",
                            ...) {
-  direction <- match.arg(direction)
-  
   data_selected <-
     data %>% 
-    mutate(direction = if_else(NES > 0, "positive", "negative")) %>% 
-    filter(db == {{db}}, direction == {{direction}})
+    filter(db == {{db}}, padj <= max_p_adj & abs(NES) >= min_abs_NES) %>% 
+    group_by(contrast, cluster)
   
-  top_terms <- 
+  top_terms_pos <- 
     data_selected %>% 
-    filter(padj <= max_p_adj & abs(NES) >= min_abs_NES) %>% 
-    group_by(contrast, cluster) %>%
-    slice_max(n = top_n, order_by = abs(NES), with_ties = FALSE) %>%
-    pull(pathway) %>% 
+    slice_max(n = top_n_positive, order_by = NES, with_ties = FALSE) %>%
+    pull(pathway) %>%
     unique()
   
+  top_terms_neg <- 
+    data_selected %>% 
+    slice_min(n = top_n_negative, order_by = NES, with_ties = FALSE) %>%
+    pull(pathway) %>%
+    unique()
+    
   data_vis <- 
     data_selected %>%
-    filter(pathway %in% top_terms) %>% 
+    ungroup() %>% 
+    filter(pathway %in% c(top_terms_pos, top_terms_neg)) %>% 
     mutate(
       is_significant =
         padj <= max_p_adj &
         abs(NES) >= min_abs_NES,
       pathway =
         as_factor(pathway) %>%
-        fct_reorder(abs(NES), max, na.rm = TRUE)
-    )
+        fct_reorder(NES, sum, na.rm = TRUE)
+      )
+  
+  color_limit <- max(abs(data_vis$NES))
   
   p <- 
-    ggplot(data_vis, aes(cluster, pathway, size = -log10(padj))) +
-    geom_point(aes(color = abs(NES))) +
+    ggplot(data_vis, aes(contrast, pathway, size = -log10(padj))) +
+    geom_point(aes(color = NES)) +
     geom_point(data = data_vis %>% filter(is_significant), shape = 1) +
     scale_color_distiller(
-      palette = "Purples",
+      palette = "PiYG",
       direction = 1,
-      limits = c(0, NA)
+      limits = c(-color_limit, color_limit)
     ) +
     scale_size_area() +
     coord_fixed() +
-    facet_wrap(vars(contrast), drop = FALSE) +
+    facet_wrap(vars(cluster), drop = FALSE, nrow = 1) +
     labs(
       y = "",
       color = "normalized\nenrichment\nscore",
       size = TeX("-log_{10} (p_{adj})"),
       title = str_glue("FGSEA results ({db})"),
       caption = str_glue(
-        "top {top_n} {direction}ly enriched terms per cluster; ",
+        "top {top_n_positive} positively and top {top_n_negative} negatively ",
+        "enriched terms per cluster; ",
         "bordered circles: adjusted p value <= {max_p_adj}, ",
         "absolute NES >= {min_abs_NES}"
       )
     ) +
     theme_bw() +
     theme(
+      axis.text.x = element_text(angle = 90),
+      panel.spacing = unit(0, "mm"),
       strip.background = element_blank(),
       strip.text = element_text(face = "bold")
     ) +
     NULL
   
   if (filename == "auto") {
-    filename <- str_glue("dge/gsea_{db}_{direction}")
+    filename <- str_glue("dge/gsea_{db}")
   }
   ggsave_default(filename, ...)
   p
@@ -839,57 +851,23 @@ plot_gsea_dots <- function(data,
 
 
 plot_gsea_dots(gsea_results,
-               db = "GO_Biological_Process_2018",
-               width = 400,
-               height = 350)
-plot_gsea_dots(gsea_results,
-               db = "GO_Biological_Process_2018",
-               direction = "negative",
-               width = 400,
-               height = 350)
-
-plot_gsea_dots(gsea_results,
-               db = "GO_Cellular_Component_2018",
-               width = 400)
-plot_gsea_dots(gsea_results,
-               db = "GO_Cellular_Component_2018",
-               direction = "negative",
-               width = 400)
-
-plot_gsea_dots(gsea_results,
-               db = "GO_Molecular_Function_2018",
-               width = 420)
-plot_gsea_dots(gsea_results,
-               db = "GO_Molecular_Function_2018",
-               direction = "negative",
-               width = 420)
-
-plot_gsea_dots(gsea_results,
-               db = "KEGG_2019_Human",
-               width = 400,
-               height = 350)
-plot_gsea_dots(gsea_results,
-               db = "KEGG_2019_Human",
-               direction = "negative",
-               width = 400,
-               height = 350)
-
-plot_gsea_dots(gsea_results,
-               db = "WikiPathways_2019_Human",
-               width = 420,
-               height = 250)
-plot_gsea_dots(gsea_results,
-               db = "WikiPathways_2019_Human",
-               direction = "negative",
-               width = 420,
-               height = 250)
-
-plot_gsea_dots(gsea_results,
-               db = "MSigDB_Hallmark_2020")
-plot_gsea_dots(gsea_results,
                db = "MSigDB_Hallmark_2020",
-               direction = "negative",)
+               width = 400)
 
+plot_gsea_dots(gsea_results,
+               db = "GO_Biological_Process_2018",
+               width = 600,
+               height = 600)
+
+plot_gsea_dots(gsea_results,
+               db = "KEGG_2019_Human",
+               width = 400,
+               height = 350)
+
+plot_gsea_dots(gsea_results,
+               db = "WikiPathways_2019_Human",
+               width = 800,
+               height = 400)
 
 
 
