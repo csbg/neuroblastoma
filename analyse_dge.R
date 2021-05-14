@@ -195,8 +195,9 @@ plot_volcano <- function(data,
                          min_abs_log_fc = 1,
                          min_freq = 0.1,
                          filename = NULL) {
-  group_left <- str_extract(contrast, "^[^_]+")
-  group_right <- str_extract(contrast, "[^_]$")
+  contrast_groups <- str_match(contrast, "(.+)_vs_(.+)")[1,]
+  group_left <- contrast_groups[2]
+  group_right <- contrast_groups[3]
   
   data_filtered <- 
     data %>%
@@ -311,8 +312,9 @@ plot_violin <- function(data,
                         top_n = 10,
                         direction = c("up", "down"),
                         filename = NULL) {
-  group_left <- str_extract(contrast, "^[^_]+")
-  group_right <- str_extract(contrast, "[^_]$")
+  contrast_groups <- str_match(contrast, "(.+)_vs_(.+)")[1,]
+  group_left <- contrast_groups[2]
+  group_right <- contrast_groups[3]
   direction <- match.arg(direction)
   
   top_genes <- 
@@ -392,8 +394,9 @@ plot_pbheatmap <- function(data,
                            top_n = Inf,
                            clusters = NULL,
                            filename = NULL) {
-  group_left <- str_extract(contrast, "^[^_]+")
-  group_right <- str_extract(contrast, "[^_]$")
+  contrast_groups <- str_match(contrast, "(.+)_vs_(.+)")[1,]
+  group_left <- contrast_groups[2]
+  group_right <- contrast_groups[3]
   
   top_genes <- 
     data %>% 
