@@ -113,19 +113,42 @@ filter_dge_results <- function(data,
                                min_abs_log_fc = 1,
                                min_freq = 0.1,
                                remove_ribosomal = TRUE) {
+  # lookup table of gene frequencies in groups
+  gene_frq <-
+    data %>% 
+    select(gene, cluster_id, ends_with("frq")) %>%
+    distinct() %>% 
+    pivot_longer(
+      ends_with("frq"),
+      names_to = "frq_col",
+      names_pattern = "(.+)\\.",
+      values_to = "frq"
+    )
+  
   res <-
     data %>%
-    filter(
-      (contrast == "II_vs_I"  & (II.frq >= min_freq  | I.frq >= min_freq)) |
-      (contrast == "III_vs_I" & (III.frq >= min_freq | I.frq >= min_freq)) |
-      (contrast == "IV_vs_I"  & (IV.frq >= min_freq  | I.frq >= min_freq))
+    extract(
+      contrast,
+      into = c("contrast_left", "contrast_right"),
+      regex = "(.+)_vs_(.+)",
+      remove = FALSE
+    ) %>% 
+    left_join(
+      gene_frq,
+      by = c("gene", "cluster_id", contrast_left = "frq_col")
+    ) %>%
+    left_join(
+      gene_frq,
+      by = c("gene", "cluster_id", contrast_right = "frq_col")
     ) %>%
     filter(
+      frq.x >= min_freq | frq.y >= min_freq,
       p_val <= max_p,
       p_adj.loc <= max_p_adj,
       abs(logFC) >= min_abs_log_fc
     ) %>% 
-    mutate(direction = if_else(logFC > 0, "up", "down"))
+    mutate(direction = if_else(logFC > 0, "up", "down")) %>% 
+    select(!c(matches("frq"), contrast_left, contrast_right))
   
   if (remove_ribosomal) {
     ribo_proteins <-
