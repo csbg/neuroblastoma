@@ -12,6 +12,58 @@ source("common_functions.R")
 
 
 
+# Functions ---------------------------------------------------------------
+
+#' Add subclusters to the NB cluster.
+#'
+#' @param metadata Cell metadata.
+#' @param cluster_col Column with supercluster IDs.
+#' @param nb_cluster_name Name of the NB cluster in this column.
+#' @param subcluster_file File with subcluster information.
+#'
+#' @return The dataframe passed as `metadata`, with the NB cluster in the column
+#'   given by `cluster_col` subdivided into subclusters.
+subdivide_tumor_cluster <- function(metadata,
+                                    cluster_col,
+                                    nb_cluster_name,
+                                    subcluster_file) {
+  subclusters <- 
+    read_csv(subcluster_file, col_types = "cc") %>% 
+    mutate(
+      tumor_subcluster =
+        as_factor(tumor_subcluster) %>%
+        fct_inseq() %>% 
+        fct_relabel(~str_glue("{str_sub(nb_cluster_name, end = -2L)}.{.})"))
+    )
+  
+  old_levels <-
+    metadata %>% 
+    pull({{cluster_col}}) %>% 
+    levels()
+  
+  tumor_cluster_pos <- str_which(old_levels, fixed(nb_cluster_name))
+  
+  new_levels <- c(
+    old_levels[1:(tumor_cluster_pos - 1)],
+    levels(subclusters$tumor_subcluster),
+    old_levels[(tumor_cluster_pos + 1):length(old_levels)]
+  )
+  
+  metadata %>% 
+    left_join(subclusters, by = "cell") %>%
+    mutate(
+      {{cluster_col}} :=
+        case_when(
+          {{cluster_col}} == nb_cluster_name ~ as.character(tumor_subcluster),
+          TRUE ~ as.character({{cluster_col}})
+        ) %>%
+        as_factor() %>%
+        fct_relevel(new_levels)
+    ) %>%
+    select(!tumor_subcluster)
+}
+
+
 # Load data ---------------------------------------------------------------
 
 nb <-
@@ -21,6 +73,11 @@ nb <-
 colData(nb) <-
   readRDS("data_generated/metadata.rds") %>%
   mutate(Size_Factor = colData(nb)$Size_Factor) %>% 
+  subdivide_tumor_cluster(
+    cluster_col = cellont_cluster,
+    nb_cluster_name = "NB (8)",
+    subcluster_file = "~/Desktop/nb_subclusters.csv"
+  ) %>% 
   column_to_rownames("cell") %>% 
   as("DataFrame")
 rowData(nb)[["gene_short_name"]] <- rownames(nb)
@@ -30,17 +87,6 @@ markers <- read_csv("metadata/cell_markers.csv", comment = "#")
 
 
 # Canonical cell type markers ---------------------------------------------
-
-cluster_info <-
-  read_csv("metadata/clusters.csv", comment = "#") %>%
-  mutate(
-    across(
-      !id,
-      ~as_factor(.) %>%
-        fct_relevel("T", "NK", "B", "M", "D", "E", "NB", "other")
-    )
-  )
-
 
 #' Plot manually selected canonical cell type markers for each cluster.
 #' Oder cluster by manually assigned cell types.
@@ -67,16 +113,12 @@ plot_canonical_markers <- function(cluster_col, filename = NULL) {
       yintercept = first(r) - 0.5,
       label_y = mean(r)
     )
-  
-  cluster_info <- 
-    cluster_info %>%
-    arrange({{cluster_col}}, id) %>%
-    filter(!is.na({{cluster_col}}))
-  
+
   x_annotation_data <-
-    cluster_info %>%
-    mutate(r = row_number()) %>%
-    group_by(label = {{cluster_col}}) %>%
+    tibble(level = levels(colData(nb)$cellont_cluster)) %>% 
+    extract(level, into = "label", regex = "(\\w+)") %>%
+    mutate(label = as_factor(label), r = row_number()) %>%
+    group_by(label) %>%
     summarize(
       xmin = first(r) - 0.5,
       xmax = last(r) + 0.5,
@@ -93,17 +135,10 @@ plot_canonical_markers <- function(cluster_col, filename = NULL) {
     plot_dots(
       logcounts(nb),
       rev(markers$gene),
-      fct_relevel(
-        colData(nb) %>% as_tibble() %>% pull({{cluster_col}}),
-        as.character(cluster_info$id)
-      ),
+      colData(nb) %>% as_tibble() %>% pull({{cluster_col}}),
       panel_annotation = x_annotation_data
     ) +
-    geom_text(
-      data = x_annotation_data,
-      aes(x = label_x, y = length(markers$gene) + 2, label = label),
-      size = 4
-    ) +
+    scale_x_discrete(labels = function(x) str_replace(x, " ", "\n")) +
     geom_hline(
       yintercept = y_annotation_data$yintercept,
       linetype = "dashed",
@@ -111,7 +146,11 @@ plot_canonical_markers <- function(cluster_col, filename = NULL) {
     ) +
     geom_text(
       data = y_annotation_data,
-      aes(x = nrow(cluster_info) + 2, y = label_y, label = label),
+      aes(
+        x = nlevels(colData(nb)$cellont_cluster) + 2,
+        y = label_y,
+        label = label
+      ),
       size = 4,
       hjust = 0
     ) +
@@ -122,8 +161,7 @@ plot_canonical_markers <- function(cluster_col, filename = NULL) {
   p
 }
 
-plot_canonical_markers(cluster_50, filename = "markers/overview_50")
-plot_canonical_markers(cluster_20, filename = "markers/overview_20")
+plot_canonical_markers(cellont_cluster, filename = "markers/overview")
 
 
 
@@ -264,16 +302,12 @@ plot_panglaodb_markers <- function(cell_type, cluster_col,
     missing_markers <- waiver()
 
   figure_height <- max(6 * length(known_markers), 70)
-
-  cluster_info <- 
-    cluster_info %>%
-    arrange({{cluster_col}}, id) %>%
-    filter(!is.na({{cluster_col}}))
   
   x_annotation_data <-
-    cluster_info %>%
-    mutate(r = row_number()) %>%
-    group_by(label = {{cluster_col}}) %>%
+    tibble(level = levels(colData(nb)$cellont_cluster)) %>% 
+    extract(level, into = "label", regex = "(\\w+)") %>%
+    mutate(label = as_factor(label), r = row_number()) %>%
+    group_by(label) %>%
     summarize(
       xmin = first(r) - 0.5,
       xmax = last(r) + 0.5,
@@ -290,17 +324,10 @@ plot_panglaodb_markers <- function(cell_type, cluster_col,
     plot_dots(
       counts,
       known_markers,
-      fct_relevel(
-        colData(nb) %>% as_tibble() %>% pull({{cluster_col}}),
-        as.character(cluster_info$id)
-      ),
+      colData(nb) %>% as_tibble() %>% pull({{cluster_col}}),
       panel_annotation = x_annotation_data
     ) +
-    geom_text(
-      data = x_annotation_data,
-      aes(x = label_x, y = length(known_markers) + 1, label = label),
-      size = 4
-    ) +
+    scale_x_discrete(labels = function(x) str_replace(x, " ", "\n")) +
     labs(
       title = cell_type,
       subtitle = "PanglaoDB canonical markers",
@@ -314,18 +341,11 @@ plot_panglaodb_markers <- function(cell_type, cluster_col,
 }
 
 
-plot_panglaodb_markers("B cells", cluster_50, folder = "panglaodb_50")
+plot_panglaodb_markers("B cells", cellont_cluster, folder = "panglaodb_50")
 
 walk(
   panglaodb_cell_types$cell_type,
   plot_panglaodb_markers,
   cluster_50,
   folder = "panglaodb_50"
-)
-
-walk(
-  panglaodb_cell_types$cell_type,
-  plot_panglaodb_markers,
-  cluster_20,
-  folder = "panglaodb_20"
 )

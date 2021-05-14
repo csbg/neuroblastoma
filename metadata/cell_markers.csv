@@ -1,6 +1,6 @@
 # Description: Cell type markers for tumor and NB cells
 # Sources:
-#   Dong: Table S2C from Dong et al., Cancer Cell 38, 716–733 (2020); DOI: 
+#   Dong: Table S2C from Dong et al., Cancer Cell 38, 716–733 (2020); DOI:
 #   Neildez-Nguyen: Table 1 from Neildez-Nguyen et al., Nat. Biotech. 20, 467–472 (2002); DOI: 10.1038/nbt0502-467
 #   Akashi: Figure 1 from Akashi et al, Nature 404, 193–197 (2000); DOI: 10.1038/35004599
 #     CMP is FCGR-/CD34+, GMP is FRGR+/CD34+, MEP is FCGR-/CD34-
@@ -42,8 +42,8 @@ plasmacytoid DC,NRP1,biotechne
 erythroblast,TFRC,Neildez-Nguyen
 erythroblast,GYPA,Neildez-Nguyen
 erythroblast,CD36,Neildez-Nguyen
-CMP,CD34,Akashi
-CMP,FCGR2A,Akashi
+HSC,CD34,Akashi
+HSC,FCGR2A,Akashi
 neuroblastoma,PHOX2B,Dong
 neuroblastoma,PHOX2A,Dong
 neuroblastoma,TH,Dong
