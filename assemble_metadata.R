@@ -176,10 +176,11 @@ add_subclusters <- function(df_metadata, subcluster_file) {
 #' @param df_metadata Dataframe returned by `load_cell_metadata()`.
 #' @param clusters Column with cluster IDs.
 #' @param ancestors Character vector with cell ontology IDs.
+#' @param abbrev Character vector with cell type abbreviations
 #'
-#' @return The dataframe provided by `df_metadata`, with two additional columns
-#'   `cellont_name` and `cellont_id`.
-add_unified_labels <- function(df_metadata, clusters, ancestors) {
+#' @return The dataframe provided by `df_metadata`, with three additional
+#'   columns `cellont_name`, `cellont_id`, and `cellont_cluster`.
+add_unified_labels <- function(df_metadata, clusters, ancestors, abbrev) {
   # get cell ontology IDs for cell type reference datasets
   reference_cell_types <-
     list(
@@ -196,9 +197,9 @@ add_unified_labels <- function(df_metadata, clusters, ancestors) {
   # add CO IDs of assigned cell types to each cell
   data_cellont <-
     df_metadata %>% 
-    select(cell, {{clusters}}, ends_with("fine")) %>%
+    select(cell, cluster_col = {{clusters}}, ends_with("fine")) %>%
     pivot_longer(
-      !c(cell, {{clusters}}),
+      !c(cell, cluster_col),
       names_to = "ref",
       values_to = "cell_type",
       names_pattern = "type_(.*)_fine"
@@ -231,13 +232,30 @@ add_unified_labels <- function(df_metadata, clusters, ancestors) {
     data_cellont %>% 
     left_join(common_ancestors, by = c(coid = "child")) %>% 
     replace_na(list(cellont_name = "other")) %>%
-    group_by({{clusters}}, cellont_name) %>%
+    group_by(cluster_col, cellont_name) %>%
     summarise(cellont_id = first(ancestor), n = n()) %>%
     slice_max(n, n = 1) %>% 
-    select(!n)
+    select(!n) %>% 
+    ungroup() %>% 
+    mutate(
+      cellont_name_short =
+        cellont_name %>%
+        as_factor() %>% 
+        fct_recode(!!!cell_type_abbreviations) %>%
+        fct_relevel(names(cell_type_abbreviations)),
+    ) %>%
+    arrange(cellont_name_short, cluster_col) %>% 
+    mutate(
+      cellont_cluster =
+        str_glue("{cellont_name_short} ({cluster_col})") %>%
+        as_factor()
+    ) %>% 
+    select(!cellont_name_short)
+  
+  join_by <- set_names("cluster_col", rlang::as_string(rlang::enexpr(clusters)))
   
   df_metadata %>%
-    left_join(unified_labels, by = rlang::as_string(rlang::enexpr(clusters)))
+    left_join(unified_labels, by = join_by)
 }
 
 
@@ -282,6 +300,17 @@ ancestors <- c(
   "CL:0008001"
 )
 
+cell_type_abbreviations <- c(
+  "T" = "T cell",
+  NK  = "natural killer cell",
+  B   = "B cell",
+  M   = "monocyte",
+  pDC = "plasmacytoid dendritic cell",
+  E   = "erythroid lineage cell",
+  SC  = "hematopoietic precursor cell",
+  NB  = "neuron"
+)
+
 singler_data <- map(
   dir_ls(folder, regex = "cell_types"),
   load_singler_data
@@ -292,7 +321,7 @@ nb_data <-
   modify_clusters() %>% 
   add_cell_types(singler_data) %>%
   add_subclusters(path_join(c(folder, subcluster_file))) %>% 
-  add_unified_labels(cluster_50, ancestors)
+  add_unified_labels(cluster_50, ancestors, cell_type_abbreviations)
 
 
 
