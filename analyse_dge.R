@@ -278,41 +278,6 @@ plot_volcano(dge_results, "IV_vs_I", filename = "dge/volcano_IV")
 
 
 
-## Upset plot ----
-
-#' Plot an upset plot showing how many DGE genes are shared between the
-#' clusters.
-#'
-#' @param data A DGE dataset.
-#' @param contrast A contrast present in the dataset.
-#' @param filename Name of output file.
-#'
-#' @return An object of class Heatmap.
-plot_upset <- function(data, contrast, filename = NULL) {
-  p <-
-    data %>%
-    filter(contrast == {{contrast}}) %>%
-    select(cluster_id, gene) %>%
-    chop(gene) %>%
-    deframe() %>%
-    make_comb_mat() %>% 
-    UpSet(
-      comb_order = order(comb_size(.), decreasing = TRUE),
-      comb_col = viridis(nrow(.))[comb_degree(.)],
-      column_title = "Number of DE genes shared between clusters",
-      row_title = "cluster"
-    )
-  
-  ggsave_default(filename, plot = p, width = 297, height = 100)
-  p
-}
-
-plot_upset(dge_results_filtered, "II_vs_I", filename = "dge/upset_II")
-plot_upset(dge_results_filtered, "III_vs_I", filename = "dge/upset_III")
-plot_upset(dge_results_filtered, "IV_vs_I", filename = "dge/upset_IV")
-
-
-
 ## Violin plot ----
 
 #' Title
