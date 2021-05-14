@@ -3,6 +3,7 @@
 # @DEPI rna_decontaminated.rds
 # @DEPI metadata.rds
 
+library(monocle3)
 library(muscat)
 library(scater)
 library(tidyverse)
@@ -40,21 +41,13 @@ nb@colData <-
   as("DataFrame")
 rowData(nb)[["gene_short_name"]] <- rownames(nb)
 
-# for k=50, cluster 8 comprises a few cells in group I
-ignored_barcodes <-
-  colData(nb) %>%
-  as_tibble(rownames = "cell") %>% 
-  filter(cluster_50 == "8", group == "I") %>%
-  pull(cell)
-nb <- nb[, !colnames(nb) %in% ignored_barcodes]
-
 
 
 # DGE analysis ------------------------------------------------------------
 
 nb <- prepSCE(
   nb,
-  kid = "cluster_50",
+  kid = "cellont_cluster",
   gid = "group",
   sid = "sample",
   drop = TRUE
@@ -95,7 +88,7 @@ dge_results <-
     cluster_id =
       as_factor(cluster_id) %>%
       fct_expand(levels(colData(nb)$cluster_id)) %>%
-      fct_inseq()
+      fct_relevel(levels(colData(nb)$cluster_id))
   )
 
 
@@ -123,10 +116,9 @@ filter_dge_results <- function(data,
   res <-
     data %>%
     filter(
-      I.frq >= min_freq |
-      (contrast == "II_vs_I" & II.frq >= min_freq) |
-      (contrast == "III_vs_I" & III.frq >= min_freq) |
-      (contrast == "IV_vs_I" & IV.frq >= min_freq)
+      (contrast == "II_vs_I"  & (II.frq >= min_freq  | I.frq >= min_freq)) |
+      (contrast == "III_vs_I" & (III.frq >= min_freq | I.frq >= min_freq)) |
+      (contrast == "IV_vs_I"  & (IV.frq >= min_freq  | I.frq >= min_freq))
     ) %>%
     filter(
       p_val <= max_p,
