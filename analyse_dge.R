@@ -17,6 +17,7 @@ library(scico)
 library(fgsea)
 library(msigdbr)
 library(openxlsx)
+library(ggrepel)
 source("common_functions.R")
 
 
@@ -1057,3 +1058,135 @@ freezePane(wb, "gsea", firstRow = TRUE)
 
 # save file
 saveWorkbook(wb, "plots/dge/dge_data.xlsx", overwrite = TRUE)
+
+
+
+# DGE in tumor cluster ----------------------------------------------------
+
+# preprocessing as above
+nb_tumor <-
+  nb[, colData(nb)$group_id != "I" & colData(nb)$cluster_id == "NB"] %>% 
+  prepSCE()
+
+pb_tumor <- aggregateData(nb_tumor, assay = "counts")
+
+model_mat_tumor <- model.matrix(
+  ~ 0 + group_id,
+  data =
+    metadata(pb_tumor)$experiment_info %>%
+    mutate(group_id = fct_drop(group_id)) %>% 
+    column_to_rownames("sample_id")
+)
+
+colnames(model_mat_tumor) <- str_sub(colnames(model_mat_tumor), start = 9L)
+
+# perform DGE
+dge_results_tumor <-
+  pb_tumor %>% 
+  pbDS(
+    design = model_mat_tumor,
+    contrast = limma::makeContrasts(
+      II_vs_III = II - III,
+      II_vs_IV = II - IV,
+      III_vs_IV = III - IV,
+      levels = model_mat_tumor
+    ),
+    min_cells = 1
+  ) %>% 
+  {resDS(nb_tumor, ., frq = TRUE)} %>%
+  as_tibble()
+
+# filter results
+dge_results_filtered_tumor <- filter_dge_results(dge_results_tumor)
+dge_results_filtered_gsea_tumor <- filter_dge_results(
+  dge_results_tumor,
+  max_p_adj = Inf,
+  min_abs_log_fc = 0
+)
+
+# plot results
+plot_volcano(dge_results_tumor, "II_vs_IV", "dge/volcano_tumor_II_vs_IV")
+plot_volcano(dge_results_tumor, "II_vs_III", "dge/volcano_tumor_II_vs_III")
+plot_volcano(dge_results_tumor, "III_vs_IV", "dge/volcano_tumor_III_vs_IV")
+
+plot_violin(
+  dge_results_filtered_tumor,
+  contrast = "II_vs_IV",
+  cluster = "NB",
+  direction = "up",
+  top_n = Inf,
+  filename = "dge/violin_tumor_II_vs_IV_up"
+)
+plot_violin(
+  dge_results_filtered_tumor,
+  contrast = "II_vs_IV",
+  cluster = "NB",
+  direction = "down",
+  top_n = Inf,
+  filename = "dge/violin_tumor_II_vs_IV_down"
+)
+
+pb_log_tumor <- aggregateData(
+  nb_tumor,
+  assay = "logcounts",
+  fun = "mean",
+  by = c("cluster_id", "sample_id")
+)
+
+plot_pbheatmap(dge_results_filtered_tumor, pb_log_tumor,
+               contrast = "II_vs_IV", filename = "dge/heatmap_tumor_II_vs_IV")
+
+# GSEA analysis
+gsea_results_tumor <- perform_gsea(
+  dge_results_filtered_gsea_tumor,
+  enrichr_genesets
+)
+
+plot_gsea_dots(gsea_results_tumor,
+               db = "MSigDB_Hallmark_2020",
+               height = 80,
+               filename = "dge/gsea_tumor_MSigDB_Hallmark_2020")
+
+plot_gsea_dots(gsea_results_tumor,
+               db = "GO_Biological_Process_2018",
+               height = 150,
+               filename = "dge/gsea_tumor_GO_Biological_Process_2018")
+
+plot_gsea_dots(gsea_results_tumor,
+               db = "KEGG_2019_Human",
+               height = 80,
+               filename = "dge/gsea_tumor_KEGG_2019_Human")
+
+plot_gsea_dots(gsea_results_tumor,
+               db = "WikiPathways_2019_Human",
+               height = 60,
+               filename = "dge/gsea_tumor_WikiPathways_2019_Human")
+
+plot_gsea_dots(gsea_results_tumor,
+               db = "TRRUST_Transcription_Factors_2019",
+               height = 60,
+               filename = "dge/gsea_tumor_TRRUST_Transcription_Factors_2019")
+
+
+dge_results_tumor %>% 
+  filter(contrast == "II_vs_IV") %>% 
+  inner_join(
+    read_csv("metadata/rifatbegovic2018_table_s5.csv", comment = "#")
+  ) %>% 
+  rename(logfc_sc = logFC, q_sc = p_adj.loc, logfc_bulk = logfc, q_bulk = q) %>% 
+  ggplot(aes(logfc_sc, logfc_bulk)) +
+  geom_point(aes(size = -log10(q_sc)), alpha = .5) +
+  geom_smooth(method = "lm") +
+  geom_text_repel(aes(label = gene), seed = 42) +
+  scale_radius(range = c(0.5, 6)) +
+  coord_fixed() +
+  labs(
+    x = "log FC (scRNA-seq)",
+    y = "log FC (bulk)",
+    size = TeX("-log_{10} (p_{adj})"),
+    caption = "bulk values: Table S5 from Rifatbegovic et al 2018"
+  ) +
+  theme_bw()
+
+ggsave_default("dge/mycn_bulk_vs_sc")
+
