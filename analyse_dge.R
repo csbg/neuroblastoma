@@ -47,7 +47,7 @@ rowData(nb)[["gene_short_name"]] <- rownames(nb)
 
 nb <- prepSCE(
   nb,
-  kid = "cellont_cluster",
+  kid = "cellont_abbr",  # use cellont_cluster for DGE on cluster level
   gid = "group",
   sid = "sample",
   drop = TRUE
@@ -167,7 +167,7 @@ filter_dge_results <- function(data,
 dge_results_filtered <- filter_dge_results(dge_results)
 
 # for GSEA, only remove low-frequent and ribosomal genes
-dge_results_filtered_fgsea <- filter_dge_results(
+dge_results_filtered_gsea <- filter_dge_results(
   dge_results,
   max_p_adj = Inf,
   min_abs_log_fc = 0
@@ -770,20 +770,29 @@ perform_gsea <- function(data, gene_sets) {
     )
 }
 
+# already defined in secion 'enrichment analysis',
+# but we repeat it here for convenience
+enrichr_dbs <- c(
+  "GO_Biological_Process_2018",
+  "GO_Cellular_Component_2018",
+  "GO_Molecular_Function_2018",
+  "KEGG_2019_Human",
+  "WikiPathways_2019_Human",
+  "MSigDB_Hallmark_2020",
+  "TRRUST_Transcription_Factors_2019"
+)
 
 enrichr_genesets <- get_enrichr_genesets(enrichr_dbs)
 
 # remove mouse genes from TTRUST database
-keep_ttrust <-
-  enrichr_genesets$TRRUST_Transcription_Factors_2019 %>%
-  imap_lgl(~str_detect(.y, "human"))
 enrichr_genesets$TRRUST_Transcription_Factors_2019 <-
-  enrichr_genesets$TRRUST_Transcription_Factors_2019[keep_ttrust]
+  enrichr_genesets$TRRUST_Transcription_Factors_2019 %>% 
+  magrittr::extract(imap_lgl(., ~str_detect(.y, "human"))) %>% 
+  set_names(str_extract, "\\w+")
 
-gsea_results <- perform_gsea(dge_results_filtered_fgsea, enrichr_genesets)
+gsea_results <- perform_gsea(dge_results_filtered_gsea, enrichr_genesets)
 # gsea_results %>% saveRDS("~/Desktop/gsea_results.rds")
 # gsea_results <- readRDS("~/Desktop/gsea_results.rds")
-
 
 gsea_results %>%
   ggplot(aes(NES, -log10(padj))) +
@@ -876,7 +885,7 @@ plot_gsea_dots <- function(data,
       y = "",
       color = "normalized\nenrichment\nscore",
       size = TeX("-log_{10} (p_{adj})"),
-      title = str_glue("FGSEA results ({db})"),
+      title = str_glue("GSEA results ({db})"),
       caption = str_glue(
         "top {top_n_positive} positively and top {top_n_negative} negatively ",
         "enriched terms per cluster; ",
@@ -908,23 +917,23 @@ plot_gsea_dots(gsea_results,
 
 plot_gsea_dots(gsea_results,
                db = "GO_Biological_Process_2018",
-               width = 600,
-               height = 700)
+               width = 400,
+               height = 500)
 
 plot_gsea_dots(gsea_results,
                db = "KEGG_2019_Human",
                width = 400,
-               height = 400)
+               height = 300)
 
 plot_gsea_dots(gsea_results,
                db = "WikiPathways_2019_Human",
-               width = 800,
-               height = 400)
+               width = 400,
+               height = 300)
 
 plot_gsea_dots(gsea_results,
                db = "TRRUST_Transcription_Factors_2019",
-               height = 400,
-               width = 400)
+               width = 400,
+               height = 300)
 
 # sample plots for selecting the top 10 enriched terms
 # plot_gsea_dots(gsea_results,
@@ -1020,7 +1029,7 @@ writeData(wb, "enrichr", table_data, headerStyle = header_style)
 freezePane(wb, "enrichr", firstRow = TRUE)
 
 
-# workbook with fgsea results
+# workbook with GSEA results
 table_data <- 
   gsea_results %>% 
   select(
@@ -1032,12 +1041,12 @@ table_data <-
   ungroup() %>% 
   filter(abs(NES) >= 1) %>%
   arrange(db, contrast, cluster, desc(NES))
-addWorksheet(wb, "fgsea")
-writeData(wb, "fgsea", table_data, headerStyle = header_style)
-freezePane(wb, "fgsea", firstRow = TRUE)
+addWorksheet(wb, "gsea")
+writeData(wb, "gsea", table_data, headerStyle = header_style)
+freezePane(wb, "gsea", firstRow = TRUE)
 
 
-# workbook with leading edge genes from FGSEA
+# workbook with leading edge genes from GSEA
 # addWorksheet(wb, "gsea_genes")
 # writeData(wb, "gsea_genes", gsea_genes, headerStyle = header_style)
 # freezePane(wb, "gsea_genes", firstRow = TRUE)
