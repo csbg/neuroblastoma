@@ -562,8 +562,10 @@ enrichr_dbs <- c(
   "GO_Molecular_Function_2018",
   "KEGG_2019_Human",
   "WikiPathways_2019_Human",
-  "MSigDB_Hallmark_2020"
+  "MSigDB_Hallmark_2020",
+  "TRRUST_Transcription_Factors_2019"
 )
+
 enrichr_results <- enrich_all_genes(dge_results_filtered, enrichr_dbs)
 
 
@@ -770,9 +772,18 @@ perform_gsea <- function(data, gene_sets) {
 
 
 enrichr_genesets <- get_enrichr_genesets(enrichr_dbs)
+
+# remove mouse genes from TTRUST database
+keep_ttrust <-
+  enrichr_genesets$TRRUST_Transcription_Factors_2019 %>%
+  imap_lgl(~str_detect(.y, "human"))
+enrichr_genesets$TRRUST_Transcription_Factors_2019 <-
+  enrichr_genesets$TRRUST_Transcription_Factors_2019[keep_ttrust]
+
 gsea_results <- perform_gsea(dge_results_filtered_fgsea, enrichr_genesets)
 # gsea_results %>% saveRDS("~/Desktop/gsea_results.rds")
 # gsea_results <- readRDS("~/Desktop/gsea_results.rds")
+
 
 gsea_results %>%
   ggplot(aes(NES, -log10(padj))) +
@@ -782,8 +793,10 @@ gsea_results %>%
 
 #' Generate a dotplot for terms enriched by GSEA.
 #' 
-#' Dots that meet given limits of adjusted p value and normalized enrichment
-#' score (NES) are bordered.
+#' Select the top "important" terms (i.e., terms that meet given limits of
+#' adjusted p-value and normalized enrichment score, NES) per contrast and
+#' cluster. Plot dots for these terms in all conditions, border the important
+#' ones.
 #'
 #' @param data Results from `perform_gsea()`.
 #' @param db Enrichr database for which results should be plotted.
@@ -797,46 +810,58 @@ gsea_results %>%
 #' @return A ggplot object.
 plot_gsea_dots <- function(data,
                            db,
-                           top_n_positive = 5,
-                           top_n_negative = 5,
+                           top_n_positive = 5L,
+                           top_n_negative = 5L,
                            max_p_adj = 0.05,
                            min_abs_NES = 1,
                            filename = "auto",
                            ...) {
-  data_selected <-
+  data_top_terms <-
     data %>% 
-    filter(db == {{db}}, padj <= max_p_adj & abs(NES) >= min_abs_NES) %>% 
+    filter(db == {{db}}, padj <= max_p_adj, abs(NES) >= min_abs_NES) %>% 
     group_by(contrast, cluster)
   
   top_terms_pos <- 
-    data_selected %>% 
+    data_top_terms %>% 
     slice_max(n = top_n_positive, order_by = NES, with_ties = FALSE) %>%
     pull(pathway) %>%
     unique()
   
   top_terms_neg <- 
-    data_selected %>% 
+    data_top_terms %>% 
     slice_min(n = top_n_negative, order_by = NES, with_ties = FALSE) %>%
     pull(pathway) %>%
     unique()
     
   data_vis <- 
-    data_selected %>%
-    ungroup() %>% 
-    filter(pathway %in% c(top_terms_pos, top_terms_neg)) %>% 
+    data %>% 
+    filter(db == {{db}}, pathway %in% c(top_terms_pos, top_terms_neg)) %>% 
     mutate(
       is_significant =
         padj <= max_p_adj &
         abs(NES) >= min_abs_NES,
       pathway =
         as_factor(pathway) %>%
-        fct_reorder(NES, sum, na.rm = TRUE)
+        # fct_reorder(NES * is_significant, sum, na.rm = TRUE)
+        fct_reorder(NES * -log10(padj), sum, na.rm = TRUE)
       )
   
+  if (nlevels(data_vis$pathway) > 5) {
+    horizontal_grid <-
+      geom_hline(
+        yintercept = seq(5, nlevels(data_vis$pathway), 5),
+        size = 0.5,
+        color = "grey92"
+      )
+  } else {
+    horizontal_grid <- NULL  
+  }
   color_limit <- max(abs(data_vis$NES))
   
   p <- 
     ggplot(data_vis, aes(contrast, pathway, size = -log10(padj))) +
+    scale_y_discrete() +
+    horizontal_grid +    
     geom_point(aes(color = NES)) +
     geom_point(data = data_vis %>% filter(is_significant), shape = 1) +
     scale_color_distiller(
@@ -846,7 +871,7 @@ plot_gsea_dots <- function(data,
     ) +
     scale_size_area() +
     coord_fixed() +
-    facet_wrap(vars(cluster), drop = FALSE, nrow = 1) +
+    facet_wrap(vars(cluster), nrow = 1) +
     labs(
       y = "",
       color = "normalized\nenrichment\nscore",
@@ -862,6 +887,7 @@ plot_gsea_dots <- function(data,
     theme_bw() +
     theme(
       axis.text.x = element_text(angle = 90),
+      panel.grid = element_blank(),
       panel.spacing = unit(0, "mm"),
       strip.background = element_blank(),
       strip.text = element_text(face = "bold")
@@ -883,17 +909,38 @@ plot_gsea_dots(gsea_results,
 plot_gsea_dots(gsea_results,
                db = "GO_Biological_Process_2018",
                width = 600,
-               height = 600)
+               height = 700)
 
 plot_gsea_dots(gsea_results,
                db = "KEGG_2019_Human",
                width = 400,
-               height = 350)
+               height = 400)
 
 plot_gsea_dots(gsea_results,
                db = "WikiPathways_2019_Human",
                width = 800,
                height = 400)
+
+plot_gsea_dots(gsea_results,
+               db = "TRRUST_Transcription_Factors_2019",
+               height = 400,
+               width = 400)
+
+# sample plots for selecting the top 10 enriched terms
+# plot_gsea_dots(gsea_results,
+#                db = "GO_Biological_Process_2018",
+#                top_n_positive = 10L,
+#                top_n_negative = 10L,
+#                width = 600,
+#                height = 800,
+#                filename = "dge/gsea_GO_Biological_Process_2018_10")
+# 
+# plot_gsea_dots(gsea_results,
+#                db = "MSigDB_Hallmark_2020",
+#                top_n_positive = 10L,
+#                top_n_negative = 10L,
+#                width = 400,
+#                filename = "dge/gsea_MSigDB_Hallmark_2020_10")
 
 
 
