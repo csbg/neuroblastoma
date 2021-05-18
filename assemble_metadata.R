@@ -178,8 +178,8 @@ add_subclusters <- function(df_metadata, subcluster_file) {
 #' @param ancestors Character vector with cell ontology IDs.
 #' @param abbrev Character vector with cell type abbreviations
 #'
-#' @return The dataframe provided by `df_metadata`, with three additional
-#'   columns `cellont_name`, `cellont_id`, and `cellont_cluster`.
+#' @return The dataframe provided by `df_metadata`, with four additional columns
+#'   `cellont_name`, `cellont_abbr`, `cellont_id`, and `cellont_cluster`.
 add_unified_labels <- function(df_metadata, clusters, ancestors, abbrev) {
   # get cell ontology IDs for cell type reference datasets
   reference_cell_types <-
@@ -238,20 +238,18 @@ add_unified_labels <- function(df_metadata, clusters, ancestors, abbrev) {
     select(!n) %>% 
     ungroup() %>% 
     mutate(
-      cellont_name_short =
+      cellont_abbr =
         cellont_name %>%
         as_factor() %>% 
         fct_recode(!!!cell_type_abbreviations) %>%
         fct_relevel(names(cell_type_abbreviations)),
     ) %>%
-    arrange(cellont_name_short, cluster_col) %>% 
+    arrange(cellont_abbr, cluster_col) %>% 
     mutate(
       cellont_cluster =
-        str_glue("{cellont_name_short} ({cluster_col})") %>%
+        str_glue("{cellont_abbr} ({cluster_col})") %>%
         as_factor()
-    ) %>% 
-    select(!cellont_name_short)
-  
+    )
   join_by <- set_names("cluster_col", rlang::as_string(rlang::enexpr(clusters)))
   
   df_metadata %>%
