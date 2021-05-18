@@ -41,13 +41,22 @@ nb@colData <-
   as("DataFrame")
 rowData(nb)[["gene_short_name"]] <- rownames(nb)
 
+# clusters that contain more than 1% of total cells
+used_clusters <- 
+  colData(nb) %>% 
+  as_tibble() %>%
+  count(cellont_cluster) %>% 
+  mutate(n = n / sum(n)) %>% 
+  filter(n > 0.01) %>% 
+  pull(cellont_cluster)
+
 
 
 # DGE analysis ------------------------------------------------------------
 
-nb <- prepSCE(
-  nb,
-  kid = "cellont_abbr",  # use cellont_cluster for DGE on cluster level
+nb <- prepSCE(                                           # on cluster level,
+  nb[, colData(nb)$cellont_cluster %in% used_clusters],  # use nb
+  kid = "cellont_abbr",                                  # and cellont_cluster 
   gid = "group",
   sid = "sample",
   drop = TRUE
@@ -906,33 +915,28 @@ plot_gsea_dots <- function(data,
   if (filename == "auto") {
     filename <- str_glue("dge/gsea_{db}")
   }
-  ggsave_default(filename, ...)
+  ggsave_default(filename, width = 400, ...)
   p
 }
 
 
 plot_gsea_dots(gsea_results,
-               db = "MSigDB_Hallmark_2020",
-               width = 400)
+               db = "MSigDB_Hallmark_2020")
 
 plot_gsea_dots(gsea_results,
                db = "GO_Biological_Process_2018",
-               width = 400,
                height = 500)
 
 plot_gsea_dots(gsea_results,
                db = "KEGG_2019_Human",
-               width = 400,
                height = 300)
 
 plot_gsea_dots(gsea_results,
                db = "WikiPathways_2019_Human",
-               width = 400,
                height = 300)
 
 plot_gsea_dots(gsea_results,
                db = "TRRUST_Transcription_Factors_2019",
-               width = 400,
                height = 300)
 
 # sample plots for selecting the top 10 enriched terms
