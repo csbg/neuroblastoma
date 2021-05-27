@@ -76,7 +76,7 @@ colData(nb) <-
   subdivide_tumor_cluster(
     cluster_col = cellont_cluster,
     nb_cluster_name = "NB (8)",
-    subcluster_file = "~/Desktop/nb_subclusters.csv"
+    subcluster_file = "metadata/nb_subclusters.csv"
   ) %>% 
   column_to_rownames("cell") %>% 
   as("DataFrame")
@@ -341,11 +341,11 @@ plot_panglaodb_markers <- function(cell_type, cluster_col,
 }
 
 
-plot_panglaodb_markers("B cells", cellont_cluster, folder = "panglaodb_50")
+plot_panglaodb_markers("B cells", cellont_cluster, folder = "panglaodb")
 
 walk(
   panglaodb_cell_types$cell_type,
   plot_panglaodb_markers,
   cluster_50,
-  folder = "panglaodb_50"
+  folder = "panglaodb"
 )

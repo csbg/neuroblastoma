@@ -103,33 +103,21 @@ plot_conserved_markers <- function(data,
   sort_col <- "t.summary.logFC"
   prefix <- "t.logFC."
 
-  cluster_info <-
-    read_csv("metadata/clusters.csv", comment = "#") %>%
-    filter(!is.na({{id_col}})) %>% 
-    mutate(
-      cell_type =
-        as_factor({{id_col}}) %>%
-        fct_relevel("T", "NK", "B", "M", "D", "E", "NB", "other")
-    ) %>%
-    arrange(cell_type, id) %>%
-    mutate(id = as_factor(id) %>% fct_inorder())
-
   dge_df <-
     markers[[pval_type]][[group]] %>%
     as_tibble(rownames = "gene") %>%
     filter(p.value < pval_max) %>%
     slice_head(n = n_genes) %>%
     arrange(desc(!!sym(sort_col)))
-
+  
   dge_matrix <-
     dge_df %>%
     select(gene, starts_with(prefix)) %>%
     rename_with(~str_replace(.x, prefix, "")) %>%
     mutate({{group}} := NA_real_) %>%
     column_to_rownames("gene") %>%
-    as.matrix() %>%
-    magrittr::extract(, levels(cluster_info$id))
-
+    as.matrix()
+ 
   break_max <- quantile(dge_matrix, 0.95, na.rm = TRUE)
 
   heatmap <- Heatmap(
@@ -140,36 +128,19 @@ plot_conserved_markers <- function(data,
     ),
     cluster_columns = FALSE,
     cluster_rows = FALSE,
-    name = "log FC",
-    top_annotation = HeatmapAnnotation(
-      "cell type" =
-        cluster_info %>%
-        filter(id %in% colnames(dge_matrix)) %>%
-        pull(cell_type),
-      col = list("cell type" = c(
-        "T" = "#1f78b4",
-        NK = "#a6cee3",
-        B = "#33a02c",
-        M = "#ff7f00",
-        NB = "#e31a1c",
-        E = "#b15928",
-        other = "#6a3d9a",
-        D = "#fdbf6f"
-      ))
-    )
+    name = "log FC"
   )
 
-  p <- wrap_plots(
-    grid.grabExpr(draw(heatmap, merge_legend = TRUE)),
-    plot_dots(
-      logcounts(data),
-      rownames(dge_matrix) %>% rev(),
-      fct_relevel(
-        colData(data) %>% as_tibble() %>% pull({{id_col}}),
-        levels(cluster_info$id)
-      )
-    )
-  ) +
+  p <-
+    wrap_plots(
+      grid.grabExpr(draw(heatmap, merge_legend = TRUE)),
+      plot_dots(
+        logcounts(data),
+        rownames(dge_matrix) %>% rev(),
+        colData(data) %>% as_tibble() %>% pull({{id_col}})
+      ) +
+        scale_x_discrete(labels = function(x) str_replace(x, " ", "\n"))
+    ) +
     plot_annotation(
       str_glue("Cluster {group} in {rlang::as_string(ensym(id_col))}")
     )
@@ -181,28 +152,27 @@ plot_conserved_markers <- function(data,
 
 # Analysis ----------------------------------------------------------------
 
-conmarkers_clusters <- assemble_markers(
-  nb,
-  colData(nb)$cluster_50,
-  pval_types = "any"
-)
+# conmarkers_clusters <- assemble_markers(
+#   nb,
+#   colData(nb)$cellont_cluster,
+#   pval_types = "any"
+# )
 
 # test plotting function
 plot_conserved_markers(nb, conmarkers_clusters,
-                       group = "8", id_col = cluster_50,
-                       filename = "markers/conserved_50/cluster_8")
+                       group = "NB (8)", id_col = cellont_cluster)
 
 # make all plots
 walk(
-  levels(colData(nb)$cluster_50),
+  levels(colData(nb)$cellont_cluster),
   function(cluster) {
     message("Plotting cluster ", cluster)
     plot_conserved_markers(
       nb,
       conmarkers_clusters,
       group = cluster,
-      id_col = cluster_50,
-      filename = str_glue("markers/conserved_50/cluster_{cluster}")
+      id_col = cellont_cluster,
+      filename = str_glue("markers/conserved/cluster_{cluster}")
     )
   }
 )
@@ -213,7 +183,7 @@ header_style <- createStyle(textDecoration = "bold")
 wb <- createWorkbook()
 
 walk(
-  levels(colData(nb)$cluster_50),
+  levels(colData(nb)$cellont_cluster),
   function(cluster) {
     table_data <-
       conmarkers_clusters$any[[cluster]] %>% 
@@ -226,4 +196,4 @@ walk(
   }
 )
 
-saveWorkbook(wb, "plots/markers/conserved_50/genes.xlsx", overwrite = TRUE)
+saveWorkbook(wb, "plots/markers/conserved/genes.xlsx", overwrite = TRUE)
