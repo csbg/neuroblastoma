@@ -1190,3 +1190,70 @@ dge_results_tumor %>%
 
 ggsave_default("dge/mycn_bulk_vs_sc")
 
+
+
+# LogFC correlation -------------------------------------------------------
+
+#' Plot a Heatmap showing correlations of log fold changes.
+#'
+#' @param data DGE results.
+#' @param filename Name of output file.
+#'
+#' @return A Heatmap object.
+plot_logfc_correlation_heatmap <- function(data, filename = NULL) {
+  corr_mat <- 
+    data %>% 
+    select(gene, cluster_id, contrast, logFC) %>%
+    extract(contrast, "contrast") %>% 
+    unite(cluster_id, contrast, col = "cluster_group") %>% 
+    pivot_wider(names_from = "cluster_group", values_from = "logFC") %>%
+    select(!gene) %>%
+    cor(use = "pairwise.complete.obs")
+  
+  p <- Heatmap(
+    corr_mat,
+    col = circlize::colorRamp2(
+      seq(0, max(corr_mat[lower.tri(corr_mat)]), length.out = 9),
+      scico(9, palette = "davos", direction = -1),
+    ),
+    name = "correlation"
+  )
+  ggsave_default(filename, plot = p, width = 130, height = 110)
+  p
+}
+
+plot_logfc_correlation_heatmap(dge_results,
+                               filename = "dge/logfc_correlation_heatmap")
+
+
+#' Scatter plots of gene expression log-flod change in two clusters.
+#'
+#' @param data DGE results.
+#' @param x Cluster on x-axis.
+#' @param y Cluster on y-axis.
+#' @param filename 
+#'
+#' @param filename Name of output file.
+#'
+#' @return A ggplot object.
+plot_logfc_correlation_scatter <- function(data, x, y, filename = NULL) {
+  p <-
+    data %>% 
+    select(gene, cluster_id, contrast, logFC) %>%
+    extract(contrast, "contrast") %>% 
+    unite(cluster_id, contrast, col = "cluster_group") %>% 
+    pivot_wider(names_from = "cluster_group", values_from = "logFC") %>% 
+    ggplot(aes({{x}}, {{y}})) +
+    geom_point(alpha = .1) +
+    geom_smooth(method = "lm") +
+    coord_fixed() +
+    theme_bw()
+  
+  ggsave_default(filename, height = 100)
+  p
+}
+
+plot_logfc_correlation_scatter(dge_results, NK_III, E_II,
+                               filename = "dge/logfc_correlation_example_1")
+plot_logfc_correlation_scatter(dge_results, NK_III, T_III,
+                               filename = "dge/logfc_correlation_example_2")
