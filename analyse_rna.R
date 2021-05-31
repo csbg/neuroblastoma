@@ -11,6 +11,7 @@ library(egg)
 library(fs)
 library(bluster)
 library(ggbeeswarm)
+library(latex2exp)
 source("common_functions.R")
 
 
@@ -926,6 +927,141 @@ walk(
 
 
 
+# Cell type abundance -----------------------------------------------------
+
+nb_data %>%
+  group_by(group, sample, cellont_name) %>% 
+  summarise(n = n()) %>% 
+  mutate(n_rel = n / sum(n)) %>% 
+  ungroup() %>% 
+  filter(cellont_name == "natural killer cell") %>% 
+  mutate(sample = fct_rev(sample)) %>% 
+  ggplot(aes(sample, n_rel)) +
+  geom_col(aes(fill = group)) +
+  coord_flip() +
+  ylab("fraction of total cells") +
+  theme_bw() +
+  theme(panel.grid.major.y = element_blank()) +
+  NULL
+ggsave_default("cell_types/abundances_NK", width = 100, height = 80)
+
+
+#' Determine the enrichment of a cell type in a sample via Fisher's exact test.
+#'
+#' @param sample Sample.
+#' @param cellont_abbr Cell type.
+#'
+#' @return A named list with elements `odds_ratio` and `p_val`.
+do_fisher_test <- function(sample, cellont_abbr) {
+  res <- 
+    nb_data %>%
+    mutate(
+      sample = fct_collapse(
+        sample,
+        yes = .env$sample,
+        other_level = "no"
+      ),
+      cell_type = fct_collapse(
+        cellont_abbr,
+        yes = .env$cellont_abbr,
+        other_level = "no"
+      )
+    ) %>%
+    count(sample, cell_type) %>%
+    pivot_wider(names_from = cell_type, values_from = n) %>%
+    column_to_rownames("sample") %>%
+    as.matrix() %>%
+    fisher.test()
+    
+  list(
+    odds_ratio = res$estimate,
+    p_val = res$p.value
+  )
+}
+
+# do_fisher_test("2016_4503", "B")  # for testing
+
+cell_type_enrichment <-
+  nb_data %>%
+  distinct(
+    group,
+    sample = as.character(sample),
+    cell_type = as.character(cellont_abbr)
+  ) %>%
+  rowwise() %>% 
+  mutate(fisher = list(do_fisher_test(sample, cell_type))) %>% 
+  unnest_wider(fisher) %>% 
+  mutate(p_adj = p.adjust(p_val, method = "BH"))
+
+cell_type_enrichment 
+
+
+
+#' Plot a dotplot for cell type enrichment.
+#'
+#' @param data Results from `do_fisher_test()`.
+#' @param p_lim Cap for -log10 p-value.
+#' @param or_lim Cap for absolute log2 odds ratio.
+#'
+#' @return A ggplot object.
+plot_enrichment <- function(data, p_lim = 20, or_lim = 2) {
+  data %>% 
+    mutate(
+      log_p_adj = pmin(-log10(p_adj), p_lim),
+      log_odds_ratio = log2(odds_ratio),
+      log_odds_ratio = case_when(
+        log_odds_ratio > or_lim  ~ or_lim,
+        log_odds_ratio < -or_lim ~ -or_lim,
+        TRUE                     ~ log_odds_ratio
+      )
+    ) %>% 
+    ggplot(aes(cell_type, sample)) + 
+    geom_point(aes(color = log_odds_ratio, size = log_p_adj), shape = 16) + 
+    scale_color_distiller(
+      name = TeX("log_2 odds ratio"),
+      palette = "PiYG",
+      direction = 1,
+      limits = c(-or_lim, or_lim),
+      breaks = c(-or_lim, 0, or_lim),
+      labels = c(
+        str_glue("-{or_lim} or lower"),
+        "0",
+        str_glue("{or_lim} or higher")
+      )
+    ) +
+    scale_radius(
+      name = TeX("-log_{10} p_{adj}"),
+      range = c(1, 6),
+      labels = function(x) c(x[-length(x)], paste(x[length(x)], "or higher"))
+    ) +
+    xlab("cell type") +
+    facet_grid(vars(group), scales = "free_y", space = "free_y") +
+    theme_bw() +
+    theme(
+      panel.grid = element_blank(),
+      panel.spacing = unit(0, "mm"),
+      strip.background = element_blank(),
+      strip.text.y.right = element_text(face = "bold", angle = 0)
+    ) +
+    NULL
+}
+
+cell_type_enrichment %>% 
+  mutate(
+    cell_type =
+      as_factor(cell_type) %>%
+      fct_relevel(
+        levels(nb_data$cellont_cluster) %>%
+          str_extract("\\w+") %>% 
+          unique()
+      )
+  ) %>% 
+  filter(cell_type != "NB") %>% 
+  plot_enrichment()
+ggsave_default("cell_types/abundances_enriched", width = 120, height = 130)
+
+
+
 # Unified cell labels -----------------------------------------------------
 
 #' Plot cell types with cluster IDs.
@@ -1323,3 +1459,4 @@ nb_data %>%
     strip.background = element_rect(fill = "gray90", color = NA),
     strip.text = element_text(face = "bold")
   )
+ggsave_default("monocle/tif_violin", width = 150, height = 100)
