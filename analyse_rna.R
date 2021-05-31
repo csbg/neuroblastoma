@@ -1288,3 +1288,38 @@ plot_infiltration_rate(nb_data, cell_type_hpca_broad, "Neurons",
                        filename = "monocle/tif_neurons")
 plot_infiltration_rate(nb_data, cluster_50, "8",
                        filename = "monocle/tif_clusters")
+
+
+nb_data %>% 
+  mutate(
+    cells = case_when(
+      cellont_cluster == "NB (8)" ~ "tumor",
+      TRUE ~ "other"
+    )
+  ) %>%
+  pivot_longer(
+    starts_with("signature"),
+    names_to = "signature",
+    names_prefix = "signature_"
+  ) %>% 
+  ggplot(aes(cells, value)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_violin(aes(fill = cells), scale = "width") +
+  geom_boxplot(
+    aes(group = cells),
+    width = 0.075,
+    outlier.shape = NA,
+    coef = 0,
+    position = position_dodge(width = 0.9)
+  ) +
+  scale_fill_manual(values = c("gray80", "#e41a1c")) +
+  coord_flip() +
+  facet_grid(vars(signature), switch = "y") +
+  theme_bw() +
+  theme(
+    panel.background = element_rect(fill = "gray95"),
+    panel.border = element_blank(),
+    panel.grid = element_blank(),
+    strip.background = element_rect(fill = "gray90", color = NA),
+    strip.text = element_text(face = "bold")
+  )
