@@ -46,15 +46,17 @@ nb_data <- readRDS("data_generated/metadata.rds")
 #' @param data infercnv data loaded by `read_infercnv_data()`.
 #' @param metadata Cell metadata from `assemble_metadata.R`.
 #' @param cells Plot either the "tumor" or "ref"erence cells.
-#' @param cells_per_sample If not `NULL`, only plot a limited number of cells
-#'   per sample, which are randomly selected.
+#' @param cells_per_row_split If not `NULL`, only plot a limited number of cells
+#'   per row plit, which are randomly selected.
 #' @param seed Seed for random selection of cells.
+#' @param row_title Heatmap row title; if `NULL`, use a default title.
 #' @param filename Name of output file.
 #'
 #' @return A character vector giving the order of samples in the heatmap.
-plot_residual_expression <- function(data, metadata, cells = c("tumor", "ref"),
-                                     cells_per_sample = 50L, seed = 42,
-                                     filename = NULL) {
+plot_residual_expression <- function(data, metadata,
+                                     cells = c("tumor", "ref", "input"),
+                                     cells_per_row_split = 50L, seed = 42,
+                                     row_title = NULL, filename = NULL) {
   cells <- match.arg(cells)
   
   # colors for group and sample annotations
@@ -68,7 +70,16 @@ plot_residual_expression <- function(data, metadata, cells = c("tumor", "ref"),
     rainbow(nlevels(metadata$sample)) %>%
     set_names(levels(metadata$sample))
   
-  # data frame with tumor or reference cell indices
+  # row titles
+  if (is.null(row_title)) {
+    row_title <- c(
+      tumor = "sample",
+      ref = "cell type",
+      input = ""
+    )[cells]  
+  }
+  
+  # prepare cell metadata
   if (cells == "tumor") {
     # order of tumor samples
     tumor_samples <-
@@ -84,32 +95,52 @@ plot_residual_expression <- function(data, metadata, cells = c("tumor", "ref"),
       filter(str_starts(name, "malignant")) %>% 
       extract(
         name,
-        into = "sample",
+        into = "row_split",
         regex = "malignant_(.*)_I"
       ) %>% 
-      mutate(sample = as_factor(sample) %>% fct_relevel(tumor_samples)) %>% 
-      arrange(sample)
-  } else {
+      mutate(
+        row_split = as_factor(row_split) %>% fct_relevel(tumor_samples)
+      ) %>% 
+      arrange(row_split)
+  } else if (cells == "ref") {
     cell_metadata <- 
       data$final_obj@tumor_subclusters$subclusters %>%
-      enframe(name = "sample") %>% 
-      filter(!str_starts(sample, "malignant"))
+      enframe(name = "row_split") %>% 
+      filter(!str_starts(row_split, "malignant"))
+  } else {
+    # if cells == "input"
+    cell_indices <- 
+      data$final_obj@tumor_subclusters$subclusters %>% 
+      map_dfr(~enframe(.[[1]], "cell", "cell_index"))
+    cell_metadata <- 
+      metadata %>% 
+      select(cell, sample, group, row_split = cluster_50) %>% 
+      left_join(cell_indices, by = "cell")
   }
   
-  cell_metadata <- 
-    cell_metadata %>% 
-    unnest_longer(value) %>%
-    select(!value_id) %>%
-    unnest_longer(value, values_to = "cell_index", indices_to = "cell") %>% 
-    left_join(metadata %>% select(cell, patient = sample, group), by = "cell")
+  # post-processing for tumor and ref cells
+  if (cells != "input") {
+    cell_metadata <- 
+      cell_metadata %>% 
+      unnest_longer(value) %>%
+      select(!value_id) %>%
+      unnest_longer(value, values_to = "cell_index", indices_to = "cell") %>% 
+      left_join(metadata %>% select(cell, sample, group), by = "cell")
+  }
   
-  # optional: subset n cells per sample
-  if (!is.null(cells_per_sample)) {
+  # cell_metadata is now a dataframe with five columns:
+  # cell, sample, group (as usual),
+  # cell_index (index in residual expression matrix), and
+  # row_split (factor for splitting the heatmap rows).
+  # return(cell_metadata)
+  
+  # optional: subset n cells per row_split
+  if (!is.null(cells_per_row_split)) {
     set.seed(seed)
     cell_metadata <- 
       cell_metadata %>% 
-      group_by(sample) %>% 
-      slice_sample(n = cells_per_sample) %>% 
+      group_by(row_split) %>% 
+      slice_sample(n = cells_per_row_split) %>% 
       ungroup()
   }
   
@@ -119,20 +150,12 @@ plot_residual_expression <- function(data, metadata, cells = c("tumor", "ref"),
     magrittr::extract(, cell_metadata$cell_index) %>% 
     t()
   
-  # annotation (group for tumor cells, sample for reference cells)
-  if (cells == "tumor") {
-    left_annotation <- rowAnnotation(
-      group = cell_metadata$group,
-      col = list(group = group_colors)
-    )
-  } else {
-    patient_ids <- unique(cell_metadata$patient)
-    left_annotation <- rowAnnotation(
-      sample = cell_metadata$patient,
-      group = cell_metadata$group,
-      col = list(sample = sample_colors, group = group_colors)
-    )
-  }
+  # annotation
+  left_annotation <- rowAnnotation(
+    sample = cell_metadata$sample,
+    group = cell_metadata$group,
+    col = list(sample = sample_colors, group = group_colors)
+  )
   
   # draw heatmap
   p <- 
@@ -146,7 +169,7 @@ plot_residual_expression <- function(data, metadata, cells = c("tumor", "ref"),
       show_row_names = FALSE,
       show_column_names = FALSE,
       
-      row_split = cell_metadata$sample,
+      row_split = cell_metadata$row_split,
       row_gap = unit(0, "mm"),
       row_title_rot = 0,
       
@@ -160,10 +183,12 @@ plot_residual_expression <- function(data, metadata, cells = c("tumor", "ref"),
       
       border = TRUE,
       
-      left_annotation = left_annotation
+      left_annotation = left_annotation,
+      
+      use_raster = FALSE,
     ) %>%
     draw(
-      row_title = if (cells == "tumor") "sample",
+      row_title = row_title,
       column_title = "chromosome"
     ) 
   
@@ -175,10 +200,21 @@ plot_residual_expression <- function(data, metadata, cells = c("tumor", "ref"),
 sample_order <- plot_residual_expression(
   infercnv_data, nb_data, filename = "cnv/residual_expr_tumor"
 )
+sample_order
 
 # reference cells
 plot_residual_expression(
   infercnv_data, nb_data, cells = "ref", filename = "cnv/residual_expr_ref"
+)
+
+# small clusters
+plot_residual_expression(
+  infercnv_data,
+  nb_data %>% filter(as.numeric(cluster_50) >= 15),
+  cells = "input",
+  row_title = "cluster",
+  cells_per_row_split = NULL,
+  filename = "cnv/residual_expr_clusters"
 )
 
 
