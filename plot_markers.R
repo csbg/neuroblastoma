@@ -245,6 +245,52 @@ plot_features(
 
 
 
+#' Plot markers for NB cells and cells with highest scores in a selected gene
+#' signature. Group cells by cluster.
+#'
+#' @param signature_col Column with gene signature scores.
+#' @param top_prop Fraction of cells with highest scores to select.
+#' @param filename Name of the output file.
+#'
+#' @return A ggplot2 object
+plot_nb_markers_of_high_signature_cells <- function(signature_col,
+                                                    top_prop = 0.05,
+                                                    filename = NULL) {
+  selected_cells <- union(
+    colData(nb) %>% 
+      as_tibble(rownames = "cell") %>% 
+      slice_max(prop = top_prop, order_by = {{signature_col}}) %>% 
+      pull(cell),
+    colData(nb) %>% 
+      as_tibble(rownames = "cell") %>% 
+      filter(cellont_abbr == "NB") %>% 
+      pull(cell)
+  )
+  
+  nb_subset <- nb[, selected_cells]
+  
+  nb_markers <-
+    markers %>% 
+    filter(cell_type == "neuroblastoma") %>% 
+    pull(gene)
+  
+  p <- plot_dots(
+    logcounts(nb_subset),
+    nb_markers,
+    colData(nb_subset)$cluster_50
+  )
+  
+  ggsave_default(filename, height = 100)
+  p
+}
+
+plot_nb_markers_of_high_signature_cells(signature_mesenchymal,
+                                        filename = "markers/nb_mesenchymal")
+plot_nb_markers_of_high_signature_cells(signature_ncc_like,
+                                        filename = "markers/nb_ncc_like")
+
+
+
 # PanglaoDB ---------------------------------------------------------------
 
 panglaodb <- 

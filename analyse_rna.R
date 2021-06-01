@@ -1460,3 +1460,45 @@ nb_data %>%
     strip.text = element_text(face = "bold")
   )
 ggsave_default("monocle/tif_violin", width = 150, height = 100)
+
+
+
+#' Plot a UMAP, highlight cells with the hightest score in a given signature.
+#'
+#' @param data Metadata.
+#' @param signature Column with gene signature scores. 
+#' @param top_prop Proportion of cells to highlight.
+#' @param filename Name of output file.
+#'
+#' @return A ggplot object.
+plot_signature_highlight <- function(data, signature, top_prop = 0.05,
+                                     filename = NULL) {
+  p <- 
+    data %>%
+    ggplot(aes(umap_1_monocle, umap_2_monocle)) +
+    geom_point(color = "gray90", size = 0.1) +
+    geom_point(
+      data =
+        nb_data %>% 
+        slice_max({{signature}}, prop = top_prop) %>% 
+        arrange({{signature}}),
+      aes(color = {{signature}}),
+      size = 0.1
+    ) +
+    scale_color_gradient(low = "#0c2c84", high = "#e7298a") +
+    coord_fixed() +
+    theme_classic() +
+    theme(
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold")
+    ) +
+    NULL
+  
+  ggsave_default(filename)
+  p
+}
+
+plot_signature_highlight(nb_data, signature_mesenchymal,
+                         filename = "gene_programs/umap_mesenchymal")
+plot_signature_highlight(nb_data, signature_ncc_like,
+                         filename = "gene_programs/umap_ncc_like")
