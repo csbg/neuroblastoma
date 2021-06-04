@@ -334,3 +334,146 @@ walk(
     filename = str_glue("cnv/regions_{.}")
   )
 )
+
+
+
+# Compare to SNP array data -----------------------------------------------
+
+# java -Xmx1500m --module-path=lib @igv.args --module=org.igv/org.broad.igv.tools.IgvTools tdftobedgraph ../DTC_656_NA.LogR.tdf ../DTC_656_NA.LogR.tdf.bedgraph
+
+plot_sample <- function(sample, sc_data, manual_data, snp_data,
+                        probability = 0.5, filename = NULL) {
+  # chromosome sizes from GenomeInfoDb
+  chromosome_size <- 
+    Seqinfo(genome = "GRCh38.p13") %>%
+    seqlengths() %>% 
+    enframe("chr", "end") %>% 
+    filter(str_detect(chr, "^(\\d\\d?|X|Y)$")) %>%
+    mutate(chr = as_factor(chr) %>% fct_inseq())
+  
+  # labels and colors for copy numbers
+  cn_metadata <-
+    tribble(
+      ~copy_number, ~label, ~color,
+      0L, "complete loss", "#4393c3",
+      1L, "loss of one copy", "#92c5de",
+      2L, "neutral", "#f7f7f7",
+      3L, "addition of one copy", "#fddbc7",
+      4L, "addition of two copies", "#ef8a62",
+      5L, "addition of more than two copies", "#b2182b"
+    ) %>% 
+    mutate(label = as_factor(label))
+  cn_colors <- 
+    cn_metadata %>% 
+    select(label, color) %>% 
+    deframe()
+  
+  # scRNA-seq data
+  plot_data_sc <-
+    sc_data$regions_data %>% 
+    filter(near(prob, probability)) %>% 
+    extract(
+      cell_group_name,
+      into = c("sample", "group"),
+      regex = "malignant_(.*?)_([IV]+)"
+    ) %>% 
+    filter(sample == {{sample}}) %>% 
+    transmute(
+      chr = chr %>% str_sub(4) %>% factor(levels = chromosome_size$chr),
+      start = as.integer(start),
+      end = as.integer(end),
+      copy_number = as.integer(state) - 1L
+    ) %>% 
+    left_join(cn_metadata, by = "copy_number")
+  
+  # manually curated data
+  plot_data_manual <-
+    read_tsv(manual_data, col_names = FALSE) %>%
+    transmute(
+      chr = X1 %>% str_sub(4) %>% factor(levels = chromosome_size$chr),
+      start = as.integer(X2),
+      end = as.integer(X3),
+      copy_number = as.integer(X13)
+    ) %>% 
+    left_join(cn_metadata, by = "copy_number")
+  
+  # raw SNP array signal
+  plot_data_snp <-
+    read_tsv(
+      snp_data,
+      col_names = c("chr", "start", "end", "log2r", "smoothed"),
+      col_types = "ciidd"
+    ) %>% 
+    mutate(chr = factor(chr, levels = chromosome_size$chr))
+  
+  # make plot
+  p <-
+    ggplot(NULL, aes(xmax = end)) +
+    geom_rect(
+      data = chromosome_size,
+      aes(xmin = 0, ymin = -0.1, ymax = 0)
+    ) +
+    geom_rect(
+      data = plot_data_sc,
+      aes(xmin = start, fill = label),
+      ymin = 0,
+      ymax = 1
+    ) +
+    geom_rect(
+      data = plot_data_manual,
+      aes(xmin = start, fill = label),
+      ymin = 1,
+      ymax = 2
+    ) +
+    geom_line(
+      data = plot_data_snp %>% slice_sample(prop = 0.01),
+      aes(x = start, y = smoothed + 1.5),
+      size = .25,
+      alpha = .25
+    ) +
+    geom_hline(yintercept = 1, size = 0.1) +
+    scale_x_continuous(
+      name = "chromosome",
+      expand = c(0, 0)
+    ) +
+    scale_y_continuous(
+      name = NULL,
+      breaks = c(0.5, 1.5),
+      labels = c("scRNA-seq", "SNP array"),
+      expand = c(0, 0)
+    ) +
+    scale_fill_manual(
+      values = cn_colors,
+      guide = guide_legend(nrow = 1),
+      drop = FALSE
+    ) +
+    coord_cartesian(ylim = c(0, 2)) +
+    facet_grid(
+      cols = vars(chr),
+      space = "free_x",
+      scales = "free_x",
+      switch = "x"
+    ) +
+    theme_classic() +
+    theme(
+      axis.line = element_blank(),
+      axis.ticks.x = element_blank(),
+      axis.text.x = element_blank(),
+      legend.position = "bottom",
+      panel.spacing = unit(0, "mm"),
+      panel.background = element_rect(color = NA, fill = "#f7f7f7"),
+      panel.border = element_rect(color = "black", fill = NA),
+      strip.background = element_blank()
+    )
+
+  ggsave_default(filename, width = 420, height = 80)
+  p
+}
+
+plot_sample(
+  "2005_1702",
+  sc_data = infercnv_data,
+  manual_data = "data_wip/snp_array/2005-1702_segments.bed",
+  snp_data = "data_wip/snp_array/DTC_656_NA.LogR.tdf.bedgraph",
+  filename = "wip/cnv_sc_manual"
+)
