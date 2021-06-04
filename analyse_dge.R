@@ -28,8 +28,10 @@ nb <-
   readRDS("data_generated/rna_decontaminated.rds") %>% 
   logNormCounts(assay.type = "soupx_counts")
 
+nb_metadata <- readRDS("data_generated/metadata.rds")
+
 nb@colData <-
-  readRDS("data_generated/metadata.rds") %>%
+  nb_metadata %>%
   mutate(
     sample =
       str_c(group, sample, sep = ".") %>% 
@@ -44,20 +46,26 @@ rowData(nb)[["gene_short_name"]] <- rownames(nb)
 
 # clusters that contain more than 1% of total cells
 used_clusters <- 
-  colData(nb) %>% 
-  as_tibble() %>%
+  nb_metadata %>% 
   count(cellont_cluster) %>% 
   mutate(n = n / sum(n)) %>% 
   filter(n > 0.01) %>% 
   pull(cellont_cluster)
+  
+# tumor infiltration rate
+tif <-
+  nb_metadata %>%
+  group_by(sample) %>%
+  summarise(tif = sum(cellont_abbr == "NB") / n())
 
 
 
 # DGE analysis ------------------------------------------------------------
 
-nb <- prepSCE(                                           # on cluster level,
-  nb[, colData(nb)$cellont_cluster %in% used_clusters],  # use nb
-  kid = "cellont_abbr",                                  # and cellont_cluster 
+# create pseudobulk data
+nb <- prepSCE(                                           # on cluster level:
+  nb[, colData(nb)$cellont_cluster %in% used_clusters],  # nb
+  kid = "cellont_abbr",                                  # "cellont_cluster" 
   gid = "group",
   sid = "sample",
   drop = TRUE
@@ -71,14 +79,24 @@ pb <- aggregateData(
 )
 pb
 
+# assemble model matrix
 exp_info <-
   metadata(pb)$experiment_info %>%
+  left_join(tif, by = c(sample_id = "sample")) %>% 
   column_to_rownames("sample_id")
+
+# (a) default analysis
 model_mat <- model.matrix(~ 0 + group_id, data = exp_info)
-colnames(model_mat) <- levels(exp_info$group_id)
+
+# ...or (b): regress out tumor infiltration rate
+# model_mat <- model.matrix(~ 0 + group_id + tif, data = exp_info)
+
+colnames(model_mat) <-
+  colnames(model_mat) %>%
+  str_replace("group_id", "")
 model_mat
 
-
+# run DGE analysis with pseudobulk counts
 dge <- pbDS(
   pb,
   design = model_mat,
@@ -364,8 +382,8 @@ plot_violin <- function(data,
   p
 }
 
-plot_violin(dge_results_filtered, "II_vs_I", cluster = "1",
-            filename = "dge/violin_II_vs_I_c1_up")
+# plot_violin(dge_results_filtered, "II_vs_I", cluster = "1",
+#             filename = "dge/violin_II_vs_I_c1_up")
 
 dge_results_filtered %>% 
   distinct(contrast, cluster = as.character(cluster_id), direction) %>% 
