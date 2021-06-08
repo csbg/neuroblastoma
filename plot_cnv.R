@@ -314,7 +314,7 @@ plot_cnv_regions <- function(data, sample_order,
       axis.text.x = element_blank(),
       legend.position = "bottom",
       panel.spacing = unit(0, "mm"),
-      panel.background = element_rect(color = NA, fill = "#f7f7f7"),
+      panel.background = element_rect(color = NA, fill = cn_colors["neutral"]),
       panel.border = element_rect(color = "black", fill = NA),
       strip.background = element_blank()
     )
@@ -352,17 +352,28 @@ plot_sample <- function(sample, sc_data, manual_data, snp_data,
     mutate(chr = as_factor(chr) %>% fct_inseq())
   
   # labels and colors for copy numbers
-  cn_metadata <-
+  cn_metadata <-  # colorbrewer PRGn
     tribble(
       ~copy_number, ~label, ~color,
-      0L, "complete loss", "#4393c3",
-      1L, "loss of one copy", "#92c5de",
+      0L, "complete loss", "#1b7837",
+      1L, "loss of one copy", "#7fbf7b",
       2L, "neutral", "#f7f7f7",
-      3L, "addition of one copy", "#fddbc7",
-      4L, "addition of two copies", "#ef8a62",
-      5L, "addition of more than two copies", "#b2182b"
-    ) %>% 
+      3L, "addition of one copy", "#e7d4e8",
+      4L, "addition of two copies", "#af8dc3",
+      5L, "addition of more than two copies", "#762a83"
+    ) %>%
     mutate(label = as_factor(label))
+  # cn_metadata <-  # colorbrewer RdBu
+  #   tribble(
+  #     ~copy_number, ~label, ~color,
+  #     0L, "complete loss", "#4393c3",
+  #     1L, "loss of one copy", "#92c5de",
+  #     2L, "neutral", "#f7f7f7",
+  #     3L, "addition of one copy", "#fddbc7",
+  #     4L, "addition of two copies", "#ef8a62",
+  #     5L, "addition of more than two copies", "#b2182b"
+  #   ) %>% 
+  #   mutate(label = as_factor(label))
   cn_colors <- 
     cn_metadata %>% 
     select(label, color) %>% 
@@ -429,7 +440,7 @@ plot_sample <- function(sample, sc_data, manual_data, snp_data,
       data = plot_data_snp %>% slice_sample(prop = 0.01),
       aes(x = start, y = smoothed + 1.5),
       size = .25,
-      alpha = .25
+      alpha = .5
     ) +
     geom_hline(yintercept = 1, size = 0.1) +
     scale_x_continuous(
@@ -461,7 +472,7 @@ plot_sample <- function(sample, sc_data, manual_data, snp_data,
       axis.text.x = element_blank(),
       legend.position = "bottom",
       panel.spacing = unit(0, "mm"),
-      panel.background = element_rect(color = NA, fill = "#f7f7f7"),
+      panel.background = element_rect(color = NA, fill = cn_colors["neutral"]),
       panel.border = element_rect(color = "black", fill = NA),
       strip.background = element_blank()
     )
