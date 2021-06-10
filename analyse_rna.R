@@ -950,11 +950,15 @@ ggsave_default("cell_types/abundances_NK", width = 100, height = 80)
 #'
 #' @param sample Sample.
 #' @param cellont_abbr Cell type.
+#' @param ref_groups Groups that should be used for comparison.
 #'
 #' @return A named list with elements `odds_ratio` and `p_val`.
-do_fisher_test <- function(sample, cellont_abbr) {
+do_fisher_test <- function(sample,
+                           cellont_abbr,
+                           ref_groups = c("I", "II", "III", "IV")) {
   res <- 
     nb_data %>%
+    filter(group %in% ref_groups | sample == .env$sample) %>%
     mutate(
       sample = fct_collapse(
         sample,
@@ -988,8 +992,12 @@ cell_type_enrichment <-
     sample = as.character(sample),
     cell_type = as.character(cellont_abbr)
   ) %>%
-  rowwise() %>% 
-  mutate(fisher = list(do_fisher_test(sample, cell_type))) %>% 
+  filter(group != "I", cell_type != "NB") %>%
+  rowwise() %>%
+  mutate(fisher = list(do_fisher_test(sample, cell_type, ref_groups = "I"))) %>%
+  # filter(cell_type != "NB") %>%
+  # rowwise() %>% 
+  # mutate(fisher = list(do_fisher_test(sample, cell_type))) %>% 
   unnest_wider(fisher) %>% 
   mutate(p_adj = p.adjust(p_val, method = "BH"))
 
@@ -1056,9 +1064,9 @@ cell_type_enrichment %>%
           unique()
       )
   ) %>% 
-  filter(cell_type != "NB") %>% 
-  plot_enrichment()
-ggsave_default("cell_types/abundances_enriched", width = 120, height = 130)
+  plot_enrichment(or_lim = 3)
+# ggsave_default("cell_types/abundances_enriched", width = 120, height = 130)
+ggsave_default("cell_types/abundances_enriched", width = 120, height = 100)
 
 
 
