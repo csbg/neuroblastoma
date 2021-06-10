@@ -8,6 +8,7 @@ library(monocle3)
 library(scuttle)
 library(tidyverse)
 library(scico)
+library(ggnewscale)
 source("common_functions.R")
 
 
@@ -400,7 +401,13 @@ walk(
 
 # Receptors/ligands -------------------------------------------------------
 
-plot_pathway_genes <- function(pathways, filename = NULL) {
+plot_pathway_genes <- function(pathways = NULL,
+                               interactions = NULL,
+                               y_group = c("pathway", "interaction"),
+                               filename = NULL,
+                               ...) {
+  y_group <- match.arg(y_group)
+  
   complexes <-
     CellChat::CellChatDB.human$complex %>% 
     as_tibble(rownames = "complex") %>% 
@@ -408,19 +415,27 @@ plot_pathway_genes <- function(pathways, filename = NULL) {
     unite(!complex, col = "genes", na.rm = TRUE) %>%
     deframe()
   
-  interaction_genes <- map_dfr(
-    set_names(pathways),
-    ~CellChat::CellChatDB.human$interaction %>%
-      as_tibble() %>% 
-      filter(pathway_name == .x) %>% 
-      select(ligand, receptor) %>%
-      pivot_longer(everything(), names_to = "type", values_to = "genes") %>%
-      mutate(genes = genes %>% recode(!!!complexes) %>% str_split("_")) %>%
-      unchop(genes) %>% 
-      distinct(genes, .keep_all = TRUE) %>%
-      arrange(type),
-    .id = "pathway"
-  )
+  interaction_genes <-
+    CellChat::CellChatDB.human$interaction %>%
+    as_tibble() %>%
+    {
+      if (!is.null(pathways))
+        filter(., pathway_name %in% pathways)
+      else
+        .
+    } %>% 
+    {
+      if (!is.null(interactions))
+        filter(., interaction_name %in% interactions)
+      else
+        .
+    } %>% 
+    select(interaction_name:receptor) %>%
+    pivot_longer(c(ligand, receptor), names_to = "type", values_to = "genes") %>%
+    mutate(genes = genes %>% recode(!!!complexes) %>% str_split("_")) %>%
+    unchop(genes) %>%
+    distinct(genes, .keep_all = TRUE) %>%
+    arrange(pathway_name, type)
   
   x_annotation_data <-
     tibble(level = levels(colData(nb)$cellont_cluster)) %>% 
@@ -441,8 +456,13 @@ plot_pathway_genes <- function(pathways, filename = NULL) {
   
   y_annotation_data <-
     interaction_genes %>%
-    mutate(pathway = as_factor(pathway), r = row_number()) %>%
-    group_by(label = pathway) %>%
+    {
+      if (y_group == "pathway")
+        mutate(., label = as_factor(pathway_name), r = row_number())
+      else
+        mutate(., label = as_factor(interaction_name), r = row_number())
+    } %>% 
+    group_by(label) %>%
     summarise(
       yintercept = first(r) - 0.5,
       label_y = mean(r)
@@ -483,11 +503,25 @@ plot_pathway_genes <- function(pathways, filename = NULL) {
     ) +
     NULL
   
-  ggsave_default(filename)
+  ggsave_default(filename, ...)
   p
 }
 
 plot_pathway_genes(
-  c("TNF", "IFN-I", "IFN-II", "CD6", "CD46", "CD99"),
-  filename = "markers/receptors_ligands"  
+  pathways = c("TNF", "IFN-I", "IFN-II", "CD6", "CD46", "CD99"),
+  filename = "markers/receptors_ligands_pathways"  
 )
+
+plot_pathway_genes(
+  interactions = c("PTN_NCL", "NAMPT_INSR", "MIF_CD74_CXCR4", "MIF_CD74_CD44",
+                   "MDK_NCL", "MDK_ITGA4_ITGB1", "HLA-A_CD8A", "COL6A1_CD44",
+                   "CD99_PILRA", "CD99_CD99", "APP_CD74", "ALCAM_CD6"),
+  y_group = "interaction",
+  filename = "markers/receptors_ligands_interactions",
+  width = 420
+)
+
+
+# CellChat::CellChatDB.human$interaction %>%
+#   as_tibble() %>% 
+#   filter(receptor == "CD8A")
