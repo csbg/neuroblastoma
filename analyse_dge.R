@@ -85,39 +85,61 @@ exp_info <-
   left_join(tif, by = c(sample_id = "sample")) %>% 
   column_to_rownames("sample_id")
 
-# (a) default analysis
-model_mat <- model.matrix(~ 0 + group_id, data = exp_info)
 
-# ...or (b): regress out tumor infiltration rate
-# model_mat <- model.matrix(~ 0 + group_id + tif, data = exp_info)
+# either (a) default analysis ...
+# model_mat <- model.matrix(~ group_id, data = exp_info)
+
+# ...or (b) regress out TIF
+model_mat <- model.matrix(~ group_id + tif, data = exp_info)
 
 colnames(model_mat) <-
   colnames(model_mat) %>%
-  str_replace("group_id", "")
+  str_replace("group_id(.+)", "\\1_vs_I")
 model_mat
 
-# run DGE analysis with pseudobulk counts
-dge <- pbDS(
-  pb,
-  design = model_mat,
-  contrast = limma::makeContrasts(
-    II_vs_I = II - I,
-    III_vs_I = III - I,
-    IV_vs_I = IV - I,
-    levels = model_mat
-  ),
-  min_cells = 1
+
+plot_model_matrix <- function(mat, filename = NULL) {
+  p <- Heatmap(
+    mat[levels(metadata(pb)$experiment_info$sample_id), ],
+    name = "value",
+    col = circlize::colorRamp2(
+      breaks = seq(0, 1, length.out = 7),
+      colors = inferno(7)
+    ),
+    cluster_columns = FALSE,
+    cluster_rows = FALSE,
+  )
+  ggsave_default(filename, plot = p, width = 70, height = 100)
+  p
+}
+
+plot_model_matrix(model_mat, filename = "dge/model_matrix")
+
+
+# continue with common workflow: detect DE genes
+dge <- map(
+  2:ncol(model_mat),
+  ~pbDS(
+    pb,
+    design = model_mat,
+    coef = .x,
+    min_cells = 1
+  )
 )
 
 dge_results <-
-  resDS(nb, dge, frq = TRUE) %>%
-  as_tibble() %>%
+  map_dfr(
+    dge,
+    ~resDS(nb, .x, frq = TRUE) %>%
+    as_tibble()
+  ) %>% 
   mutate(
     cluster_id =
       as_factor(cluster_id) %>%
       fct_expand(levels(colData(nb)$cluster_id)) %>%
       fct_relevel(levels(colData(nb)$cluster_id))
-  )
+  ) %>% 
+  rename(contrast = coef)
 
 
 
@@ -136,6 +158,7 @@ dge_results <-
 #'
 #' @return A data frame.
 filter_dge_results <- function(data,
+                               contrast_frq,
                                max_p = Inf,
                                max_p_adj = 0.05,
                                min_abs_log_fc = 1,
@@ -153,30 +176,29 @@ filter_dge_results <- function(data,
       values_to = "frq"
     )
   
+  contrast_frq <- map_dfr(
+    contrast_frq,
+    ~gene_frq %>% 
+      filter(frq_col %in% .x) %>% 
+      group_by(gene, cluster_id) %>% 
+      summarise(frq = max(frq)),
+    .id = "contrast"
+  )
+  
   res <-
     data %>%
-    extract(
-      contrast,
-      into = c("contrast_left", "contrast_right"),
-      regex = "(.+)_vs_(.+)",
-      remove = FALSE
+    left_join(
+      contrast_frq,
+      by = c("gene", "cluster_id", "contrast")
     ) %>% 
-    left_join(
-      gene_frq,
-      by = c("gene", "cluster_id", contrast_left = "frq_col")
-    ) %>%
-    left_join(
-      gene_frq,
-      by = c("gene", "cluster_id", contrast_right = "frq_col")
-    ) %>%
     filter(
-      frq.x >= min_freq | frq.y >= min_freq,
+      frq >= min_freq,
       p_val <= max_p,
       p_adj.loc <= max_p_adj,
       abs(logFC) >= min_abs_log_fc
     ) %>% 
     mutate(direction = if_else(logFC > 0, "up", "down")) %>% 
-    select(!c(matches("frq"), contrast_left, contrast_right))
+    select(!matches(".frq"))
   
   if (remove_ribosomal) {
     ribo_proteins <-
@@ -191,12 +213,20 @@ filter_dge_results <- function(data,
   res
 }
 
+contrast_frq <- list(
+  II_vs_I = c("I", "II"),
+  III_vs_I = c("I", "III"),
+  IV_vs_I = c("I", "IV"),
+  tif = c("I", "II", "III", "IV")
+)
+
 # for visualization and EnrichR analysis, filter with default settings
-dge_results_filtered <- filter_dge_results(dge_results)
+dge_results_filtered <- filter_dge_results(dge_results, contrast_frq)
 
 # for GSEA, only remove low-frequent and ribosomal genes
 dge_results_filtered_gsea <- filter_dge_results(
   dge_results,
+  contrast_frq,
   max_p_adj = Inf,
   min_abs_log_fc = 0
 )
@@ -819,8 +849,8 @@ enrichr_genesets$TRRUST_Transcription_Factors_2019 <-
   set_names(str_extract, "\\w+")
 
 gsea_results <- perform_gsea(dge_results_filtered_gsea, enrichr_genesets)
-# gsea_results %>% saveRDS("~/Desktop/gsea_results.rds")
-# gsea_results <- readRDS("~/Desktop/gsea_results.rds")
+gsea_results %>% saveRDS("data_wip/gsea_results.rds")
+# gsea_results <- readRDS("data_wip/gsea_results.rds")
 
 gsea_results %>%
   ggplot(aes(NES, -log10(padj))) +
