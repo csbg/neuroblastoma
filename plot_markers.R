@@ -395,3 +395,99 @@ walk(
   cluster_50,
   folder = "panglaodb"
 )
+
+
+
+# Receptors/ligands -------------------------------------------------------
+
+plot_pathway_genes <- function(pathways, filename = NULL) {
+  complexes <-
+    CellChat::CellChatDB.human$complex %>% 
+    as_tibble(rownames = "complex") %>% 
+    mutate(across(subunit_1:subunit_4, na_if, "")) %>% 
+    unite(!complex, col = "genes", na.rm = TRUE) %>%
+    deframe()
+  
+  interaction_genes <- map_dfr(
+    set_names(pathways),
+    ~CellChat::CellChatDB.human$interaction %>%
+      as_tibble() %>% 
+      filter(pathway_name == .x) %>% 
+      select(ligand, receptor) %>%
+      pivot_longer(everything(), names_to = "type", values_to = "genes") %>%
+      mutate(genes = genes %>% recode(!!!complexes) %>% str_split("_")) %>%
+      unchop(genes) %>% 
+      distinct(genes, .keep_all = TRUE) %>%
+      arrange(type),
+    .id = "pathway"
+  )
+  
+  x_annotation_data <-
+    tibble(level = levels(colData(nb)$cellont_cluster)) %>% 
+    extract(level, into = "label", regex = "(\\w+)") %>%
+    mutate(label = as_factor(label), r = row_number()) %>%
+    group_by(label) %>%
+    summarize(
+      xmin = first(r) - 0.5,
+      xmax = last(r) + 0.5,
+      label_x = mean(r)
+    ) %>%
+    mutate(
+      fill = case_when(
+        row_number() %% 2 == 0 ~ "white",
+        TRUE                   ~ "gray90"
+      )
+    )
+  
+  y_annotation_data <-
+    interaction_genes %>%
+    mutate(pathway = as_factor(pathway), r = row_number()) %>%
+    group_by(label = pathway) %>%
+    summarise(
+      yintercept = first(r) - 0.5,
+      label_y = mean(r)
+    )
+  
+  p <-
+    plot_dots(
+      logcounts(nb),
+      interaction_genes$genes,
+      colData(nb)$cellont_cluster,
+      panel_annotation = x_annotation_data
+    ) +
+    scale_x_discrete(labels = function(x) str_replace(x, " ", "\n")) +
+    geom_hline(
+      yintercept = y_annotation_data$yintercept[-1],
+      linetype = "dashed",
+      size = 0.25
+    ) +
+    geom_text(
+      data = y_annotation_data,
+      aes(
+        x = nlevels(colData(nb)$cellont_cluster) + 2,
+        y = label_y,
+        label = label
+      ),
+      size = 4,
+      hjust = 0
+    ) +
+    new_scale_fill() +
+    geom_tile(
+      data = interaction_genes %>% mutate(y = row_number()),
+      aes(x = .25, y = y, width = .5, height = 1, fill = type)
+    ) +
+    scale_fill_manual(values = c("#e66101", "#5e3c99")) +
+    theme(
+      axis.line = element_blank(),
+      legend.position = "left"
+    ) +
+    NULL
+  
+  ggsave_default(filename)
+  p
+}
+
+plot_pathway_genes(
+  c("TNF", "IFN-I", "IFN-II", "CD6", "CD46", "CD99"),
+  filename = "markers/receptors_ligands"  
+)
