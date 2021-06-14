@@ -34,8 +34,101 @@ read_infercnv_data <- function(folder) {
   )
 }
 
+
+
+#' Load SNP array CNV data.
+#'
+#' @param folder Folder with SNP array data, i.e., BEDGRAPH and BED files with
+#'   matching names.
+#' @param new_sample_names Optional named vector of new sample names, passed to
+#'   `dplyr::recode()`.
+#'
+#' @return A list with elements `logrr_data`, `cnv_regions`, and
+#'   `chromosome_size`. `logrr_data` is a data frame with columns sample,
+#'   chr(omosome), start, end, logrr (raw log R ratio), and smoothed (smoothed
+#'   ratio). `cnv_regions` is a data frame with columns sample, chr, start, end,
+#'   type, and copy_number. `chromosome_size` is a dataframe with columns chr
+#'   and end.
+read_snparray_data <- function(folder, new_sample_names = NULL) {
+  # chromosome sizes from GenomeInfoDb
+  chromosome_size <- 
+    Seqinfo(genome = "GRCh38.p13") %>%
+    seqlengths() %>% 
+    enframe("chr", "end") %>% 
+    filter(str_detect(chr, "^(\\d\\d?|X|Y)$")) %>%
+    mutate(chr = as_factor(chr) %>% fct_inseq())
+  
+  # manually curated data
+  cnv_regions <-
+    dir_ls(folder, glob = "*.bed") %>% 
+    map_dfr(
+      read_tsv,
+      col_names = FALSE,
+      col_types = cols(X2 = "i", X3 = "i", X13 = "d", .default = "c"),
+      .id = "sample"
+    ) %>%
+    transmute(
+      sample = sample %>% path_file() %>% path_ext_remove(),
+      chr = X1 %>% str_sub(4) %>% factor(levels = chromosome_size$chr),
+      start = X2,
+      end = X3,
+      type = X4,
+      copy_number = X13
+    )
+  
+  # raw SNP array signal
+  logrr_data <-
+    dir_ls(folder, glob = "*.bedgraph") %>% 
+    map_dfr(
+      read_tsv,
+      col_names = c("chr", "start", "end", "logrr", "smoothed"),
+      col_types = "ciidd",
+      .id = "sample"
+    ) %>%
+    mutate(
+      sample =
+        sample %>%
+        path_file() %>%
+        path_ext_remove() %>%
+        path_ext_remove(),
+      chr = factor(chr, levels = chromosome_size$chr)
+    )
+  
+  # recode sample names
+  if (!is.null(new_sample_names)) {
+    cnv_regions <- 
+      cnv_regions %>% 
+      mutate(sample = recode(sample, !!!new_sample_names))
+    logrr_data <- 
+      logrr_data %>% 
+      mutate(sample = recode(sample, !!!new_sample_names))
+  }
+  
+  # check for missing data
+  samples1 <- unique(cnv_regions$sample)
+  samples2 <- unique(logrr_data$sample)
+  common_samples <- intersect(samples1, samples2)
+  all_samples <- union(samples1, samples2)
+  if (length(common_samples) != length(all_samples))
+    warn("Data missing for some samples")
+  info("Loaded samples: {str_c(common_samples, collapse = ', ')}")
+    
+  list(
+    logrr_data = logrr_data,
+    cnv_regions = cnv_regions,
+    chromosome_size = chromosome_size
+  )
+}
+
 infercnv_data <- read_infercnv_data("data_generated/infercnv_output")
 nb_data <- readRDS("data_generated/metadata.rds")
+
+snparray_sample_names <- 
+  read_csv("metadata/sample_groups.csv", comment = "#") %>% 
+  select(snp_array_id, sample) %>% 
+  filter(!is.na(snp_array_id)) %>% 
+  deframe()
+snparray_data <- read_snparray_data("data_raw/snp_array", snparray_sample_names)
 
 
 
@@ -339,47 +432,32 @@ walk(
 
 # Compare to SNP array data -----------------------------------------------
 
-# java -Xmx1500m --module-path=lib @igv.args --module=org.igv/org.broad.igv.tools.IgvTools tdftobedgraph ../DTC_656_NA.LogR.tdf ../DTC_656_NA.LogR.tdf.bedgraph
-
-plot_sample <- function(sample, sc_data, manual_data, snp_data,
-                        probability = 0.5, filename = NULL) {
-  # chromosome sizes from GenomeInfoDb
-  chromosome_size <- 
-    Seqinfo(genome = "GRCh38.p13") %>%
-    seqlengths() %>% 
-    enframe("chr", "end") %>% 
-    filter(str_detect(chr, "^(\\d\\d?|X|Y)$")) %>%
-    mutate(chr = as_factor(chr) %>% fct_inseq())
-  
+plot_cnv_data_comparison <- function(sc_data,
+                                     snp_data,
+                                     probability = 0.5,
+                                     logrr_prop = 0.01,
+                                     filename = NULL) {
   # labels and colors for copy numbers
-  cn_metadata <-  # colorbrewer PRGn
+  cn_metadata <-  # colorbrewer 11-class BrBG 
     tribble(
       ~copy_number, ~label, ~color,
-      0L, "complete loss", "#1b7837",
-      1L, "loss of one copy", "#7fbf7b",
+      0L, "complete loss", "#01665e",
+      1L, "loss of one copy", "#80cdc1",
+      NA, "mosaic loss", "#c7eae5",
       2L, "neutral", "#f7f7f7",
-      3L, "addition of one copy", "#e7d4e8",
-      4L, "addition of two copies", "#af8dc3",
-      5L, "addition of more than two copies", "#762a83"
+      NA, "mosaic gain", "#f6e8c3",
+      3L, "gain of one copy", "#dfc27d",
+      4L, "gain of two copies", "#bf812d",
+      5L, "gain of more than two copies", "#8c510a",
+      NA, "amplification", "#543005"
     ) %>%
     mutate(label = as_factor(label))
-  # cn_metadata <-  # colorbrewer RdBu
-  #   tribble(
-  #     ~copy_number, ~label, ~color,
-  #     0L, "complete loss", "#4393c3",
-  #     1L, "loss of one copy", "#92c5de",
-  #     2L, "neutral", "#f7f7f7",
-  #     3L, "addition of one copy", "#fddbc7",
-  #     4L, "addition of two copies", "#ef8a62",
-  #     5L, "addition of more than two copies", "#b2182b"
-  #   ) %>% 
-  #   mutate(label = as_factor(label))
   cn_colors <- 
     cn_metadata %>% 
     select(label, color) %>% 
     deframe()
   
-  # scRNA-seq data
+  # prepare data for plotting
   plot_data_sc <-
     sc_data$regions_data %>% 
     filter(near(prob, probability)) %>% 
@@ -388,40 +466,60 @@ plot_sample <- function(sample, sc_data, manual_data, snp_data,
       into = c("sample", "group"),
       regex = "malignant_(.*?)_([IV]+)"
     ) %>% 
-    filter(sample == {{sample}}) %>% 
     transmute(
-      chr = chr %>% str_sub(4) %>% factor(levels = chromosome_size$chr),
+      sample = sample,
+      chr = str_sub(chr, 4) %>% factor(levels = snp_data$chromosome_size$chr),
       start = as.integer(start),
       end = as.integer(end),
       copy_number = as.integer(state) - 1L
     ) %>% 
     left_join(cn_metadata, by = "copy_number")
+  # return(plot_data_sc)
   
-  # manually curated data
-  plot_data_manual <-
-    read_tsv(manual_data, col_names = FALSE) %>%
-    transmute(
-      chr = X1 %>% str_sub(4) %>% factor(levels = chromosome_size$chr),
-      start = as.integer(X2),
-      end = as.integer(X3),
-      copy_number = as.integer(X13)
+  plot_data_snp_regions <-
+    snp_data$cnv_regions %>% 
+    mutate(
+      label = case_when(
+        type == "amplification" ~ "amplification",
+        type == "gain" & near(copy_number, 5) ~ "gain of more than two copies",
+        type == "gain" & near(copy_number, 4) ~ "gain of two copies",
+        type == "gain" & near(copy_number, 3) ~ "gain of one copy",
+        type == "mosaic_gain" ~ "mosaic gain",
+        type == "mosaic_loss" ~ "mosaic loss",
+        type == "loss" & near(copy_number, 1) ~ "loss of one copy",
+        type == "loss" & near(copy_number, 0) ~ "complete loss",
+        TRUE ~ NA_character_
+      )
     ) %>% 
-    left_join(cn_metadata, by = "copy_number")
+    left_join(cn_metadata, by = "label")
+  # return(plot_data_snp_regions)
   
-  # raw SNP array signal
-  plot_data_snp <-
-    read_tsv(
-      snp_data,
-      col_names = c("chr", "start", "end", "log2r", "smoothed"),
-      col_types = "ciidd"
-    ) %>% 
-    mutate(chr = factor(chr, levels = chromosome_size$chr))
+  plot_data_snp_logrr <-
+    snp_data$logrr_data %>% 
+    group_by(sample) %>% 
+    slice_sample(prop = logrr_prop)
+  # return(plot_data_snp_logrr)
+  
+  # filter for common samples
+  common_samples <- intersect(
+    plot_data_sc$sample,
+    plot_data_snp_regions$sample
+  )
+  plot_data_sc <-
+    plot_data_sc %>%
+    filter(sample %in% common_samples)
+  plot_data_snp_regions <-
+    plot_data_snp_regions %>%
+    filter(sample %in% common_samples)
+  plot_data_snp_logrr <-
+    plot_data_snp_logrr %>%
+    filter(sample %in% common_samples)
   
   # make plot
   p <-
     ggplot(NULL, aes(xmax = end)) +
     geom_rect(
-      data = chromosome_size,
+      data = snp_data$chromosome_size,
       aes(xmin = 0, ymin = -0.1, ymax = 0)
     ) +
     geom_rect(
@@ -431,13 +529,13 @@ plot_sample <- function(sample, sc_data, manual_data, snp_data,
       ymax = 1
     ) +
     geom_rect(
-      data = plot_data_manual,
+      data = plot_data_snp_regions,
       aes(xmin = start, fill = label),
       ymin = 1,
       ymax = 2
     ) +
     geom_line(
-      data = plot_data_snp %>% slice_sample(prop = 0.01),
+      data = plot_data_snp_logrr,
       aes(x = start, y = smoothed + 1.5),
       size = .25,
       alpha = .5
@@ -454,6 +552,7 @@ plot_sample <- function(sample, sc_data, manual_data, snp_data,
       expand = c(0, 0)
     ) +
     scale_fill_manual(
+      name = NULL,
       values = cn_colors,
       guide = guide_legend(nrow = 1),
       drop = FALSE
@@ -461,6 +560,7 @@ plot_sample <- function(sample, sc_data, manual_data, snp_data,
     coord_cartesian(ylim = c(0, 2)) +
     facet_grid(
       cols = vars(chr),
+      rows = vars(sample),
       space = "free_x",
       scales = "free_x",
       switch = "x"
@@ -471,20 +571,15 @@ plot_sample <- function(sample, sc_data, manual_data, snp_data,
       axis.ticks.x = element_blank(),
       axis.text.x = element_blank(),
       legend.position = "bottom",
-      panel.spacing = unit(0, "mm"),
+      panel.spacing.x = unit(0, "mm"),
       panel.background = element_rect(color = NA, fill = cn_colors["neutral"]),
       panel.border = element_rect(color = "black", fill = NA),
       strip.background = element_blank()
     )
 
-  ggsave_default(filename, width = 420, height = 80)
+  ggsave_default(filename, width = 420, height = 400)
   p
 }
 
-plot_sample(
-  "2005_1702",
-  sc_data = infercnv_data,
-  manual_data = "data_wip/snp_array/2005-1702_segments.bed",
-  snp_data = "data_wip/snp_array/DTC_656_NA.LogR.tdf.bedgraph",
-  filename = "wip/cnv_sc_manual"
-)
+plot_cnv_data_comparison(infercnv_data, snparray_data,
+                         filename = "cnv/comparison")
