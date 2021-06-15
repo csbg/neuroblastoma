@@ -15,14 +15,14 @@ cell_type_abbreviations <- c(
 
 # ColorBrewer Set1
 cell_type_colors <- c(
-  "T cell" = "#1f78b4",
-  "natural killer cell" = "#a6cee3",
-  "B cell" = "#33a02c",
-  "monocyte" = "#ff7f00",
-  "plasmacytoid dendritic cell" = "#fdbf6f",
-  "erythroid lineage cell" = "#b15928",
-  "hematopoietic precursor cell" = "#6a3d9a",
-  "neuron" = "#e31a1c",
+  "T" = "#1f78b4",
+  "NK" = "#a6cee3",
+  "B" = "#33a02c",
+  "M" = "#ff7f00",
+  "pDC" = "#fdbf6f",
+  "E" = "#b15928",
+  "SC" = "#6a3d9a",
+  "NB" = "#e31a1c",
   "other" = "black",
   na = "gray80"
 )
@@ -46,13 +46,13 @@ theme_nb <- function(base_size = 5,
   res <-
     theme_bw(...) + 
     theme(
-      axis.text = element_text(colour = "black", size = base_size),
-      legend.text = element_text(colour = "black", size = base_size), 
-      strip.text = element_text(colour = "black", size = base_size),
+      axis.text = element_text(color = "black", size = base_size),
+      axis.title = element_text(color = "black", size = base_size),
+      legend.text = element_text(color = "black", size = base_size), 
+      legend.title = element_text(size = 5),
+      plot.margin = unit(c(1, 1, 1, 1), "mm"),
       strip.background = element_blank(),
-      legend.key.size = unit(0.4, "cm"),
-      legend.margin = margin(),
-      legend.box.spacing = unit(c(2, 0, 0, 0), "mm")
+      strip.text = element_text(color = "black", size = base_size)
     )
   
   if (!grid)
