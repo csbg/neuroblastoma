@@ -29,10 +29,10 @@ CELL_TYPE_COLORS <- c(
 
 # https://wesandersonpalettes.tumblr.com/post/110716093015/ash-should-we-dance
 GROUP_COLORS <- c(
-  I = "#b9b09f",
-  II = "#a9d8c8",
-  III = "#d16b54",
-  IV = "#e8c95d"
+  C = "#b9b09f",
+  M = "#a9d8c8",
+  A = "#d16b54",
+  R = "#e8c95d"
 )
 
 
@@ -78,6 +78,7 @@ ggsave_publication <- function(filename,
                                type = "pdf",
                                plot = NULL,
                                guides = TRUE,
+                               dpi = 1200,
                                width = 4,
                                height = 4,
                                ...) {
@@ -98,11 +99,11 @@ ggsave_publication <- function(filename,
   
   if (is.null(plot)) {
     ggplot2::ggsave(filename, plot = last_plot() + make_guides,
-                    dpi = 300, units = "cm", limitsize = FALSE,
+                    dpi = dpi, units = "cm", limitsize = FALSE,
                     width = width, height = height, ...)  
   } else {
     if (type == "png") {
-      png(filename, res = 300, units = "cm",
+      png(filename, res = dpi, units = "cm",
           width = width, height = height, ...)
     } else if (type == "pdf") {
       pdf(filename, width = width / 2.54, height = height / 2.54, ...)

@@ -1,0 +1,52 @@
+# Description: Cell type markers for tumor and NB cells
+# Sources:
+#   Dong: Table S2C from Dong et al., Cancer Cell 38, 716–733 (2020); DOI:
+#   Neildez-Nguyen: Table 1 from Neildez-Nguyen et al., Nat. Biotech. 20, 467–472 (2002); DOI: 10.1038/nbt0502-467
+#   Akashi: Figure 1 from Akashi et al, Nature 404, 193–197 (2000); DOI: 10.1038/35004599
+#     CMP is FCGR-/CD34+, GMP is FRGR+/CD34+, MEP is FCGR-/CD34-
+#   biotechne: A Guide to Human Immune Cell Characterization by Flow Cytometry (https://resources.rndsystems.com/images/site/br_imm-cell-character-fc_rsdfy20-8243-w-mp.pdf, accessed 2021-01-07)
+#   ccri: Sabine Taschner-Mandl and Irfete Fetahu, CCRI, personal communication
+cell_type,gene,source
+ ,PTPRC,biotechne
+ ,CD52,Dong
+T,CD2,Dong
+T,CD3D,Dong
+T,CD3E,Dong
+T,CD3G,Dong
+T,CD7,Dong
+T,IL7R,biotechne
+T,CCR7,biotechne
+NK,GNLY,biotechne
+NK,NKG7,biotechne
+B,CD79A,Dong
+B,CD79B,Dong
+B,CD19,Dong
+M,CD68,Dong
+M,AIF1,Dong
+M,CSF1R,Dong
+M,TYROBP,Dong
+M,FCER1G,Dong
+M,CD14,biotechne
+M,LYZ,biotechne
+M,FCGR3A,biotechne
+M,MS4A7,biotechne
+pDC,IL3RA,Dong
+pDC,CLEC4C,Dong
+pDC,NRP1,biotechne
+E,TFRC,Neildez-Nguyen
+E,GYPA,Neildez-Nguyen
+E,CD36,Neildez-Nguyen
+SC,CD34,Akashi
+SC,FCGR2A,Akashi
+NB,PHOX2B,Dong
+NB,PHOX2A,Dong
+NB,TH,Dong
+NB,SYP,Dong
+NB,CHGA,Dong
+NB,CHGB,Dong
+NB,DBH,Dong
+NB,GATA2,Dong
+NB,MYCN,ccri
+NB,L1CAM,ccri
+NB,B4GALNT1,ccri
+NB,NCAM1,ccri

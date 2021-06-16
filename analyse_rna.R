@@ -13,6 +13,7 @@ library(bluster)
 library(ggbeeswarm)
 library(latex2exp)
 source("common_functions.R")
+source("styling.R")
 
 
 
@@ -1510,3 +1511,110 @@ plot_signature_highlight(nb_data, signature_mesenchymal,
                          filename = "gene_programs/umap_mesenchymal")
 plot_signature_highlight(nb_data, signature_ncc_like,
                          filename = "gene_programs/umap_ncc_like")
+
+
+
+
+# Publication figures -----------------------------------------------------
+
+## Figure 1b ----
+
+plot_umap <- function() {
+  adjust_positions <- tribble(
+    ~label, ~dx, ~dy,
+    "13", 1.5, -0.5,
+    "14", -1, -1,
+    "15", 0, 1,
+    "16", 0, 0.5,
+    "17", 1, 0,
+    "18", -1, 0,
+    "19", 1, 0,
+    "20", 1, 0,
+    "21", 0, -1
+  )
+  
+  cluster_labels <- 
+    nb_data %>% 
+    group_by(label = cluster_50) %>% 
+    summarise(
+      umap_1_monocle = mean(umap_1_monocle),
+      umap_2_monocle = mean(umap_2_monocle)
+    ) %>% 
+    left_join(adjust_positions, by = "label") %>%
+    mutate(
+      label = as_factor(label),
+      umap_1_monocle = umap_1_monocle + replace_na(dx, 0),
+      umap_2_monocle = umap_2_monocle + replace_na(dy, 0)
+    )
+   
+  p <- 
+    nb_data %>%
+    ggplot(aes(umap_1_monocle, umap_2_monocle)) +
+    geom_point(
+      aes(color = cellont_abbr),
+      size = .001,
+      shape = 16
+    ) +
+    geom_text(
+      data = cluster_labels,
+      aes(label = label),
+      size = BASE_TEXT_SIZE_MM
+    ) +
+    scale_x_continuous("UMAP1", breaks = c(-10, 0, 10)) +
+    scale_y_continuous("UMAP2", breaks = c(-10, 0, 10)) +
+    scale_color_manual(
+      name = "cell type",
+      values = CELL_TYPE_COLORS,
+      guide = guide_legend(override.aes = list(size = 1))
+    ) +
+    coord_fixed() +
+    theme_nb(grid = FALSE) +
+    theme(
+      legend.key.height = unit(1, "mm"),
+      legend.key.width = unit(1, "mm"),
+      legend.position = c(.9, .2)
+    )
+  
+  p
+}
+
+plot_umap()
+ggsave_publication("1b_umap_dataset", width = 6, height = 6)
+
+
+## Figure 1c ----
+
+nb_data %>% 
+  mutate(
+    cells = case_when(
+      cellont_cluster == "NB (8)" ~ "tumor",
+      TRUE ~ "other"
+    )
+  ) %>%
+  pivot_longer(
+    starts_with("signature"),
+    names_to = "signature",
+    names_prefix = "signature_"
+  ) %>% 
+  mutate(signature = recode(signature, ncc_like = "NCC-like")) %>% 
+  ggplot(aes(cells, value)) +
+  geom_hline(
+    yintercept = 0,
+    linetype = "dashed",
+    size = BASE_LINE_SIZE
+  ) +
+  geom_violin(
+    aes(fill = cells),
+    scale = "width",
+    size = BASE_LINE_SIZE
+  ) +
+  scale_fill_manual(values = c("gray80", cell_type_colors["NB"])) +
+  xlab(NULL) +
+  ylab("gene signature score") +
+  coord_flip() +
+  facet_grid(vars(signature)) +
+  theme_nb(grid = FALSE) +
+  theme(legend.position = "none")
+
+ggsave_publication("1c_gene_programs", width = 4, height = 6)
+

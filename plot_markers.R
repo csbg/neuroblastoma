@@ -10,6 +10,7 @@ library(tidyverse)
 library(scico)
 library(ggnewscale)
 source("common_functions.R")
+source("styling.R")
 
 
 
@@ -525,3 +526,98 @@ plot_pathway_genes(
 # CellChat::CellChatDB.human$interaction %>%
 #   as_tibble() %>% 
 #   filter(receptor == "CD8A")
+
+
+
+# Publication figures -----------------------------------------------------
+
+## Figure 1d ----
+
+selected_markers <-
+  read_csv("metadata/cell_markers_publication.csv", comment = "#")
+
+plot_canonical_markers <- function() {
+  y_annotation_data <-
+    selected_markers %>%
+    arrange(desc(row_number())) %>%
+    mutate(r = row_number()) %>%
+    group_by(label = cell_type) %>%
+    summarise(
+      yintercept = first(r) - 0.5,
+      label_y = mean(r)
+    )
+  
+  x_annotation_data <-
+    tibble(level = levels(colData(nb)$cellont_cluster)) %>% 
+    extract(level, into = "label", regex = "(\\w+)") %>%
+    mutate(label = as_factor(label), r = row_number()) %>%
+    group_by(label) %>%
+    summarize(
+      xmin = first(r) - 0.5,
+      xmax = last(r) + 0.5,
+      label_x = mean(r)
+    ) %>%
+    mutate(
+      fill = case_when(
+        row_number() %% 2 == 0 ~ "white",
+        TRUE                   ~ "gray90"
+      )
+    )
+  
+  p <-
+    plot_dots(
+      logcounts(nb),
+      rev(selected_markers$gene),
+      colData(nb)$cellont_cluster,
+      panel_annotation = x_annotation_data
+    ) +
+    scale_x_discrete(
+      name = "cluster / cell type",
+      labels = function(x) str_replace(x, "(.+) \\((.+)\\)", "\\2\n\\1"),
+      expand = expansion(add = 0.5)
+    ) +
+    scale_y_discrete(NULL, expand = expansion(add = 0.5)) +
+    scale_color_dotplot(
+      "scaled average expression",
+      guide = guide_colorbar(
+        barheight = unit(2, "mm"),
+        barwidth = unit(15, "mm"),
+        label.position = "top",
+        title.vjust = 0.1
+      )
+    ) +
+    scale_radius("% expressed", range = c(0, 2.5)) +
+    coord_fixed(
+      xlim = c(1, 24),
+      clip = "off"
+    ) +
+    geom_hline(
+      yintercept = y_annotation_data$yintercept,
+      linetype = "dashed",
+      size = 0.25
+    ) +
+    geom_text(
+      data = y_annotation_data,
+      aes(
+        x = 25,
+        y = label_y,
+        label = label
+      ),
+      size = BASE_TEXT_SIZE_MM,
+      hjust = 0
+    ) +
+    theme_nb(grid = FALSE) +
+    theme(
+      legend.box.just = "bottom",
+      legend.key.height = unit(1, "mm"),
+      legend.key.width = unit(1, "mm"),
+      legend.position = "top",
+      legend.spacing = unit(0, "mm"),
+      legend.margin = margin(0, 1, -2, 1, "mm"),
+      panel.border = element_rect(size = .25)
+    )
+  p
+}
+
+plot_canonical_markers()
+ggsave_publication("1d_markers", height = 12, width = 8)

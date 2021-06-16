@@ -9,6 +9,7 @@ library(ComplexHeatmap)
 library(tidyverse)
 library(fs)
 source("common_functions.R")
+source("styling.R")
 
 ht_opt(message = FALSE, show_parent_dend_line = FALSE)
 
@@ -583,3 +584,278 @@ plot_cnv_data_comparison <- function(sc_data,
 
 plot_cnv_data_comparison(infercnv_data, snparray_data,
                          filename = "cnv/comparison")
+
+
+
+
+# Publication figures -----------------------------------------------------
+
+## Figure 1e ----
+
+plot_resexp_tumor <- function(data,
+                              metadata,
+                              cells_per_sample = 50L) {
+  # cell metadata
+  cell_metadata <- 
+    data$final_obj@tumor_subclusters$subclusters %>%
+    enframe() %>%
+    filter(str_starts(name, "malignant")) %>%
+    unnest_longer(value) %>%
+    select(value) %>%
+    unnest_longer(value, values_to = "cell_index", indices_to = "cell") %>%
+    left_join(nb_data %>% select(cell, sample, group), by = "cell") %>%
+    mutate(
+      sample = rename_patients(sample),
+      group = rename_groups(group)
+    )
+  
+  # subset n cells per sample
+  set.seed(1L)
+  cell_metadata <- 
+    cell_metadata %>% 
+    group_by(sample) %>% 
+    slice_sample(n = cells_per_sample) %>% 
+    ungroup()
+  
+  # matrix with residual expression, rows ordered
+  cnv_mat <-
+    data$final_obj@expr.data %>% 
+    magrittr::extract(, cell_metadata$cell_index) %>% 
+    t()
+  
+  # draw heatmap
+  Heatmap(
+    cnv_mat,
+    name = "residual\nexpression",
+    col = circlize::colorRamp2(
+      breaks = seq(0.85, 1.15, length.out = 7),
+      colors = rev(brewer.pal(7, "RdBu"))
+    ),
+    heatmap_legend_param = list(
+      border = FALSE,
+      grid_width = unit(2, "mm"),
+      labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+    ),
+    
+    show_row_names = FALSE,
+    show_column_names = FALSE,
+    
+    row_split = cell_metadata$sample,
+    row_gap = unit(0, "mm"),
+    row_title_rot = 0,
+    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    row_dend_gp = gpar(lwd = 0.5),
+    
+    cluster_columns = FALSE,
+    column_split =
+      data$final_obj@gene_order$chr %>%
+      str_sub(4) %>%
+      as_factor(),
+    cluster_column_slices = FALSE,
+    column_gap = unit(0, "mm"),
+    column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    
+    border = TRUE,
+    border_gp = gpar(lwd = 0.5),
+    
+    left_annotation = rowAnnotation(
+      group = cell_metadata$group,
+      col = list(group = GROUP_COLORS),
+      annotation_name_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      annotation_name_side = "top",
+      simple_anno_size = unit(1, "mm"),
+      annotation_legend_param = list(
+        group = list(
+          grid_width = unit(2, "mm"),
+          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+        )
+      )
+    ),
+    
+    use_raster = FALSE,
+  ) %>%
+    draw(
+      row_title = "sample",
+      row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      column_title = "chromosome",
+      column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+    ) 
+}
+
+p <- plot_resexp_tumor(infercnv_data, nb_data, cells_per_sample = 50L)
+ggsave_publication("1e_resexp_tumor", plot = p,
+                   type = "png", width = 18, height = 8)
+
+
+## Figure 1f ----
+
+plot_cnv_data_comparison <- function(sc_data,
+                                     snp_data,
+                                     selected_samples = NULL,
+                                     probability = 0.5,
+                                     logrr_prop = 0.01) {
+  # labels and colors for copy numbers
+  cn_metadata <-  # colorbrewer 11-class BrBG 
+    tribble(
+      ~copy_number, ~label, ~color,
+      0L, "complete loss", "#01665e",
+      1L, "loss of one copy", "#80cdc1",
+      NA, "mosaic loss", "#c7eae5",
+      2L, "neutral", "#f7f7f7",
+      NA, "mosaic gain", "#f6e8c3",
+      3L, "gain of one copy", "#dfc27d",
+      4L, "gain of two copies", "#bf812d",
+      5L, "gain of more than two copies", "#8c510a",
+      NA, "amplification", "#543005"
+    ) %>%
+    mutate(label = as_factor(label))
+  cn_colors <- 
+    cn_metadata %>% 
+    select(label, color) %>% 
+    deframe()
+  
+  # prepare data for plotting
+  plot_data_sc <-
+    sc_data$regions_data %>% 
+    filter(near(prob, probability)) %>% 
+    extract(
+      cell_group_name,
+      into = c("sample", "group"),
+      regex = "malignant_(.*?)_([IV]+)"
+    ) %>% 
+    transmute(
+      sample = sample,
+      chr = str_sub(chr, 4) %>% factor(levels = snp_data$chromosome_size$chr),
+      start = as.integer(start),
+      end = as.integer(end),
+      copy_number = as.integer(state) - 1L
+    ) %>% 
+    left_join(cn_metadata, by = "copy_number")
+  # return(plot_data_sc)
+  
+  plot_data_snp_regions <-
+    snp_data$cnv_regions %>% 
+    mutate(
+      label = case_when(
+        type == "amplification" ~ "amplification",
+        type == "gain" & near(copy_number, 5) ~ "gain of more than two copies",
+        type == "gain" & near(copy_number, 4) ~ "gain of two copies",
+        type == "gain" & near(copy_number, 3) ~ "gain of one copy",
+        type == "mosaic_gain" ~ "mosaic gain",
+        type == "mosaic_loss" ~ "mosaic loss",
+        type == "loss" & near(copy_number, 1) ~ "loss of one copy",
+        type == "loss" & near(copy_number, 0) ~ "complete loss",
+        TRUE ~ NA_character_
+      )
+    ) %>% 
+    left_join(cn_metadata, by = "label")
+  # return(plot_data_snp_regions)
+  
+  plot_data_snp_logrr <-
+    snp_data$logrr_data %>% 
+    group_by(sample) %>% 
+    slice_sample(prop = logrr_prop)
+  # return(plot_data_snp_logrr)
+  
+  # filter for common samples
+  
+  
+  # filter for selected or common samples
+  if (is.null(selected_samples)) {
+    selected_samples <- intersect(
+      plot_data_sc$sample,
+      plot_data_snp_regions$sample
+    )
+  }
+  plot_data_sc <-
+    plot_data_sc %>%
+    filter(sample %in% selected_samples) %>% 
+    mutate(sample = rename_patients(sample))
+  plot_data_snp_regions <-
+    plot_data_snp_regions %>%
+    filter(sample %in% selected_samples) %>% 
+    mutate(sample = rename_patients(sample))
+  plot_data_snp_logrr <-
+    plot_data_snp_logrr %>%
+    filter(sample %in% selected_samples) %>% 
+    mutate(sample = rename_patients(sample))
+  
+  # make plot
+  p <-
+    ggplot(NULL, aes(xmax = end)) +
+    geom_rect(
+      data = snp_data$chromosome_size,
+      aes(xmin = 0, ymin = -0.1, ymax = 0)
+    ) +
+    geom_rect(
+      data = plot_data_sc,
+      aes(xmin = start, fill = label),
+      ymin = 0,
+      ymax = 1
+    ) +
+    geom_rect(
+      data = plot_data_snp_regions,
+      aes(xmin = start, fill = label),
+      ymin = 1,
+      ymax = 2
+    ) +
+    geom_line(
+      data = plot_data_snp_logrr,
+      aes(x = start, y = smoothed + 1.5),
+      size = BASE_LINE_SIZE,
+      alpha = .5
+    ) +
+    geom_hline(yintercept = 1, size = BASE_LINE_SIZE) +
+    scale_x_continuous(
+      name = "chromosome",
+      expand = c(0, 0)
+    ) +
+    scale_y_continuous(
+      name = NULL,
+      breaks = c(0.5, 1.5),
+      labels = c("scRNA-seq", "SNP array"),
+      expand = c(0, 0)
+    ) +
+    scale_fill_manual(
+      name = NULL,
+      values = cn_colors,
+      guide = guide_legend(nrow = 1),
+      drop = FALSE
+    ) +
+    coord_cartesian(ylim = c(0, 2)) +
+    facet_grid(
+      cols = vars(chr),
+      rows = vars(sample),
+      space = "free_x",
+      scales = "free_x",
+      switch = "x"
+    ) +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.line = element_blank(),
+      axis.ticks.x = element_blank(),
+      axis.text.x = element_blank(),
+      legend.key.height = unit(2, "mm"),
+      legend.key.width = unit(2, "mm"),
+      legend.margin = margin(0, 1, -2, 1, "mm"),
+      legend.position = "top",
+      panel.spacing.x = unit(0, "mm"),
+      panel.background = element_rect(color = NA, fill = cn_colors["neutral"]),
+      panel.border = element_rect(
+        color = "black",
+        fill = NA,
+        size = BASE_LINE_SIZE
+      ),
+      strip.text.y = element_text(angle = 0)
+    )
+  
+  p
+}
+
+plot_cnv_data_comparison(
+  infercnv_data, snparray_data,
+  selected_samples = c("2005_1702", "2006_2684", "2016_4503")
+)
+ggsave_publication("1f_cnv_comparison", width = 18, height = 6)
