@@ -2,7 +2,7 @@
 
 # Common definitions ------------------------------------------------------
 
-cell_type_abbreviations <- c(
+CELL_TYPE_ABBREVIATIONS <- c(
   "T" = "T cell",
   NK  = "natural killer cell",
   B   = "B cell",
@@ -14,7 +14,7 @@ cell_type_abbreviations <- c(
 )
 
 # ColorBrewer Set1
-cell_type_colors <- c(
+CELL_TYPE_COLORS <- c(
   "T" = "#1f78b4",
   "NK" = "#a6cee3",
   "B" = "#33a02c",
@@ -28,7 +28,7 @@ cell_type_colors <- c(
 )
 
 # https://wesandersonpalettes.tumblr.com/post/110716093015/ash-should-we-dance
-group_colors <- c(
+GROUP_COLORS <- c(
   I = "#b9b09f",
   II = "#a9d8c8",
   III = "#d16b54",
@@ -39,20 +39,26 @@ group_colors <- c(
 
 # ggplot functions --------------------------------------------------------
 
-theme_nb <- function(base_size = 5,
-                     grid = TRUE,
+BASE_TEXT_SIZE_MM = 1.76  # corresponds to 5 pt
+BASE_TEXT_SIZE_PT = 5
+BASE_LINE_SIZE = 0.25
+
+theme_nb <- function(grid = TRUE,
                      rotate = FALSE,
                      ...){
   res <-
     theme_bw(...) + 
     theme(
-      axis.text = element_text(color = "black", size = base_size),
-      axis.title = element_text(color = "black", size = base_size),
-      legend.text = element_text(color = "black", size = base_size), 
-      legend.title = element_text(size = 5),
+      line = element_line(size = BASE_LINE_SIZE),
+      axis.text = element_text(color = "black", size = BASE_TEXT_SIZE_PT),
+      axis.title = element_text(color = "black", size = BASE_TEXT_SIZE_PT),
+      legend.background = element_blank(),
+      legend.text = element_text(color = "black", size = BASE_TEXT_SIZE_PT), 
+      legend.title = element_text(size = BASE_TEXT_SIZE_PT),
+      panel.border = element_rect(size = BASE_LINE_SIZE * 2),
       plot.margin = unit(c(1, 1, 1, 1), "mm"),
       strip.background = element_blank(),
-      strip.text = element_text(color = "black", size = base_size)
+      strip.text = element_text(color = "black", size = BASE_TEXT_SIZE_PT)
     )
   
   if (!grid)
@@ -95,8 +101,15 @@ ggsave_publication <- function(filename,
                     dpi = 300, units = "cm", limitsize = FALSE,
                     width = width, height = height, ...)  
   } else {
-    rlang::exec(type, filename, res = 300, units = "cm",
-                width = width, height = height,  ...)
+    if (type == "png") {
+      png(filename, res = 300, units = "cm",
+          width = width, height = height, ...)
+    } else if (type == "pdf") {
+      pdf(filename, width = width / 2.54, height = height / 2.54, ...)
+    } else {
+      stop("Type", type, "cannot be saved.")
+    }
+    
     print(plot)
     dev.off()
   }
@@ -143,9 +156,6 @@ rename_groups <- function(s) {
   )
 }
 
-rename_groups(c("I", "II", "III", "IV"))
-rename_groups(factor(c("I", "II", "III", "IV")))
-
 
 rename_patients <- function(s) {
   rename_str_or_fct(
@@ -169,27 +179,5 @@ rename_patients <- function(s) {
       "2019_2495", "R4",
       "2020_1667", "R5"
     )
-    # read_csv("metadata/sample_groups.csv", comment = "#") %>% 
-    #   distinct(group, old = sample) %>% 
-    #   arrange(group, old) %>% 
-    #   mutate(group = rename_groups(group)) %>% 
-    #   group_by(group) %>% 
-    #   mutate(n = row_number()) %>% 
-    #   unite(group, n, col = "new", sep = "") %>% 
-    #   select(old, new)
   )
 }
-
-rename_patients(c("2014_0102", "2020_1667", "2019_5022", "2005_1702"))
-rename_patients(factor(c("2014_0102", "2020_1667", "2019_5022", "2005_1702")))
-
-
-
-read_csv("metadata/sample_groups.csv", comment = "#") %>% 
-  distinct(group, old = sample) %>% 
-  arrange(group, old) %>% 
-  mutate(group = rename_groups(group)) %>% 
-  group_by(group) %>% 
-  mutate(n = row_number()) %>% 
-  unite(group, n, col = "new", sep = "") %>% 
-  select(old, new)
