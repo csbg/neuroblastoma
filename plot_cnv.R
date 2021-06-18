@@ -74,7 +74,9 @@ read_snparray_data <- function(folder, new_sample_names = NULL) {
       start = X2,
       end = X3,
       type = X4,
-      copy_number = X13
+      copy_number = X13,
+      ploidy = replace_na(X21, "2") %>% as.numeric(),
+      delta_copy_number = copy_number - ploidy
     )
   
   # raw SNP array signal
@@ -433,33 +435,43 @@ walk(
 
 # Compare to SNP array data -----------------------------------------------
 
+#' Compare CNVs detected in scRNA-seq data to CNVs from SNP array data.
+#'
+#' @param sc_data scRNA-seq data as loaded by `read_infercnv_data()`.
+#' @param snp_data  SNP array data as loaded by `read_snparray_data()`.
+#' @param selected_samples Samples to include. If `NULL`, include all samples
+#'   with complete data.
+#' @param probability Filtering probability for CNVs predicted from scRNA-seq.
+#' @param logrr_prop Proportion of log R ratio data points to plot.
+#' @param filename Name of output file.
+#'
+#' @return A ggplot object.
 plot_cnv_data_comparison <- function(sc_data,
                                      snp_data,
+                                     selected_samples = NULL,
                                      probability = 0.5,
                                      logrr_prop = 0.01,
                                      filename = NULL) {
   # labels and colors for copy numbers
   cn_metadata <-  # colorbrewer 11-class BrBG 
     tribble(
-      ~copy_number, ~label, ~color,
-      0L, "complete loss", "#01665e",
-      1L, "loss of one copy", "#80cdc1",
-      NA, "mosaic loss", "#c7eae5",
-      2L, "neutral", "#f7f7f7",
-      NA, "mosaic gain", "#f6e8c3",
-      3L, "gain of one copy", "#dfc27d",
-      4L, "gain of two copies", "#bf812d",
-      5L, "gain of more than two copies", "#8c510a",
-      NA, "amplification", "#543005"
+      ~delta_copy_number, ~label,         ~color,
+      -2, "complete loss",                "#01665EFF",
+      -1, "loss of one copy",             "#80CDC1FF",
+       0, "neutral",                      "#F7F7F7FF",
+       1, "gain of one copy",             "#DFC27DFF",
+       2, "gain of two copies",           "#BF812DFF",
+       3, "gain of more than two copies", "#8C510AFF",
+       38, "amplification",               "#543005FF"
     ) %>%
     mutate(label = as_factor(label))
-  cn_colors <- 
-    cn_metadata %>% 
-    select(label, color) %>% 
-    deframe()
+  cn_color <- circlize::colorRamp2(
+    cn_metadata$delta_copy_number,
+    cn_metadata$color
+  )
   
   # prepare data for plotting
-  plot_data_sc <-
+  plot_data_regions <-
     sc_data$regions_data %>% 
     filter(near(prob, probability)) %>% 
     extract(
@@ -469,75 +481,59 @@ plot_cnv_data_comparison <- function(sc_data,
     ) %>% 
     transmute(
       sample = sample,
+      type = "sc",
       chr = str_sub(chr, 4) %>% factor(levels = snp_data$chromosome_size$chr),
       start = as.integer(start),
       end = as.integer(end),
-      copy_number = as.integer(state) - 1L
+      delta_copy_number = as.numeric(state) - 3,
+      ymin = 0,
+      ymax = 1
     ) %>% 
-    left_join(cn_metadata, by = "copy_number")
-  # return(plot_data_sc)
-  
-  plot_data_snp_regions <-
-    snp_data$cnv_regions %>% 
-    mutate(
-      label = case_when(
-        type == "amplification" ~ "amplification",
-        type == "gain" & near(copy_number, 5) ~ "gain of more than two copies",
-        type == "gain" & near(copy_number, 4) ~ "gain of two copies",
-        type == "gain" & near(copy_number, 3) ~ "gain of one copy",
-        type == "mosaic_gain" ~ "mosaic gain",
-        type == "mosaic_loss" ~ "mosaic loss",
-        type == "loss" & near(copy_number, 1) ~ "loss of one copy",
-        type == "loss" & near(copy_number, 0) ~ "complete loss",
-        TRUE ~ NA_character_
-      )
+    bind_rows(
+      snparray_data$cnv_regions %>% 
+        select(!type:ploidy) %>%
+        mutate(type = "snp", ymin = 1, ymax = 2)
     ) %>% 
-    left_join(cn_metadata, by = "label")
-  # return(plot_data_snp_regions)
+    mutate(fill = cn_color(delta_copy_number))
+  # return(plot_data_regions)
   
-  plot_data_snp_logrr <-
+  plot_data_logrr <-
     snp_data$logrr_data %>% 
     group_by(sample) %>% 
     slice_sample(prop = logrr_prop)
-  # return(plot_data_snp_logrr)
+  # return(plot_data_logrr)
   
-  # filter for common samples
-  common_samples <- intersect(
-    plot_data_sc$sample,
-    plot_data_snp_regions$sample
-  )
-  plot_data_sc <-
-    plot_data_sc %>%
-    filter(sample %in% common_samples)
-  plot_data_snp_regions <-
-    plot_data_snp_regions %>%
-    filter(sample %in% common_samples)
-  plot_data_snp_logrr <-
-    plot_data_snp_logrr %>%
-    filter(sample %in% common_samples)
+  # filter for selected or common samples
+  if (is.null(selected_samples)) {
+    selected_samples <- 
+      plot_data_regions %>%
+      group_by(type) %>% 
+      summarise(samples = list(unique(sample))) %>% 
+      deframe() %>% 
+      {intersect(.$sc, .$snp)}
+  }
+  plot_data_regions <-
+    plot_data_regions %>%
+    filter(sample %in% selected_samples)
+  plot_data_logrr <-
+    plot_data_logrr %>%
+    filter(sample %in% selected_samples)
   
   # make plot
   p <-
-    ggplot(NULL, aes(xmax = end)) +
+    ggplot(NULL, aes(xmin = start, xmax = end, ymin = ymin, ymax = ymax)) +
     geom_rect(
       data = snp_data$chromosome_size,
       aes(xmin = 0, ymin = -0.1, ymax = 0)
     ) +
     geom_rect(
-      data = plot_data_sc,
-      aes(xmin = start, fill = label),
-      ymin = 0,
-      ymax = 1
-    ) +
-    geom_rect(
-      data = plot_data_snp_regions,
-      aes(xmin = start, fill = label),
-      ymin = 1,
-      ymax = 2
+      data = plot_data_regions,
+      aes(fill = fill)
     ) +
     geom_line(
-      data = plot_data_snp_logrr,
+      data = plot_data_logrr,
       aes(x = start, y = smoothed + 1.5),
+      inherit.aes = FALSE,
       size = .25,
       alpha = .5
     ) +
@@ -552,11 +548,11 @@ plot_cnv_data_comparison <- function(sc_data,
       labels = c("scRNA-seq", "SNP array"),
       expand = c(0, 0)
     ) +
-    scale_fill_manual(
+    scale_fill_identity(
       name = NULL,
-      values = cn_colors,
       guide = guide_legend(nrow = 1),
-      drop = FALSE
+      breaks = cn_metadata$color,
+      labels = cn_metadata$label
     ) +
     coord_cartesian(ylim = c(0, 2)) +
     facet_grid(
@@ -573,7 +569,7 @@ plot_cnv_data_comparison <- function(sc_data,
       axis.text.x = element_blank(),
       legend.position = "bottom",
       panel.spacing.x = unit(0, "mm"),
-      panel.background = element_rect(color = NA, fill = cn_colors["neutral"]),
+      panel.background = element_rect(color = NA, fill = cn_color(0)),
       panel.border = element_rect(color = "black", fill = NA),
       strip.background = element_blank()
     )
@@ -583,8 +579,9 @@ plot_cnv_data_comparison <- function(sc_data,
 }
 
 plot_cnv_data_comparison(infercnv_data, snparray_data,
+                         # selected_samples = "2019_2495",
+                         # logrr_prop = 0.001,
                          filename = "cnv/comparison")
-
 
 
 
