@@ -18,7 +18,9 @@ library(fgsea)
 library(msigdbr)
 library(openxlsx)
 library(ggrepel)
+library(ggbeeswarm)
 source("common_functions.R")
+source("styling.R")
 
 
 
@@ -148,6 +150,8 @@ dge_results <-
 #' Filter DGE results and add a column "direction".
 #'
 #' @param data A dataframe as returned by `muscat::resDS()`.
+#' @param contrast_frq Named list of character vectors indicating which groups
+#'   should be included for frequency filtering in each contrast.
 #' @param max_p Maximum p value.
 #' @param max_p_adj Maximum adjusted p value. Note: The FDR is calculated by
 #'   muscat/edgeR via p.adjust(method = "BH").
@@ -1305,3 +1309,231 @@ plot_logfc_correlation_scatter(dge_results, NK_III, E_II,
                                filename = "dge/logfc_correlation_example_1")
 plot_logfc_correlation_scatter(dge_results, NK_III, T_III,
                                filename = "dge/logfc_correlation_example_2")
+
+
+
+# Publication figures -----------------------------------------------------
+
+## Figure 3c ----
+
+plot_violin <- function(gene,
+                        groups = c("I", "II", "III", "IV"),
+                        direction = c("up", "down")) {
+  direction <- match.arg(direction)
+  
+  logcounts(nb)[gene, , drop = FALSE] %>% 
+    t() %>%
+    as.matrix() %>%
+    magrittr::set_colnames("logexp") %>% 
+    as_tibble(rownames = "cell") %>%
+    left_join(nb_metadata, by = "cell") %>% 
+    filter(group %in% {{groups}}) %>% 
+    mutate(
+      sample = rename_patients(sample),
+      group = rename_groups(group)
+    ) %>% 
+    ggplot(aes(sample, logexp)) +
+    geom_violin(size = BASE_LINE_SIZE, color = "gray60") +
+    geom_quasirandom(
+      aes(color = group),
+      width = .4,
+      bandwidth = 1,
+      alpha = .5,
+      show.legend = FALSE,
+      size = 0.2,
+      shape = 16
+    ) +
+    annotate(
+      "text_npc",
+      label = str_glue("{gene}, {direction}"),
+      npcx = 0.05,
+      npcy = 0.95,
+      size = BASE_TEXT_SIZE_MM,
+      hjust = 0
+    ) +
+    xlab(NULL) +
+    ylab(NULL) +
+    scale_color_manual(values = GROUP_COLORS) +
+    theme_nb(grid = FALSE) +
+    NULL
+}
+
+p1 <- plot_violin("IRF9", c("I", "II"), "up")
+# p1
+# ggsave_publication("3c_exp_violin", width = 3, height = 3, type = "png")
+p2 <- plot_violin("SAP30", c("I", "II"), "down")
+p3 <- plot_violin("WDR74", c("I", "III"), "up")
+p4 <- plot_violin("IRF9", c("I", "III"), "up")
+p5 <- plot_violin("IFI44L", c("I", "IV"), "up")
+p6 <- plot_violin("HIST1H1E", c("I", "IV"), "down")
+wrap_plots(
+  p1, p2, p3, p4, p5, p6,
+  byrow = FALSE,
+  nrow = 2,
+  widths = c(9, 7, 10)
+)
+ggsave_publication("3c_exp_violin", width = 10, height = 6, type = "png")
+
+
+  
+
+
+
+## Figure 3d ----
+
+plot_gsea <- function(data,
+                      db,
+                      circle_significant = FALSE,
+                      top_n_positive = 5L,
+                      top_n_negative = 5L,
+                      max_p_adj = 0.05,
+                      min_abs_NES = 1) {
+  data_top_terms <-
+    data %>% 
+    filter(db == {{db}}, padj <= max_p_adj, abs(NES) >= min_abs_NES) %>% 
+    group_by(contrast, cluster)
+  
+  top_terms_pos <- 
+    data_top_terms %>% 
+    slice_max(n = top_n_positive, order_by = NES, with_ties = FALSE) %>%
+    pull(pathway) %>%
+    unique()
+  
+  top_terms_neg <- 
+    data_top_terms %>% 
+    slice_min(n = top_n_negative, order_by = NES, with_ties = FALSE) %>%
+    pull(pathway) %>%
+    unique()
+  
+  data_vis <- 
+    data %>% 
+    filter(
+      contrast != "tif",
+      db == {{db}},
+      pathway %in% c(top_terms_pos, top_terms_neg)
+    ) %>% 
+    mutate(
+      is_significant =
+        padj <= max_p_adj &
+        abs(NES) >= min_abs_NES,
+      pathway =
+        as_factor(pathway) %>%
+        fct_reorder(NES * -log10(padj), sum, na.rm = TRUE),
+      contrast = factor(contrast) %>% rename_contrast()
+    )
+  
+  if (nlevels(data_vis$pathway) > 5) {
+    horizontal_grid <-
+      geom_hline(
+        yintercept = seq(5, nlevels(data_vis$pathway), 5),
+        size = BASE_LINE_SIZE,
+        color = "grey92"
+      )
+  } else {
+    horizontal_grid <- NULL  
+  }
+  
+  color_limit <- max(abs(data_vis$NES))
+  
+  if (circle_significant) {
+    circle_significant <- geom_point(
+      data = data_vis %>% filter(is_significant),
+      shape = 1
+    )
+  } else {
+    circle_significant <- NULL
+  }
+    
+  p <- 
+    ggplot(data_vis, aes(contrast, pathway, size = -log10(padj))) +
+    scale_y_discrete() +
+    horizontal_grid +    
+    geom_point(aes(color = NES)) +
+    circle_significant +
+    xlab("vs C (contrast)") +
+    ylab(NULL) +
+    scale_color_gsea(
+      limits = c(-color_limit, color_limit),
+      guide = guide_colorbar(
+        barheight = unit(2, "mm"),
+        barwidth = unit(15, "mm"),
+        label.position = "top",
+        title.vjust = 0.1
+      )
+    ) +
+    scale_size_area(
+      name = TeX("-log_{10} p_{adj}"),
+      max_size = 2.5
+    )  +
+    coord_fixed() +
+    facet_wrap(vars(cluster), nrow = 1) +
+    theme_nb(grid = FALSE) +
+    theme(
+      legend.box.just = "bottom",
+      legend.key.height = unit(1, "mm"),
+      legend.key.width = unit(1, "mm"),
+      legend.position = "top",
+      legend.spacing = unit(0, "mm"),
+      legend.margin = margin(0, 1, -3, 1, "mm"),
+      panel.spacing = unit(-.5, "pt"),
+    )
+  
+  p
+}
+
+plot_gsea(gsea_results, "MSigDB_Hallmark_2020")
+ggsave_publication("3d_gsea", width = 8, height = 10)
+
+
+
+## Figure 3e ----
+
+plot_logfc_correlation_heatmap <- function() {
+  corr_mat <- 
+    dge_results %>% 
+    filter(contrast != "tif") %>% 
+    select(gene, cluster_id, contrast, logFC) %>%
+    mutate(contrast = rename_contrast(contrast)) %>% 
+    unite(cluster_id, contrast, col = "cluster_group", sep = "·") %>%
+    pivot_wider(names_from = "cluster_group", values_from = "logFC") %>%
+    select(!gene) %>%
+    cor(use = "pairwise.complete.obs") %>% 
+    magrittr::set_rownames(str_replace(rownames(.), "(\\w+)·(\\w+)", "\\2·\\1"))
+  
+  Heatmap(
+    corr_mat,
+    col = circlize::colorRamp2(
+      seq(0, max(corr_mat[lower.tri(corr_mat)]), length.out = 9),
+      scico(9, palette = "davos", direction = -1),
+    ),
+    heatmap_legend_param = list(
+      border = FALSE,
+      grid_width = unit(2, "mm"),
+      labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+    ),
+    name = "correlation",
+    
+    row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    row_dend_gp = gpar(lwd = 0.5),
+    row_dend_width = unit(3, "mm"),
+    
+    column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    column_dend_gp = gpar(lwd = 0.5),
+    column_dend_height = unit(3, "mm"),
+    
+    height = unit(3.5, "cm"),
+    width = unit(3.5, "cm"),
+    border = F
+  )
+}
+
+ht_opt(DENDROGRAM_PADDING = unit(0, "pt"))
+p <- plot_logfc_correlation_heatmap()
+p
+ggsave_publication("3e_logfc_correlation_heatmap",
+                   plot = p, width = 6, height = 5)
+
+
+
+

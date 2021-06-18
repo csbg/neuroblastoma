@@ -32,7 +32,7 @@ GROUP_COLORS <- c(
   C = "#b9b09f",
   M = "#a9d8c8",
   A = "#d16b54",
-  R = "#e8c95d"
+  S = "#e8c95d"
 )
 
 
@@ -127,8 +127,8 @@ scale_color_dotplot <- function(...) {
 
 scale_color_gsea <- function(...) {
   scale_color_distiller(
-    palette = "PiYG",
-    direction = 1,
+    palette = "RdBu",
+    direction = -1,
     ...
   )
 }
@@ -152,7 +152,7 @@ rename_groups <- function(s) {
       "I", "C",
       "II", "M",
       "III", "A",
-      "IV", "R"
+      "IV", "S"
     )
   )
 }
@@ -174,11 +174,23 @@ rename_patients <- function(s) {
       "2019_5754", "M4",
       "2005_1702", "A1",
       "2016_3924", "A2",
-      "2006_2684", "R1",
-      "2018_1625", "R2",
-      "2018_6056", "R3",
-      "2019_2495", "R4",
-      "2020_1667", "R5"
+      "2006_2684", "S1",
+      "2018_1625", "S2",
+      "2018_6056", "S3",
+      "2019_2495", "S4",
+      "2020_1667", "S5"
+    )
+  )
+}
+
+rename_contrast <- function(s) {
+  rename_str_or_fct(
+    s,
+    tribble(
+      ~old, ~new,
+      "II_vs_I",  "M",
+      "III_vs_I", "A",
+      "IV_vs_I",  "S"
     )
   )
 }

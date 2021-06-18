@@ -1618,3 +1618,98 @@ nb_data %>%
 
 ggsave_publication("1c_gene_programs", width = 4, height = 6)
 
+
+
+## Figure 3a ----
+
+plot_celltype_dots <- function(data, p_lim = 20, or_lim = 3) {
+  data %>% 
+    mutate(
+      cell_type =
+        as_factor(cell_type) %>%
+        fct_relevel(
+          levels(nb_data$cellont_cluster) %>%
+            str_extract("\\w+") %>% 
+            unique()
+        ),
+      log_p_adj = pmin(-log10(p_adj), p_lim),
+      log_odds_ratio = log2(odds_ratio),
+      log_odds_ratio = case_when(
+        log_odds_ratio > or_lim  ~ or_lim,
+        log_odds_ratio < -or_lim ~ -or_lim,
+        TRUE                     ~ log_odds_ratio
+      ),
+      sample =
+        sample %>% 
+        factor(levels = levels(nb_data$sample)) %>% 
+        rename_patients() %>% 
+        fct_rev(),
+      group = rename_groups(group)
+    ) %>% 
+    ggplot(aes(cell_type, sample)) + 
+    geom_point(aes(color = log_odds_ratio, size = log_p_adj), shape = 16) + 
+    xlab("cell type") +
+    scale_color_gsea(
+      name = TeX("log_2 odds ratio"),
+      limits = c(-or_lim, or_lim),
+      breaks = c(-or_lim, 0, or_lim),
+      labels = c(
+        str_glue("-{or_lim} or lower"),
+        "0",
+        str_glue("{or_lim} or higher")
+      ),
+      guide = guide_colorbar(ticks = FALSE)
+    ) +
+    scale_radius(
+      name = TeX("-log_{10} p_{adj}"),
+      range = c(0.25, 3),
+      breaks = c(0, 10, 20),
+      labels = function(x) c(x[-length(x)], paste(x[length(x)], "or higher"))
+    ) +
+    facet_grid(vars(group), scales = "free_y", space = "free_y") +
+    theme_nb(grid = FALSE) +
+    theme(
+      legend.key.height = unit(2, "mm"),
+      legend.key.width = unit(2, "mm"),
+      legend.spacing = unit(5, "mm"),
+      legend.margin = margin(0, 0, 0, -3, "mm"),
+      panel.spacing = unit(-.5, "pt"),
+      strip.text.y.right = element_text(angle = 0)
+    )
+}
+
+plot_celltype_dots(cell_type_enrichment)
+ggsave_publication("3a_cell_type_abundances", width = 5, height = 4)
+
+
+## Figure 3b ----
+
+nb_data %>%
+  group_by(group, sample, cellont_name) %>% 
+  summarise(n = n()) %>% 
+  mutate(n_rel = n / sum(n)) %>% 
+  ungroup() %>% 
+  filter(cellont_name == "natural killer cell") %>% 
+  mutate(
+    sample = rename_patients(sample) %>% fct_rev(),
+    group = rename_groups(group)
+  ) %>% 
+  ggplot(aes(sample, n_rel)) +
+  geom_col(aes(fill = group), show.legend = FALSE) +
+  scale_y_continuous(
+    "fraction of total cells",
+    expand = expansion()
+  ) +
+  scale_fill_manual(values = GROUP_COLORS) +
+  coord_flip() +
+  theme_nb(grid = FALSE) +
+  theme(
+    axis.line = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.ticks.length.y = unit(0, "mm"),
+    panel.background = element_blank(),
+    panel.border = element_blank(),
+    panel.ontop = TRUE,
+    panel.grid.major.x = element_line(color = "white", size = BASE_LINE_SIZE),
+  )
+ggsave_publication("3b_abundances_NK", width = 5, height = 4)
