@@ -1,10 +1,14 @@
+library(monocle3)
 library(tidyverse)
 source("common_functions.R")
 source("styling.R")
 
+
+
+# Enrichments -------------------------------------------------------------
+
 gsea_data <- readRDS("~/Desktop/NB_Enrichment_Cl4.rds")
 gsea_data
-
 
 plot_gsea <- function(data,
                       db,
@@ -118,3 +122,73 @@ plot_gsea <- function(data,
 
 plot_gsea(gsea_data, "Panther_2016")
 ggsave_publication("2_enrichment", width = 6, height = 8)
+
+
+
+# Trajectory --------------------------------------------------------------
+
+cds <- readRDS("~/Desktop/NB_CDS_trajectory.rds")
+cds
+
+
+plot_trajectory <- function() {
+  # get UMAP coordinates of trajectory nodes
+  ica_space_df <-
+    cds@principal_graph_aux$UMAP$dp_mst %>%
+    t() %>% 
+    magrittr::set_colnames(c("umap_1", "umap_2")) %>% 
+    as_tibble(rownames = "node_id")
+  
+  # get edges of trajectory graph and add UMAP coordinates of their nodes
+  edge_df <-
+    cds@principal_graph$UMAP %>%
+    igraph::as_data_frame() %>%
+    left_join(
+      ica_space_df %>%
+        rename(
+          source_umap_1 = umap_1,
+          source_umap_2 = umap_2
+        ),
+      by = c(from = "node_id")
+    ) %>%
+    left_join(
+      ica_space_df %>%
+        rename(
+          target_umap_1 = umap_1,
+          target_umap_2 = umap_2
+        ),
+      by = c(to = "node_id")
+    )
+  
+  colData(cds) %>% 
+    as_tibble(rownames = "cell") %>% 
+    left_join(
+      reducedDim(cds, "UMAP") %>%
+        magrittr::set_colnames(c("umap_1", "umap_2")) %>% 
+        as_tibble(rownames = "cell"),
+      by = "cell"
+    ) %>% 
+    ggplot(aes(umap_1, umap_2)) +
+    geom_point(
+      aes(color = cytoTRACE),
+      shape = 16,
+      size = 0.1,
+      show.legend = FALSE
+    ) +
+    geom_segment(
+      data = edge_df,
+      aes(
+        x = source_umap_1, 
+        y = source_umap_2,
+        xend = target_umap_1, 
+        yend = target_umap_2
+      ),
+      size = BASE_LINE_SIZE,
+    ) +
+    scale_color_viridis_c(option = "inferno") +
+    coord_fixed() +
+    theme_nb(grid = FALSE)  
+}
+
+plot_trajectory()
+ggsave_publication("2_trajectory", width = 4, height = 4)
