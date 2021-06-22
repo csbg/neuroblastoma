@@ -35,6 +35,14 @@ GROUP_COLORS <- c(
   S = "#e8c95d"
 )
 
+PATIENT_COLORS <-
+  scico::scico(16, palette = "romaO") %>%
+  colorspace::lighten(0.3) %>% 
+  set_names(c("C1", "C2", "C3", "C4", "C5",
+              "M1", "M2", "M3", "M4",
+              "A1", "A2",
+              "S1", "S2", "S3", "S4", "S5"))
+
 
 
 # ggplot functions --------------------------------------------------------
@@ -58,7 +66,11 @@ theme_nb <- function(grid = TRUE,
       panel.border = element_rect(size = BASE_LINE_SIZE * 2),
       plot.margin = unit(c(1, 1, 1, 1), "mm"),
       strip.background = element_blank(),
-      strip.text = element_text(color = "black", size = BASE_TEXT_SIZE_PT)
+      strip.text = element_text(
+        color = "black",
+        size = BASE_TEXT_SIZE_PT,
+        margin = margin(b = 1, unit = "mm")
+      )
     )
   
   if (!grid)
@@ -129,6 +141,7 @@ scale_color_gsea <- function(...) {
   scale_color_distiller(
     palette = "RdBu",
     direction = -1,
+    oob = scales::oob_squish_any,
     ...
   )
 }

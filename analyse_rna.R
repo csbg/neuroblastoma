@@ -1713,3 +1713,130 @@ nb_data %>%
     panel.grid.major.x = element_line(color = "white", size = BASE_LINE_SIZE),
   )
 ggsave_publication("3b_abundances_NK", width = 5, height = 4)
+
+
+## Figure S1a ----
+
+set.seed(1L)
+nb_data %>%
+  select(
+    cell, sample,
+    umap_1_monocle, umap_2_monocle,
+    umap_1_unaligned, umap_2_unaligned
+  ) %>% 
+  pivot_longer(
+    starts_with("umap"),
+    names_to = c("coord", "aligned"),
+    names_pattern = "(umap_\\d)_(.+)"
+  ) %>% 
+  pivot_wider(names_from = coord) %>% 
+  mutate(
+    aligned =
+      as_factor(aligned) %>%
+      fct_recode(integrated = "monocle", original = "unaligned") %>% 
+      fct_rev(),
+    sample = rename_patients(sample)
+  ) %>% 
+  # arrange(umap_1) %>% 
+  slice_sample(prop = 1) %>% 
+  ggplot(aes(umap_1, umap_2)) +
+  geom_point(
+    aes(color = sample),
+    size = .001,
+    shape = 16
+  ) +
+  scale_x_continuous("UMAP1", breaks = c(-10, 0, 10)) +
+  scale_y_continuous("UMAP2", breaks = c(-10, 0, 10)) +
+  scale_color_manual(
+    values = PATIENT_COLORS,
+    guide = guide_legend(override.aes = list(size = 1), ncol = 2)
+  ) +
+  coord_fixed() +
+  facet_wrap(vars(aligned)) +
+  theme_nb(grid = FALSE) +
+  theme(
+    legend.title.align = 1,
+    legend.key.height = unit(1, "mm"),
+    legend.key.width = unit(1, "mm"),
+    legend.position = c(.92, .24)
+  )
+ggsave_publication("S1a_umap_integration", type = "png", width = 9, height = 5)
+
+
+## Figure S1b ----
+
+plot_infiltration_rate <- function() {
+  tif_facs <-
+    read_csv("metadata/sample_groups.csv", comment = "#") %>%
+    filter(!is.na(facs_alive)) %>% 
+    mutate(tif_facs = facs_tumor / facs_alive) %>% 
+    select(group, sample, tif_facs)
+  
+  tif_data <-
+    nb_data %>%
+    group_by(group, sample) %>% 
+    summarise(tif_sc = sum(cluster_50 == "8") / n())
+  
+  infiltration_rates <-
+    left_join(
+      tif_facs,
+      tif_data,
+      by = c("group", "sample")
+    ) %>% 
+    mutate(group = rename_groups(group) %>% fct_relevel("C", "M", "A", "S"))
+  
+  p <- 
+    infiltration_rates %>%
+    pivot_longer(
+      starts_with("tif"),
+      names_to = "method",
+      names_prefix = "tif_",
+      values_to = "tif"
+    ) %>%
+    mutate(method = recode(method, facs = "FACS", sc = "scRNA-seq")) %>% 
+    ggplot(aes(method, tif, color = group)) +
+    geom_point(show.legend = FALSE) +
+    geom_line(aes(group = sample), show.legend = FALSE) +
+    geom_text(
+      data =
+        infiltration_rates %>%
+        group_by(group) %>%
+        summarise(across(starts_with("tif"), mean)) %>%
+        pivot_longer(
+          starts_with("tif"),
+          names_to = "method",
+          names_prefix = "tif_",
+          values_to = "tif"
+        ) %>%
+        mutate(
+          label = sprintf("%.1f", tif * 100),
+          tif = 0.6,
+          method = recode(method, facs = "FACS", sc = "scRNA-seq")
+        ),
+      aes(label = label),
+      color = "black",
+      size = BASE_TEXT_SIZE_MM
+    ) +
+    geom_text(
+      data = tibble(
+        label = "mean over\npatients",
+        group = factor("C", levels = c("C", "M", "A", "S"))
+      ),
+      aes(label = label, x = 1.5, y = 0.52),
+      color = "black",
+      size = BASE_TEXT_SIZE_MM
+    ) +
+    xlab(NULL) +
+    ylab("tumor infiltration rate") +
+    scale_color_manual(values = GROUP_COLORS) +
+    facet_wrap(vars(group), nrow = 1) +
+    theme_nb(grid = FALSE) +
+    theme(
+      panel.grid.major.y = element_line(color = "grey92", size = BASE_LINE_SIZE)
+    )
+  
+  p
+}
+
+plot_infiltration_rate()
+ggsave_publication("S1b_tif", width = 9, height = 4)

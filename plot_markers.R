@@ -9,6 +9,7 @@ library(scuttle)
 library(tidyverse)
 library(scico)
 library(ggnewscale)
+library(patchwork)
 source("common_functions.R")
 source("styling.R")
 
@@ -72,8 +73,10 @@ nb <-
   readRDS("data_generated/rna_decontaminated.rds") %>% 
   logNormCounts(assay.type = "soupx_counts")
 
+nb_metadata <- readRDS("data_generated/metadata.rds")
+
 colData(nb) <-
-  readRDS("data_generated/metadata.rds") %>%
+  nb_metadata %>%
   mutate(Size_Factor = colData(nb)$Size_Factor) %>% 
   subdivide_tumor_cluster(
     cluster_col = cellont_cluster,
@@ -621,3 +624,137 @@ plot_canonical_markers <- function() {
 
 plot_canonical_markers()
 ggsave_publication("1d_markers", height = 12, width = 8)
+
+
+## Figure S1c (top) ----
+  
+plot_mesenchymal <- function(top_prop = 0.05) {
+  data_highlight <-
+    bind_rows(
+      mesenchymal =
+        nb_metadata %>%
+        slice_max(signature_mesenchymal, prop = top_prop) %>% 
+        select(
+          cell, umap_1_monocle, umap_2_monocle,
+          value = signature_mesenchymal
+        ),
+      `NCC-like` =
+        nb_metadata %>%
+        slice_max(signature_ncc_like, prop = top_prop) %>% 
+        select(
+          cell, umap_1_monocle, umap_2_monocle,
+          value = signature_ncc_like
+        ),
+      .id = "signature"
+    ) %>% 
+    arrange(value)
+  
+  nb_metadata %>%
+    ggplot(aes(umap_1_monocle, umap_2_monocle)) +
+    geom_point(color = "gray90", size = 0.001, shape = 16) +
+    geom_point(
+      data = data_highlight,
+      aes(color = value),
+      size = 0.001,
+      shape = 16
+    ) +
+    scale_x_continuous("UMAP1", breaks = c(-10, 0, 10)) +
+    scale_y_continuous("UMAP2", breaks = c(-10, 0, 10)) +
+    scale_color_distiller(
+      name = "gene\nsign.\nscore",
+      palette = "RdPu",
+      breaks = c(0.2, 0.4, 0.6),
+      guide = guide_colorbar(
+        barwidth = unit(2, "mm"),
+        barheight = unit(15, "mm")
+      )
+    ) +
+    coord_fixed() +
+    facet_wrap(vars(signature)) +
+    theme_nb(grid = FALSE) +
+    theme(
+      legend.position = c(.95, .32)
+    )
+}
+
+plot_mesenchymal()
+ggsave_publication("S1c_top_mesenchymal", type = "png", width = 9, height = 5)
+
+
+## Figure S1c (bottom) ----
+
+subplot_nb_dots <- function(signature_col, title = NULL, top_prop = 0.05) {
+  selected_cells <- union(
+    colData(nb) %>% 
+      as_tibble(rownames = "cell") %>% 
+      slice_max(prop = top_prop, order_by = {{signature_col}}) %>% 
+      pull(cell),
+    colData(nb) %>% 
+      as_tibble(rownames = "cell") %>% 
+      filter(cellont_abbr == "NB") %>% 
+      pull(cell)
+  )
+  
+  nb_subset <- nb[, selected_cells]
+  
+  nb_markers <-
+    markers %>% 
+    filter(cell_type == "neuroblastoma") %>% 
+    pull(gene)
+  
+  plot_dots(
+    logcounts(nb_subset),
+    nb_markers,
+    colData(nb_subset)$cluster_50
+  ) +
+    scale_x_discrete("cluster") +
+    scale_y_discrete(NULL) +
+    scale_color_dotplot(
+      "scaled average expression",
+      limits = c(-0.5, 2.5),
+      breaks = c(0, 1, 2),
+      guide = guide_colorbar(
+        barheight = unit(2, "mm"),
+        barwidth = unit(15, "mm"),
+        label.position = "top",
+        title.vjust = 0.1
+      )
+    ) +
+    scale_radius("% expressed", range = c(0, 2.5)) +
+    ggtitle(title) +
+    coord_fixed() +
+    theme_nb(grid = FALSE) +
+    theme(
+      plot.title = element_text(
+        size = BASE_TEXT_SIZE_PT,
+        hjust = 0.5,
+        margin = margin(b = 1, unit = "mm")
+      )
+    )
+}
+
+wrap_plots(
+  guide_area(),
+  subplot_nb_dots(signature_mesenchymal, "mesenchymal"),
+  subplot_nb_dots(signature_ncc_like, "NCC-like") +
+    theme(
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank()
+    ),
+  guides = "collect",
+  design = "AA\nBC",
+  heights = c(0.2, 0.8),
+  widths = c(12, 19)
+) &
+  theme(
+    legend.box.just = "bottom",
+    legend.key.height = unit(1, "mm"),
+    legend.key.width = unit(1, "mm"),
+    legend.position = "top",
+    legend.spacing = unit(0, "mm"),
+    legend.margin = margin(0, 1, 0, 1, "mm"),
+    plot.margin = margin(0, 1, 0, 1, "mm"),
+    
+  )
+
+ggsave_publication("s1c_bottom_dots.pdf", width = 9, height = 4)

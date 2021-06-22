@@ -834,3 +834,114 @@ plot_cnv_data_comparison(
   selected_samples = c("2016_4503", "2005_1702", "2006_2684")
 )
 ggsave_publication("1f_cnv_comparison", width = 18, height = 6)
+
+
+
+## Figure S1d ----
+
+plot_resexp_marrow <- function(data,
+                               metadata,
+                               cells_per_type = 50L) {
+  # cell metadata
+  cell_metadata <- 
+    data$final_obj@tumor_subclusters$subclusters %>%
+    enframe(name = "row_split") %>% 
+    filter(!str_starts(row_split, "malignant")) %>% 
+    unnest_longer(value) %>%
+    select(value) %>%
+    unnest_longer(value, values_to = "cell_index", indices_to = "cell") %>%
+    left_join(
+      nb_data %>%
+        select(cell, sample, group, cellont_abbr), 
+      by = "cell"
+    ) %>%
+    filter(cellont_abbr != "other") %>% 
+    mutate(
+      sample = rename_patients(sample),
+      group = rename_groups(group)
+    )
+  
+  # subset n cells per sample
+  set.seed(1L)
+  cell_metadata <- 
+    cell_metadata %>% 
+    group_by(cellont_abbr) %>% 
+    slice_sample(n = cells_per_type) %>% 
+    ungroup()
+  
+  # matrix with residual expression, rows ordered
+  cnv_mat <-
+    data$final_obj@expr.data %>% 
+    magrittr::extract(, cell_metadata$cell_index) %>% 
+    t()
+  
+  # draw heatmap
+  Heatmap(
+    cnv_mat,
+    name = "residual\nexpression",
+    col = circlize::colorRamp2(
+      breaks = seq(0.85, 1.15, length.out = 7),
+      colors = rev(brewer.pal(7, "RdBu"))
+    ),
+    heatmap_legend_param = list(
+      border = FALSE,
+      grid_width = unit(2, "mm"),
+      labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+    ),
+    
+    show_row_names = FALSE,
+    show_column_names = FALSE,
+    
+    row_split = cell_metadata$cellont_abbr,
+    row_gap = unit(0, "mm"),
+    row_title_rot = 0,
+    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    row_dend_gp = gpar(lwd = 0.5),
+    
+    cluster_columns = FALSE,
+    column_split =
+      data$final_obj@gene_order$chr %>%
+      str_sub(4) %>%
+      as_factor(),
+    cluster_column_slices = FALSE,
+    column_gap = unit(0, "mm"),
+    column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    
+    border = TRUE,
+    border_gp = gpar(lwd = 0.5),
+    
+    left_annotation = rowAnnotation(
+      group = cell_metadata$group,
+      sample = cell_metadata$sample,
+      col = list(group = GROUP_COLORS, sample = PATIENT_COLORS),
+      annotation_name_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      annotation_name_side = "top",
+      simple_anno_size = unit(1.5, "mm"),
+      annotation_legend_param = list(
+        group = list(
+          grid_width = unit(2, "mm"),
+          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+        ),
+        sample = list(
+          grid_width = unit(2, "mm"),
+          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+        )
+      )
+    ),
+    
+    use_raster = FALSE,
+  ) %>%
+    draw(
+      row_title = "cell type",
+      row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      column_title = "chromosome",
+      column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+    ) 
+}
+
+p <- plot_resexp_marrow(infercnv_data, nb_data)
+ggsave_publication("S1d_resexp_marrow", plot = p,
+                   type = "png", width = 18, height = 8)
