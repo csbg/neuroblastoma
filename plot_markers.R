@@ -31,12 +31,13 @@ subdivide_tumor_cluster <- function(metadata,
                                     nb_cluster_name,
                                     subcluster_file) {
   subclusters <- 
-    read_csv(subcluster_file, col_types = "cc") %>% 
+    read_csv(subcluster_file, col_types = "ci") %>% 
     mutate(
       tumor_subcluster =
-        as_factor(tumor_subcluster) %>%
-        fct_inseq() %>% 
-        fct_relabel(~str_glue("{str_sub(nb_cluster_name, end = -2L)}.{.})"))
+        letters[tumor_subcluster] %>% 
+        as_factor() %>%
+        fct_infreq() %>% 
+        fct_relabel(~str_glue("{str_sub(nb_cluster_name, end = -2L)}{.})"))
     )
   
   old_levels <-
@@ -540,6 +541,11 @@ selected_markers <-
   read_csv("metadata/cell_markers_publication.csv", comment = "#")
 
 plot_canonical_markers <- function() {
+  # remove other cells
+  nb <- nb[, colData(nb)$cellont_abbr != "other"]
+  colData(nb)$cellont_abbr <- fct_drop(colData(nb)$cellont_abbr)
+  colData(nb)$cellont_cluster <- fct_drop(colData(nb)$cellont_cluster)
+  
   y_annotation_data <-
     selected_markers %>%
     arrange(desc(row_number())) %>%
@@ -567,6 +573,8 @@ plot_canonical_markers <- function() {
       )
     )
   
+  
+  
   p <-
     plot_dots(
       logcounts(nb),
@@ -591,7 +599,7 @@ plot_canonical_markers <- function() {
     ) +
     scale_radius("% expressed", range = c(0, 2.5)) +
     coord_fixed(
-      xlim = c(1, 24),
+      xlim = c(1, 23),
       clip = "off"
     ) +
     geom_hline(
@@ -602,7 +610,7 @@ plot_canonical_markers <- function() {
     geom_text(
       data = y_annotation_data,
       aes(
-        x = 25,
+        x = 24,
         y = label_y,
         label = label
       ),
@@ -617,7 +625,7 @@ plot_canonical_markers <- function() {
       legend.position = "top",
       legend.spacing = unit(0, "mm"),
       legend.margin = margin(0, 1, -2, 1, "mm"),
-      panel.border = element_rect(size = .25)
+      panel.border = element_rect(color = "black", size = .25)
     )
   p
 }

@@ -663,7 +663,6 @@ plot_resexp_tumor <- function(data,
       col = list(group = GROUP_COLORS),
       annotation_name_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
       annotation_name_side = "top",
-      simple_anno_size = unit(1, "mm"),
       annotation_legend_param = list(
         group = list(
           grid_width = unit(2, "mm"),
@@ -676,14 +675,21 @@ plot_resexp_tumor <- function(data,
     use_raster = FALSE,
   ) %>%
     draw(
-      row_title = "sample",
+      gap = unit(50, "mm"),
+      row_title = "patient",
       row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
       column_title = "chromosome",
       column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
     ) 
 }
 
-p <- plot_resexp_tumor(infercnv_data, nb_data, cells_per_sample = 50L)
+ht_opt(
+  simple_anno_size = unit(1.5, "mm"),
+  DENDROGRAM_PADDING = unit(1, "pt"),
+  ROW_ANNO_PADDING = unit(1, "pt"),
+  TITLE_PADDING = unit(1, "mm")
+)
+p <- plot_resexp_tumor(infercnv_data, nb_data, 50L)
 ggsave_publication("1e_resexp_tumor", plot = p,
                    type = "png", width = 18, height = 8)
 
@@ -778,16 +784,18 @@ plot_cnv_data_comparison <- function(sc_data,
     ) +
     geom_rect(
       data = plot_data_regions,
-      aes(fill = fill)
+      aes(fill = fill),
+      key_glyph = "rect"
     ) +
     geom_line(
       data = plot_data_logrr,
-      aes(x = start, y = smoothed + 1.5),
       inherit.aes = FALSE,
+      aes(x = start, y = smoothed + 1.5, color = "log R ratio"),
       size = BASE_LINE_SIZE,
-      alpha = .5
+      alpha = .5,
+      key_glyph = "timeseries"
     ) +
-    geom_hline(yintercept = 1, size = BASE_LINE_SIZE,) +
+    geom_hline(yintercept = 1, size = BASE_LINE_SIZE) +
     scale_x_continuous(
       name = "chromosome",
       expand = c(0, 0)
@@ -796,7 +804,16 @@ plot_cnv_data_comparison <- function(sc_data,
       name = NULL,
       breaks = c(0.5, 1.5),
       labels = c("scRNA-seq", "SNP array"),
-      expand = c(0, 0)
+      expand = c(0, 0),
+      sec.axis = sec_axis(
+        name = "log R ratio",
+        trans = ~. - 1.5,
+        breaks = c(-0.5, 0, .5)
+      )
+    ) +
+    scale_color_manual(
+      name = NULL,
+      values = "black"
     ) +
     scale_fill_identity(
       name = NULL,
@@ -810,20 +827,24 @@ plot_cnv_data_comparison <- function(sc_data,
       rows = vars(sample),
       space = "free_x",
       scales = "free_x",
-      switch = "x"
+      switch = "both"
     ) +
     theme_nb(grid = FALSE) +
     theme(
       axis.line = element_blank(),
       axis.ticks.x = element_blank(),
+      axis.ticks.length.x = unit(0, "mm"),
       axis.text.x = element_blank(),
       legend.key.height = unit(2, "mm"),
       legend.key.width = unit(2, "mm"),
       legend.margin = margin(0, 1, -2, 1, "mm"),
       legend.position = "top",
-      panel.spacing = unit(-.5, "pt"),
+      panel.spacing.x = unit(-.5, "pt"),
+      panel.spacing.y = unit(1, "mm"),
       panel.background = element_rect(color = NA, fill = cn_color(0)),
-      strip.text.y = element_text(angle = 0)
+      strip.placement = "outside",
+      strip.text.x = element_text(margin = margin()),
+      strip.text.y.left = element_text(angle = 0, margin = margin())
     )
   
   p
@@ -913,18 +934,17 @@ plot_resexp_marrow <- function(data,
     
     left_annotation = rowAnnotation(
       group = cell_metadata$group,
-      sample = cell_metadata$sample,
-      col = list(group = GROUP_COLORS, sample = PATIENT_COLORS),
+      patient = cell_metadata$sample,
+      col = list(group = GROUP_COLORS, patient = PATIENT_COLORS),
       annotation_name_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
       annotation_name_side = "top",
-      simple_anno_size = unit(1.5, "mm"),
       annotation_legend_param = list(
         group = list(
           grid_width = unit(2, "mm"),
           labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
           title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
         ),
-        sample = list(
+        patient = list(
           grid_width = unit(2, "mm"),
           labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
           title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)

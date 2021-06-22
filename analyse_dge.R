@@ -1317,35 +1317,49 @@ plot_logfc_correlation_scatter(dge_results, NK_III, T_III,
 ## Figure 3c ----
 
 plot_violin <- function(gene,
+                        cell_type,
                         groups = c("I", "II", "III", "IV"),
                         direction = c("up", "down")) {
   direction <- match.arg(direction)
   
-  logcounts(nb)[gene, , drop = FALSE] %>% 
+  barcodes <- 
+    nb_metadata %>% 
+    filter(
+      cellont_cluster %in% used_clusters,
+      cellont_abbr == {{cell_type}}
+    ) %>% 
+    pull(cell)
+  
+  logcounts(nb)[gene, barcodes, drop = FALSE] %>%
     t() %>%
     as.matrix() %>%
-    magrittr::set_colnames("logexp") %>% 
+    magrittr::set_colnames("logexp") %>%
     as_tibble(rownames = "cell") %>%
-    left_join(nb_metadata, by = "cell") %>% 
-    filter(group %in% {{groups}}) %>% 
+    left_join(nb_metadata, by = "cell") %>%
+    filter(group %in% {{groups}}) %>%
     mutate(
       sample = rename_patients(sample),
       group = rename_groups(group)
-    ) %>% 
+    ) %>%
     ggplot(aes(sample, logexp)) +
-    geom_violin(size = BASE_LINE_SIZE, color = "gray60") +
+    geom_violin(
+      size = BASE_LINE_SIZE,
+      color = "gray60",
+      scale = "width",
+      width = 0.8
+    ) +
     geom_quasirandom(
       aes(color = group),
-      width = .4,
+      width = 0.4,
       bandwidth = 1,
-      alpha = .5,
+      alpha = 0.5,
       show.legend = FALSE,
       size = 0.2,
       shape = 16
     ) +
     annotate(
       "text_npc",
-      label = str_glue("{gene}, {direction}"),
+      label = str_glue("{cell_type}, {gene} ({direction})"),
       npcx = 0.05,
       npcy = 0.95,
       size = BASE_TEXT_SIZE_MM,
@@ -1354,18 +1368,16 @@ plot_violin <- function(gene,
     xlab(NULL) +
     ylab(NULL) +
     scale_color_manual(values = GROUP_COLORS) +
-    theme_nb(grid = FALSE) +
-    NULL
+    theme_nb(grid = FALSE)
 }
 
-p1 <- plot_violin("IRF9", c("I", "II"), "up")
-# p1
+p1 <- plot_violin("IRF9", "B", c("I", "II"), "up")
 # ggsave_publication("3c_exp_violin", width = 3, height = 3, type = "png")
-p2 <- plot_violin("SAP30", c("I", "II"), "down")
-p3 <- plot_violin("WDR74", c("I", "III"), "up")
-p4 <- plot_violin("IRF9", c("I", "III"), "up")
-p5 <- plot_violin("IFI44L", c("I", "IV"), "up")
-p6 <- plot_violin("HIST1H1E", c("I", "IV"), "down")
+p2 <- plot_violin("SAP30", "SC", c("I", "II"), "down")
+p3 <- plot_violin("WDR74", "B", c("I", "III"), "up")
+p4 <- plot_violin("IRF9", "B", c("I", "III"), "up")
+p5 <- plot_violin("IFI44L", "SC", c("I", "IV"), "up")
+p6 <- plot_violin("HIST1H1E", "SC", c("I", "IV"), "down")
 wrap_plots(
   p1, p2, p3, p4, p5, p6,
   byrow = FALSE,
@@ -1373,9 +1385,6 @@ wrap_plots(
   widths = c(9, 7, 10)
 )
 ggsave_publication("3c_exp_violin", width = 10, height = 6, type = "png")
-
-
-  
 
 
 
@@ -1494,11 +1503,24 @@ plot_logfc_correlation_heatmap <- function() {
     filter(contrast != "tif") %>% 
     select(gene, cluster_id, contrast, logFC) %>%
     mutate(contrast = rename_contrast(contrast)) %>% 
-    unite(cluster_id, contrast, col = "cluster_group", sep = "·") %>%
+    unite(cluster_id, contrast, col = "cluster_group", sep = "_") %>%
     pivot_wider(names_from = "cluster_group", values_from = "logFC") %>%
     select(!gene) %>%
-    cor(use = "pairwise.complete.obs") %>% 
-    magrittr::set_rownames(str_replace(rownames(.), "(\\w+)·(\\w+)", "\\2·\\1"))
+    cor(use = "pairwise.complete.obs")
+  
+  distance <- as.dist(2 - corr_mat)
+  
+  metadata <- 
+    colnames(corr_mat) %>% 
+    str_match("(.+)_(.+)")
+  
+  group_names <- 
+    metadata[, 3] %>% 
+    factor(levels = names(GROUP_COLORS)) %>% 
+    fct_drop()
+  
+  colnames(corr_mat) <- metadata[, 2]
+  rownames(corr_mat) <- metadata[, 2]
   
   Heatmap(
     corr_mat,
@@ -1507,33 +1529,62 @@ plot_logfc_correlation_heatmap <- function() {
       scico(9, palette = "davos", direction = -1),
     ),
     heatmap_legend_param = list(
+      at = c(0, .4, .8),
       border = FALSE,
       grid_width = unit(2, "mm"),
       labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      legend_height = unit(15, "mm"),
       title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
     ),
-    name = "correlation",
+    name = "log fold change\ncorrelation",
     
+    clustering_distance_rows = distance,
     row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     row_dend_gp = gpar(lwd = 0.5),
     row_dend_width = unit(3, "mm"),
     
+    clustering_distance_columns = distance,
     column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     column_dend_gp = gpar(lwd = 0.5),
     column_dend_height = unit(3, "mm"),
     
     height = unit(3.5, "cm"),
     width = unit(3.5, "cm"),
-    border = F
+    border = F,
+    
+    right_annotation = rowAnnotation(
+      group = group_names,
+      col = list(group = GROUP_COLORS),
+      show_annotation_name = FALSE,
+      show_legend = TRUE,
+      annotation_legend_param = list(
+        group = list(
+          title = "vs C\n(contrast)",
+          grid_width = unit(2, "mm"),
+          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+        )
+      )
+    ),
+    
+    bottom_annotation = HeatmapAnnotation(
+      group = group_names,
+      col = list(group = GROUP_COLORS),
+      show_annotation_name = FALSE,
+      show_legend = FALSE
+    )
   )
 }
 
-ht_opt(DENDROGRAM_PADDING = unit(0, "pt"))
+ht_opt(
+  simple_anno_size = unit(1.5, "mm"),
+  COLUMN_ANNO_PADDING = unit(1, "pt"),
+  DENDROGRAM_PADDING = unit(1, "pt"),
+  HEATMAP_LEGEND_PADDING = unit(1, "mm"),
+  ROW_ANNO_PADDING = unit(1, "pt"),
+  TITLE_PADDING = unit(1, "mm")
+)
 p <- plot_logfc_correlation_heatmap()
 p
 ggsave_publication("3e_logfc_correlation_heatmap",
                    plot = p, width = 6, height = 5)
-
-
-
-

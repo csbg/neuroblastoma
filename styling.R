@@ -68,9 +68,10 @@ theme_nb <- function(grid = TRUE,
       strip.background = element_blank(),
       strip.text = element_text(
         color = "black",
-        size = BASE_TEXT_SIZE_PT,
-        margin = margin(b = 1, unit = "mm")
-      )
+        size = BASE_TEXT_SIZE_PT
+      ),
+      strip.text.x = element_text(margin = margin(b = 1, unit = "mm")),
+      strip.text.y = element_text(margin = margin(l = 1, unit = "mm"))
     )
   
   if (!grid)

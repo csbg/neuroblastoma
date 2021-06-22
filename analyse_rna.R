@@ -1608,7 +1608,8 @@ nb_data %>%
     scale = "width",
     size = BASE_LINE_SIZE
   ) +
-  scale_fill_manual(values = c("gray80", cell_type_colors["NB"])) +
+  stat_summary(geom = "point", fun = mean, size = .1) +
+  scale_fill_manual(values = c("gray80", CELL_TYPE_COLORS["NB"])) +
   xlab(NULL) +
   ylab("gene signature score") +
   coord_flip() +
@@ -1624,6 +1625,7 @@ ggsave_publication("1c_gene_programs", width = 4, height = 6)
 
 plot_celltype_dots <- function(data, p_lim = 20, or_lim = 3) {
   data %>% 
+    filter(cell_type != "other") %>% 
     mutate(
       cell_type =
         as_factor(cell_type) %>%
@@ -1649,6 +1651,7 @@ plot_celltype_dots <- function(data, p_lim = 20, or_lim = 3) {
     ggplot(aes(cell_type, sample)) + 
     geom_point(aes(color = log_odds_ratio, size = log_p_adj), shape = 16) + 
     xlab("cell type") +
+    ylab("patient") +
     scale_color_gsea(
       name = TeX("log_2 odds ratio"),
       limits = c(-or_lim, or_lim),
@@ -1672,7 +1675,7 @@ plot_celltype_dots <- function(data, p_lim = 20, or_lim = 3) {
       legend.key.height = unit(2, "mm"),
       legend.key.width = unit(2, "mm"),
       legend.spacing = unit(5, "mm"),
-      legend.margin = margin(0, 0, 0, -3, "mm"),
+      legend.margin = margin(0, 0, 0, 0, "mm"),
       panel.spacing = unit(-.5, "pt"),
       strip.text.y.right = element_text(angle = 0)
     )
@@ -1696,6 +1699,15 @@ nb_data %>%
   ) %>% 
   ggplot(aes(sample, n_rel)) +
   geom_col(aes(fill = group), show.legend = FALSE) +
+  annotate(
+    "text",
+    x = 15,
+    y = .21,
+    label = "abundance of\nNK cells",
+    size = BASE_TEXT_SIZE_MM,
+    hjust = 0
+  ) +
+  xlab("patient") +
   scale_y_continuous(
     "fraction of total cells",
     expand = expansion()
@@ -1737,7 +1749,6 @@ nb_data %>%
       fct_rev(),
     sample = rename_patients(sample)
   ) %>% 
-  # arrange(umap_1) %>% 
   slice_sample(prop = 1) %>% 
   ggplot(aes(umap_1, umap_2)) +
   geom_point(
@@ -1748,6 +1759,7 @@ nb_data %>%
   scale_x_continuous("UMAP1", breaks = c(-10, 0, 10)) +
   scale_y_continuous("UMAP2", breaks = c(-10, 0, 10)) +
   scale_color_manual(
+    name = "patient",
     values = PATIENT_COLORS,
     guide = guide_legend(override.aes = list(size = 1), ncol = 2)
   ) +
