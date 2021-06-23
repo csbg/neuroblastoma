@@ -1,7 +1,18 @@
 # styles for publication-quality figures
 
+library(tidyverse)
+library(fs)
+
+
+
 # Common definitions ------------------------------------------------------
 
+# use "patients" (instead of "samples")
+
+# UMAP dimensions are called "UMAP1" and "UMAP2"
+
+# use the following abbreviations and long forms for cell types
+# factors should be ordered like this vector
 CELL_TYPE_ABBREVIATIONS <- c(
   "T" = "T cell",
   NK  = "natural killer cell",
@@ -13,21 +24,23 @@ CELL_TYPE_ABBREVIATIONS <- c(
   NB  = "neuron"
 )
 
-# ColorBrewer Set1
+# color cell types using ColorBrewer's Set1
 CELL_TYPE_COLORS <- c(
-  "T" = "#1f78b4",
-  "NK" = "#a6cee3",
-  "B" = "#33a02c",
-  "M" = "#ff7f00",
-  "pDC" = "#fdbf6f",
-  "E" = "#b15928",
-  "SC" = "#6a3d9a",
-  "NB" = "#e31a1c",
-  "other" = "black",
-  na = "gray80"
+  "T"   = "#1f78b4",
+  NK    = "#a6cee3",
+  B     = "#33a02c",
+  M     = "#ff7f00",
+  pDC   = "#fdbf6f",
+  E     = "#b15928",
+  SC    = "#6a3d9a",
+  NB    = "#e31a1c",
+  other = "black",
+  na    = "gray80"
 )
 
-# https://wesandersonpalettes.tumblr.com/post/110716093015/ash-should-we-dance
+# color groups using one of the wesanderson color palettes
+# (https://wesandersonpalettes.tumblr.com/post/110716093015/ash-should-we-dance)
+# factors should be ordered like this vector
 GROUP_COLORS <- c(
   C = "#b9b09f",
   M = "#a9d8c8",
@@ -35,6 +48,8 @@ GROUP_COLORS <- c(
   S = "#e8c95d"
 )
 
+# color patients using the cyclic romaO from the Scientific Colour Maps
+# TODO: select colors so that M clusters in figure 2 are clearly distinguishable
 PATIENT_COLORS <-
   scico::scico(16, palette = "romaO") %>%
   colorspace::lighten(0.3) %>% 
@@ -47,10 +62,24 @@ PATIENT_COLORS <-
 
 # ggplot functions --------------------------------------------------------
 
-BASE_TEXT_SIZE_MM = 1.76  # corresponds to 5 pt
-BASE_TEXT_SIZE_PT = 5
-BASE_LINE_SIZE = 0.25
+BASE_TEXT_SIZE_MM = 1.76  # mm, corresponds to 5 pt, use in geom_text()
+BASE_TEXT_SIZE_PT = 5 # pt, use in theme()
+BASE_LINE_SIZE = 0.25 # pt
 
+#' Common theme for figures in the publication.
+#'
+#' This theme bases upon `theme_bw()` and ensures
+#' - common line widths of `BASE_LINE_SIZE`
+#' - common text sizes of `BASE_TEXT_SIZE_PT`
+#' - a uniform plot margin of 1 mm
+#' - a medium strip text, an empty strip background, and
+#'   1 mm padding between strip text and panel
+#'
+#' @param grid If `TRUE`, show the grid.
+#' @param rotate If `TRUE`, rotate x-axis tick labels by 90°.
+#' @param ... Other parameters passed to `theme_bw()`.
+#'
+#' @return A theme object.
 theme_nb <- function(grid = TRUE,
                      rotate = FALSE,
                      ...){
@@ -87,10 +116,25 @@ theme_nb <- function(grid = TRUE,
 }
 
 
+png()
+#' Save a publication-quality plot.
+#'
+#' @param filename Filename, will be saved in subfolder `plots/final`.
+#'                 If `NULL`, exit without creating a plot.
+#' @param type: Type of image file.
+#' @param plot If `NULL`, save the `last_plot()` via `ggsave()`.
+#'   Otherwise, save the graphics object in `plot` via the
+#'   `png()/pdf(); print(); dev.off()` workflow.
+#' @param legends If `FALSE`, save plot without legends
+#'   and append "_noLegends" to the filename.
+#' @param dpi Resolution.
+#' @param width Width in cm.
+#' @param height Height in cm.
+#' @param ... Other parameters passed to the plotting function.
 ggsave_publication <- function(filename,
                                type = "pdf",
                                plot = NULL,
-                               guides = TRUE,
+                               legends = TRUE,
                                dpi = 1200,
                                width = 4,
                                height = 4,
@@ -98,28 +142,51 @@ ggsave_publication <- function(filename,
   if (is.null(filename))
     return()
   
+  # construct filename
   if (guides) {
-    guidestr <- ""
+    legendstr <- ""
     make_guides <- NULL
   } else {
-    guidestr <- "_noGuides"
+    legendstr <- "_noLegends"
     make_guides <- theme(legend.position = "none")
   }
-  filename <- stringr::str_glue("plots/final/{filename}{guidestr}.{type}")
+  
+  filename <- str_glue("plots/final/{filename}{legendstr}.{type}")
   filename %>%
-    fs::path_dir() %>%
-    fs::dir_create()
+    path_dir() %>%
+    dir_create()
   
   if (is.null(plot)) {
-    ggplot2::ggsave(filename, plot = last_plot() + make_guides,
-                    dpi = dpi, units = "cm", limitsize = FALSE,
-                    width = width, height = height, ...)  
+    # if last_plot() is available, use ggsave()
+    ggsave(
+      filename,
+      plot = last_plot() + make_guides,
+      dpi = dpi,
+      units = "cm",
+      limitsize = FALSE,
+      width = width,
+      height = height,
+      ...
+    )  
   } else {
+    # for non-ggplot objects, use the base R functions directly;
+    # only png and pdf backends are supported
     if (type == "png") {
-      png(filename, res = dpi, units = "cm",
-          width = width, height = height, ...)
+      png(
+        filename,
+        res = dpi,
+        units = "cm",
+        width = width,
+        height = height,
+        ...
+      )
     } else if (type == "pdf") {
-      pdf(filename, width = width / 2.54, height = height / 2.54, ...)
+      pdf(
+        filename,
+        width = width / 2.54,  # dimensions for pdf() must be inches
+        height = height / 2.54,
+        ...
+      )
     } else {
       stop("Type", type, "cannot be saved.")
     }
@@ -129,7 +196,7 @@ ggsave_publication <- function(filename,
   }
 }
 
-
+# color scale for gene expression dotplots: oslo from Scientific Colour Maps
 scale_color_dotplot <- function(...) {
   scico::scale_color_scico(
     palette = "oslo",
@@ -138,12 +205,14 @@ scale_color_dotplot <- function(...) {
   )
 }
 
+# color scale for enrichment analyses and gene expression heatmaps:
+# ColorBrewer's RdBu
 scale_color_gsea <- function(...) {
   scale_color_distiller(
     palette = "RdBu",
     direction = -1,
-    oob = scales::oob_squish_any,
-    ...
+    oob = scales::oob_squish_any,  # make sure that value capping
+    ...                            # yields colored dots
   )
 }
 
@@ -151,6 +220,12 @@ scale_color_gsea <- function(...) {
 
 # Renaming functions ------------------------------------------------------
 
+#' Rename a string or factor while retaining level order.
+#'
+#' @param s String or factor to be renamed.
+#' @param nm Tibble with columns "old" and "new", containing old and new names.
+#'
+#' @return Renamed string or factor.
 rename_str_or_fct <- function(s, nm) {
   if (is.factor(s))
     suppressWarnings(fct_recode(s, !!!deframe(nm[c("new", "old")])))
@@ -158,53 +233,49 @@ rename_str_or_fct <- function(s, nm) {
     recode(s, !!!deframe(nm))
 }
 
-rename_groups <- function(s) {
-  rename_str_or_fct(
-    s,
-    tribble(
-      ~old, ~new,
-      "I", "C",
-      "II", "M",
-      "III", "A",
-      "IV", "S"
-    )
-  )
-}
+# use this function to create renaming functions
+# for groups, patients, and contrasts
 
-
-rename_patients <- function(s) {
-  rename_str_or_fct(
-    s,
-    tribble(
-      ~old, ~new,
-      "2014_0102", "C1",
-      "2016_1853", "C2",
-      "2016_2950", "C3",
-      "2018_4252", "C4",
-      "2020_1288", "C5",
-      "2016_4503", "M1",
-      "2018_1404", "M2",
-      "2019_5022", "M3",
-      "2019_5754", "M4",
-      "2005_1702", "A1",
-      "2016_3924", "A2",
-      "2006_2684", "S1",
-      "2018_1625", "S2",
-      "2018_6056", "S3",
-      "2019_2495", "S4",
-      "2020_1667", "S5"
-    )
+rename_groups <- partial(
+  rename_str_or_fct,
+  nm = tribble(
+    ~old,  ~new,
+    "I",   "C",
+    "II",  "M",
+    "III", "A",
+    "IV",  "S"
   )
-}
+)
 
-rename_contrast <- function(s) {
-  rename_str_or_fct(
-    s,
-    tribble(
-      ~old, ~new,
-      "II_vs_I",  "M",
-      "III_vs_I", "A",
-      "IV_vs_I",  "S"
-    )
+rename_patients <- partial(
+  rename_str_or_fct,
+  nm = tribble(
+    ~old,        ~new,
+    "2014_0102", "C1",
+    "2016_1853", "C2",
+    "2016_2950", "C3",
+    "2018_4252", "C4",
+    "2020_1288", "C5",
+    "2016_4503", "M1",
+    "2018_1404", "M2",
+    "2019_5022", "M3",
+    "2019_5754", "M4",
+    "2005_1702", "A1",
+    "2016_3924", "A2",
+    "2006_2684", "S1",
+    "2018_1625", "S2",
+    "2018_6056", "S3",
+    "2019_2495", "S4",
+    "2020_1667", "S5"
   )
-}
+)
+
+rename_contrast <- partial(
+  rename_str_or_fct,
+  nm = tribble(
+    ~old,       ~new,
+    "II_vs_I",  "M",
+    "III_vs_I", "A",
+    "IV_vs_I",  "S"
+  )
+)
