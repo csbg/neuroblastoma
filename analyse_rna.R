@@ -1579,7 +1579,7 @@ plot_umap <- function() {
 }
 
 plot_umap()
-ggsave_publication("1b_umap_dataset", width = 6, height = 6)
+ggsave_publication("1b_umap_dataset", type = "png", width = 6, height = 6)
 
 
 ## Figure 1c ----
@@ -1617,7 +1617,7 @@ nb_data %>%
   theme_nb(grid = FALSE) +
   theme(legend.position = "none")
 
-ggsave_publication("1c_gene_programs", width = 4, height = 6)
+ggsave_publication("1c_gene_programs", width = 5, height = 6)
 
 
 
@@ -1777,7 +1777,7 @@ ggsave_publication("S1a_umap_integration", type = "png", width = 9, height = 5)
 
 ## Figure S1b ----
 
-plot_infiltration_rate <- function() {
+plot_infiltration_rate <- function(show_mean = FALSE) {
   tif_facs <-
     read_csv("metadata/sample_groups.csv", comment = "#") %>%
     filter(!is.na(facs_alive)) %>% 
@@ -1797,6 +1797,42 @@ plot_infiltration_rate <- function() {
     ) %>% 
     mutate(group = rename_groups(group) %>% fct_relevel("C", "M", "A", "S"))
   
+  if (show_mean) {
+    geom_text_mean_tif <- list(
+      geom_text(
+        data =
+          infiltration_rates %>%
+          group_by(group) %>%
+          summarise(across(starts_with("tif"), mean)) %>%
+          pivot_longer(
+            starts_with("tif"),
+            names_to = "method",
+            names_prefix = "tif_",
+            values_to = "tif"
+          ) %>%
+          mutate(
+            label = sprintf("%.1f", tif * 100),
+            tif = 0.6,
+            method = recode(method, facs = "FACS", sc = "scRNA-seq")
+          ),
+        aes(label = label),
+        color = "black",
+        size = BASE_TEXT_SIZE_MM
+      ),
+      geom_text(
+        data = tibble(
+          label = "mean over\npatients",
+          group = factor("C", levels = c("C", "M", "A", "S"))
+        ),
+        aes(label = label, x = 1.5, y = 0.52),
+        color = "black",
+        size = BASE_TEXT_SIZE_MM
+      )
+    )
+  } else {
+    geom_text_mean_tif <- NULL
+  }
+  
   p <- 
     infiltration_rates %>%
     pivot_longer(
@@ -1809,37 +1845,12 @@ plot_infiltration_rate <- function() {
     ggplot(aes(method, tif, color = group)) +
     geom_point(show.legend = FALSE) +
     geom_line(aes(group = sample), show.legend = FALSE) +
-    geom_text(
-      data =
-        infiltration_rates %>%
-        group_by(group) %>%
-        summarise(across(starts_with("tif"), mean)) %>%
-        pivot_longer(
-          starts_with("tif"),
-          names_to = "method",
-          names_prefix = "tif_",
-          values_to = "tif"
-        ) %>%
-        mutate(
-          label = sprintf("%.1f", tif * 100),
-          tif = 0.6,
-          method = recode(method, facs = "FACS", sc = "scRNA-seq")
-        ),
-      aes(label = label),
-      color = "black",
-      size = BASE_TEXT_SIZE_MM
-    ) +
-    geom_text(
-      data = tibble(
-        label = "mean over\npatients",
-        group = factor("C", levels = c("C", "M", "A", "S"))
-      ),
-      aes(label = label, x = 1.5, y = 0.52),
-      color = "black",
-      size = BASE_TEXT_SIZE_MM
-    ) +
+    geom_text_mean_tif +
     xlab(NULL) +
-    ylab("tumor infiltration rate") +
+    scale_y_continuous(
+      name = "tumor infiltration rate",
+      limits = c(0, 0.6)
+    ) +
     scale_color_manual(values = GROUP_COLORS) +
     facet_wrap(vars(group), nrow = 1) +
     theme_nb(grid = FALSE) +

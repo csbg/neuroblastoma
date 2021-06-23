@@ -705,9 +705,9 @@ plot_cnv_data_comparison <- function(sc_data,
   # labels and colors for copy numbers
   cn_metadata <-  # colorbrewer 11-class BrBG 
     tribble(
-      ~delta_copy_number, ~label,         ~color,
-      -2, "complete loss",                "#01665EFF",
-      -1, "loss of one copy",             "#80CDC1FF",
+      ~delta_copy_number, ~label,        ~color,
+      -2, "complete loss",               "#01665EFF",
+      -1, "loss of one copy",            "#80CDC1FF",
       0, "neutral",                      "#F7F7F7FF",
       1, "gain of one copy",             "#DFC27DFF",
       2, "gain of two copies",           "#BF812DFF",

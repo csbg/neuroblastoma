@@ -79,11 +79,11 @@ nb_metadata <- readRDS("data_generated/metadata.rds")
 colData(nb) <-
   nb_metadata %>%
   mutate(Size_Factor = colData(nb)$Size_Factor) %>% 
-  subdivide_tumor_cluster(
-    cluster_col = cellont_cluster,
-    nb_cluster_name = "NB (8)",
-    subcluster_file = "metadata/nb_subclusters.csv"
-  ) %>% 
+  # subdivide_tumor_cluster(
+  #   cluster_col = cellont_cluster,
+  #   nb_cluster_name = "NB (8)",
+  #   subcluster_file = "metadata/nb_subclusters.csv"
+  # ) %>% 
   column_to_rownames("cell") %>% 
   as("DataFrame")
 rowData(nb)[["gene_short_name"]] <- rownames(nb)
@@ -573,7 +573,7 @@ plot_canonical_markers <- function() {
       )
     )
   
-  
+  n_col <- nlevels(colData(nb)$cellont_cluster)
   
   p <-
     plot_dots(
@@ -599,7 +599,7 @@ plot_canonical_markers <- function() {
     ) +
     scale_radius("% expressed", range = c(0, 2.5)) +
     coord_fixed(
-      xlim = c(1, 23),
+      xlim = c(1, n_col),
       clip = "off"
     ) +
     geom_hline(
@@ -610,7 +610,7 @@ plot_canonical_markers <- function() {
     geom_text(
       data = y_annotation_data,
       aes(
-        x = 24,
+        x = n_col + 1,
         y = label_y,
         label = label
       ),
@@ -631,7 +631,7 @@ plot_canonical_markers <- function() {
 }
 
 plot_canonical_markers()
-ggsave_publication("1d_markers", height = 12, width = 8)
+ggsave_publication("1d_markers", height = 12, width = 7)
 
 
 ## Figure S1c (top) ----
