@@ -5,12 +5,13 @@
 
 library(tidyverse)
 library(fs)
+source("styling.R")
 
 
 
-# RNA-seq -----------------------------------------------------------------
+# scRNA-seq ---------------------------------------------------------------
 
-df <- 
+df_rna <- 
   dir_ls("data_raw/", recurse = TRUE, regex = "metrics_summary.csv$") %>% 
   map_dfr(read_csv, .id = "file") %>%
   rename_with(~str_glue("{.x} (%)"), !file & where(is.character)) %>% 
@@ -26,7 +27,7 @@ broken_labels = c(
   "Reads Mapped Confidently to Transcriptome (%)" = "Reads Mapped Confidently\nto Transcriptome (%)"
 )
 
-df %>% 
+df_rna %>% 
   pivot_longer(!sample, names_to = "measure") %>% 
   mutate(
     measure = measure %>%
@@ -55,7 +56,7 @@ ggsave("plots/cellranger_summary/measures_rna.pdf",
 
 # ATAC-seq ----------------------------------------------------------------
 
-df <- 
+df_atac <- 
   dir_ls("data_raw/", recurse = TRUE, regex = "/summary.csv$") %>% 
   map_dfr(read_csv, na = "None", .id = "file") %>%
   extract(file, into = "sample", regex = "([\\w\\d_]*)_ATAC")
@@ -68,7 +69,7 @@ broken_labels = c(
   "median_per_cell_total_library_complexity" = "median_per_cell_\ntotal_library_complexity"
 )
 
-df %>% 
+df_atac %>% 
   select(!`cellranger-atac_version`) %>% 
   pivot_longer(!sample, names_to = "measure") %>% 
   mutate(
@@ -92,3 +93,32 @@ df %>%
 
 ggsave("plots/cellranger_summary/measures_atac.pdf",
        units = "mm", width = 297, height = 210)
+
+
+
+# Publication tables ------------------------------------------------------
+
+## Table S1 ----
+
+df_rna %>% 
+  left_join(
+    read_csv("metadata/sample_groups.csv", comment = "#") %>% 
+      select(bsf_id, sample, group) %>%
+      mutate(sample = rename_patients(sample), group = rename_groups(group)),
+    by = c(sample = "bsf_id")
+  ) %>% 
+  select(
+    Sample = sample.y,
+    `Estimated Number of Cells`,
+    `Mean Reads per Cell`,
+    `Median Genes per Cell`,
+    `Number of Reads`,
+    `Valid Barcodes (%)`,
+    `Total Genes Detected`,
+    `Median UMI Counts per Cell`,
+    `Sequencing Saturation (%)`
+  ) %>%
+  filter(!is.na(Sample)) %>% 
+  mutate(Sample = factor(Sample, levels = names(PATIENT_COLORS))) %>% 
+  arrange(Sample) %>% 
+  save_table("S1_sequencing_statistics", "Sequencing Statistics")

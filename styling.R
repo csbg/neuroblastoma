@@ -117,7 +117,7 @@ theme_nb <- function(grid = TRUE,
 }
 
 
-png()
+
 #' Save a publication-quality plot.
 #'
 #' @param filename Filename, will be saved in subfolder `plots/final`.
