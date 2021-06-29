@@ -18,6 +18,7 @@
 # * tsne_2 – tSNE coordinates
 # * cluster_[k] – cluster IDs for different numbers k of nearest neighbors
 # * partition_[k] – partition IDs for different k
+# * signature_[gs] – scores for gene signature [gs]
 #
 # @DEPI rna_qcpassed.rds
 # @DEPO rna_integrated_monocle.rds
@@ -25,6 +26,7 @@
 
 library(monocle3) 
 library(Seurat)
+library(UCell)
 library(tidyverse)
 library(fs)
 
@@ -76,6 +78,17 @@ saveRDS(cds_50, path_join(c(out_dir, "rna_integrated_monocle.rds")))
 
 
 
+# Calculate gene signature scores -----------------------------------------
+
+nb_signatures <- 
+  read_csv("metadata/nb_signatures.csv", comment = "#") %>% 
+  group_by(cell_type) %>% 
+  summarise(x = list(gene)) %>% 
+  deframe()
+
+uscores <- ScoreSignatures_UCell(counts(cds), nb_signatures)
+
+
 # Export metadata ---------------------------------------------------------
 
 monocle_metadata <- list(
@@ -98,7 +111,10 @@ monocle_metadata <- list(
   clusters(cds_50) %>% 
     enframe(name = "cell", value = "cluster_50"),
   partitions(cds_50) %>%
-    enframe(name = "cell", value = "partition_50")
+    enframe(name = "cell", value = "partition_50"),
+  uscores %>% 
+    as_tibble(rownames = "cell") %>% 
+    rename_with(~str_replace(., "(.+)_UCell", "signature_\\1"))
 ) %>%
   reduce(left_join, by = "cell")
 

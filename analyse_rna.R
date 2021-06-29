@@ -1585,20 +1585,20 @@ nb_data %>%
   ) %>% 
   mutate(signature = recode(signature, ncc_like = "NCC-like")) %>% 
   ggplot(aes(cells, value)) +
-  geom_hline(
-    yintercept = 0,
-    linetype = "dashed",
-    size = BASE_LINE_SIZE
-  ) +
   geom_violin(
     aes(fill = cells),
     scale = "width",
     size = BASE_LINE_SIZE
   ) +
   stat_summary(geom = "point", fun = mean, size = .1) +
-  scale_fill_manual(values = c("gray80", CELL_TYPE_COLORS["NB"])) +
   xlab(NULL) +
-  ylab("gene signature score") +
+  scale_y_continuous(
+    name = "gene signature score",
+    limits = c(0, 1),
+    breaks = c(0, 0.5, 1),
+    expand = expansion(add = .025)
+  ) +
+  scale_fill_manual(values = c("gray80", CELL_TYPE_COLORS["NB"])) +
   coord_flip() +
   facet_grid(vars(signature)) +
   theme_nb(grid = FALSE) +
