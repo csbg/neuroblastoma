@@ -2,6 +2,7 @@
 
 library(tidyverse)
 library(fs)
+library(openxlsx)
 
 
 
@@ -143,7 +144,7 @@ ggsave_publication <- function(filename,
     return()
   
   # construct filename
-  if (guides) {
+  if (legends) {
     legendstr <- ""
     make_guides <- NULL
   } else {
@@ -279,3 +280,28 @@ rename_contrast <- partial(
     "IV_vs_I",  "S"
   )
 )
+
+
+
+# Tables ------------------------------------------------------------------
+
+#' Save a data frame as well-formatted XLSX file.
+#' 
+#' @param df Data frame to be saved.
+#' @param filename Filename without extension; will be saved to `tables/`.
+#' @param sheet_name Name of the sheet that contains exported datas.
+#'
+#' @return Nothing.
+save_table <- function(df, filename, sheet_name = "Sheet1") {
+  filename <- str_glue("tables/{filename}.xlsx")
+  
+  wb <- createWorkbook()
+  addWorksheet(wb, sheet_name)
+  writeData(wb, sheet_name, df,
+            headerStyle = createStyle(textDecoration = "bold")
+  )
+  freezePane(wb, sheet_name, firstRow = TRUE)
+  setColWidths(wb, sheet_name, 1:ncol(df), "auto")
+  
+  saveWorkbook(wb, filename, overwrite = TRUE)
+}

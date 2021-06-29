@@ -5,7 +5,8 @@
 *_files/
 data_raw/
 data_generated/
+data_wip/
 doc/
 literature/
 plots/
-data_wip/
+tables/
