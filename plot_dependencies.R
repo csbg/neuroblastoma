@@ -81,5 +81,5 @@ vertex_attr(G, "color", index = V(G)[degree(G) == 0]) <- "#cccccc"
 
 dotfile <- tempfile()
 write_graph(G, dotfile, format = "dot")
-system(str_glue("dot -Tpdf {dotfile} > plots/dependency_graph.pdf "))
+system(str_glue("dot -Tpng {dotfile} > plots/dependency_graph.png"))
 file.remove(dotfile)
