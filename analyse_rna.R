@@ -73,10 +73,6 @@ plot_clusters_all <- function(data, x, y, clusters, label_direct = TRUE,
   p
 }
 
-plot_clusters_all(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.5,
-                  filename = "seurat/clusters_all_umap_0.5")
-plot_clusters_all(nb_data, tsne_1_seurat, tsne_2_seurat, cluster_0.5,
-                  filename = "seurat/clusters_all_tsne_0.5")
 
 plot_clusters_all(nb_data, umap_1_monocle, umap_2_monocle, cluster_20,
                   filename = "monocle/clusters_all_umap_20")
@@ -302,16 +298,10 @@ plot_cluster_diagnostics(nb_data, umap_1_monocle, umap_2_monocle, cluster_20,
 plot_cluster_diagnostics(nb_data, umap_1_monocle, umap_2_monocle, cluster_50,
                          filename = "monocle/cluster_diagnostics_50")
 
-plot_cluster_diagnostics(nb_data, umap_1_seurat, umap_2_seurat, cluster_0.5,
-                         filename = "seurat/cluster_diagnostics_0.5")
-
 
 
 # Samples -----------------------------------------------------------------
 
-plot_clusters_all(nb_data %>% arrange(umap_1_seurat),
-                  umap_1_seurat, umap_2_seurat, sample,
-                  label_direct = FALSE, filename = "seurat/samples_all_umap")
 plot_clusters_all(nb_data %>% arrange(umap_1_monocle),
                   umap_1_monocle, umap_2_monocle, sample,
                   label_direct = FALSE, filename = "monocle/samples_all_umap")
@@ -1283,9 +1273,6 @@ plot_neurons <- function(data, x, y, clusters, cell_types, filename = NULL) {
   p
 }
 
-plot_neurons(nb_data, umap_1_seurat, umap_2_seurat,
-             cluster_0.5, cell_type_hpca_broad,
-             filename = "seurat/groupwise_abundance_neurons_0.5")
 plot_neurons(nb_data, umap_1_monocle, umap_2_monocle,
              cluster_50, cell_type_hpca_broad,
              filename = "monocle/groupwise_abundance_neurons_50")

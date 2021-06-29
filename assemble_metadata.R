@@ -5,7 +5,6 @@
 # * metadata.rds - combined metadata stored with factor levels
 # * celltype_details.rds - processed SingleR details
 #
-# @DEPI metadata_seurat.csv
 # @DEPI metadata_monocle.csv
 # @DEPI cell_types_[ref]_[labels].csv
 # @DEPI subclusters.csv
@@ -284,7 +283,7 @@ modify_clusters <- function(df_metadata) {
 # Load data ---------------------------------------------------------------
 
 folder <- "data_generated"
-metadata_files <- c("metadata_monocle.csv", "metadata_seurat.csv")
+metadata_files <- "metadata_monocle.csv"
 subcluster_file <- "subclusters.csv"
 
 ancestors <- c(
