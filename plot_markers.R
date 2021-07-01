@@ -671,7 +671,6 @@ plot_mesenchymal <- function(top_prop = 0.05) {
     scale_color_distiller(
       name = "gene\nsign.\nscore",
       palette = "RdPu",
-      breaks = c(0.2, 0.4, 0.6),
       guide = guide_colorbar(
         barwidth = unit(2, "mm"),
         barheight = unit(15, "mm")
@@ -728,7 +727,11 @@ subplot_nb_dots <- function(signature_col, title = NULL, top_prop = 0.05) {
         title.vjust = 0.1
       )
     ) +
-    scale_radius("% expressed", range = c(0, 2.5)) +
+    scale_radius(
+      "% expressed",
+      range = c(0, 2.5),
+      limits = c(0, 100)
+    ) +
     ggtitle(title) +
     coord_fixed() +
     theme_nb(grid = FALSE) +
@@ -765,4 +768,4 @@ wrap_plots(
     
   )
 
-ggsave_publication("s1c_bottom_dots.pdf", width = 9, height = 4)
+ggsave_publication("s1c_bottom_dots", width = 9, height = 4)
