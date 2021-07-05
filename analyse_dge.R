@@ -1357,6 +1357,7 @@ plot_violin <- function(gene,
       size = 0.2,
       shape = 16
     ) +
+    stat_summary(geom = "point", fun = mean, size = .2) +
     annotate(
       "text_npc",
       label = str_glue("{cell_type}, {gene} ({direction})"),
@@ -1372,7 +1373,6 @@ plot_violin <- function(gene,
 }
 
 p1 <- plot_violin("IRF9", "B", c("I", "II"), "up")
-# ggsave_publication("3c_exp_violin", width = 3, height = 3, type = "png")
 p2 <- plot_violin("SAP30", "SC", c("I", "II"), "down")
 p3 <- plot_violin("WDR74", "B", c("I", "III"), "up")
 p4 <- plot_violin("IRF9", "B", c("I", "III"), "up")
@@ -1508,7 +1508,7 @@ plot_logfc_correlation_heatmap <- function() {
     select(!gene) %>%
     cor(use = "pairwise.complete.obs")
   
-  distance <- as.dist(2 - corr_mat)
+  distance <- as.dist(1 - corr_mat)
   
   metadata <- 
     colnames(corr_mat) %>% 
