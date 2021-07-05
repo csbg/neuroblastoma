@@ -740,7 +740,7 @@ plot_cnv_data_comparison <- function(sc_data,
       ymax = 1
     ) %>% 
     bind_rows(
-      snparray_data$cnv_regions %>% 
+      snp_data$cnv_regions %>% 
         select(!type:ploidy) %>%
         mutate(type = "snp", ymin = 1, ymax = 2)
     ) %>% 
@@ -965,3 +965,42 @@ plot_resexp_marrow <- function(data,
 p <- plot_resexp_marrow(infercnv_data, nb_data)
 ggsave_publication("S1d_resexp_marrow", plot = p,
                    type = "png", width = 18, height = 8)
+
+
+
+# Publication tables ------------------------------------------------------
+
+## Table S2 ----
+
+infercnv_data$regions_data %>% 
+  filter(near(prob, 0.5)) %>%
+  extract(
+    cell_group_name,
+    into = c("sample", "group"),
+    regex = "malignant_(.*?)_([IV]+)"
+  ) %>%
+  transmute(
+    sample = sample,
+    type = "sc",
+    chr = str_sub(chr, 4) %>%
+      factor(levels = snparray_data$chromosome_size$chr),
+    start = as.integer(start),
+    end = as.integer(end),
+    delta_copy_number = as.numeric(state) - 3,
+  ) %>%
+  bind_rows(
+    snparray_data$cnv_regions %>%
+      select(!type:ploidy) %>%
+      mutate(type = "snp")
+  ) %>%
+  mutate(sample = rename_patients(sample)) %>% 
+  rename(
+    Patient = sample,
+    Type = type,
+    Chromosome = chr,
+    Start = start,
+    End = end,
+    "Copy Number Difference" = delta_copy_number
+  ) %>% 
+  arrange(Patient, Type, Chromosome, Start) %>% 
+  save_table("S2_cnv", "CNV")

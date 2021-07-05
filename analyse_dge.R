@@ -1054,65 +1054,6 @@ gsea_genes
 
 
 
-# Export tables -----------------------------------------------------------
-
-# create Excel sheet
-header_style <- createStyle(textDecoration = "bold")
-wb <- createWorkbook()
-
-# workbook with DE genes
-table_data <- 
-  dge_results_filtered %>% 
-  select(contrast, cluster = cluster_id, gene, logFC,
-         p_value = p_val, FDR = p_adj.loc, I.frq:IV.frq)
-
-addWorksheet(wb, "de_genes")
-writeData(wb, "de_genes", table_data, headerStyle = header_style)
-freezePane(wb, "de_genes", firstRow = TRUE)
-
-# workbook with enrichr results
-table_data <- 
-  enrichr_results %>% 
-  filter(direction == "up", Odds.Ratio >= 1) %>%
-  select(
-    db, contrast, cluster, term = Term, FDR = Adjusted.P.value,
-    odds_ratio = Odds.Ratio, genes = Genes, overlap_size, geneset_size
-  ) %>%
-  arrange(db, contrast, cluster, desc(odds_ratio)) %>% 
-  mutate(odds_ratio = pmin(odds_ratio, 1e99))
-
-addWorksheet(wb, "enrichr")
-writeData(wb, "enrichr", table_data, headerStyle = header_style)
-freezePane(wb, "enrichr", firstRow = TRUE)
-
-
-# workbook with GSEA results
-table_data <- 
-  gsea_results %>% 
-  select(
-    db, contrast, cluster, term = pathway, FDR = padj, NES,
-    genes = leadingEdge
-  ) %>% 
-  rowwise() %>% 
-  mutate(genes = str_c(genes, collapse = ";")) %>%
-  ungroup() %>% 
-  filter(abs(NES) >= 1) %>%
-  arrange(db, contrast, cluster, desc(NES))
-addWorksheet(wb, "gsea")
-writeData(wb, "gsea", table_data, headerStyle = header_style)
-freezePane(wb, "gsea", firstRow = TRUE)
-
-
-# workbook with leading edge genes from GSEA
-# addWorksheet(wb, "gsea_genes")
-# writeData(wb, "gsea_genes", gsea_genes, headerStyle = header_style)
-# freezePane(wb, "gsea_genes", firstRow = TRUE)
-
-# save file
-saveWorkbook(wb, "plots/dge/dge_data.xlsx", overwrite = TRUE)
-
-
-
 # DGE in tumor cluster ----------------------------------------------------
 
 # preprocessing as above
@@ -1588,3 +1529,37 @@ p <- plot_logfc_correlation_heatmap()
 p
 ggsave_publication("3e_logfc_correlation_heatmap",
                    plot = p, width = 6, height = 5)
+
+
+
+# Publication tables ------------------------------------------------------
+
+## Table S3 ----
+
+dge_results_filtered_gsea %>% 
+  arrange(contrast, cluster_id, desc(logFC)) %>% 
+  mutate(contrast = rename_contrast(contrast)) %>% 
+  select(
+    "Contrast (group vs C)" = contrast,
+    "Cell Type" = cluster_id,
+    "Gene" = gene,
+    "Log fold change" = logFC,
+    "Adjusted p-value" = p_adj.loc
+  ) %>%
+  save_table("S3_dge", "Microenvironment")
+
+
+## Table S4 ----
+
+gsea_results %>% 
+  arrange(db, contrast, cluster, desc(NES)) %>% 
+  mutate(contrast = rename_contrast(contrast)) %>% 
+  select(
+    "Database" = db,
+    "Contrast (group vs C)" = contrast,
+    "Cell Type" = cluster,
+    "Pathway" = pathway,
+    "Normalized Enrichment Score" = NES,
+    "Adjusted p-value" = padj
+  ) %>%
+  save_table("S4_gsea", "Microenvironment")
