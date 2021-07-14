@@ -634,7 +634,7 @@ plot_canonical_markers()
 ggsave_publication("1d_markers", height = 12, width = 7)
 
 
-## Figure S1c (top) ----
+## Figure S1c ----
   
 plot_mesenchymal <- function(top_prop = 0.05) {
   data_highlight <-
@@ -685,10 +685,10 @@ plot_mesenchymal <- function(top_prop = 0.05) {
 }
 
 plot_mesenchymal()
-ggsave_publication("S1c_top_mesenchymal", type = "png", width = 9, height = 5)
+ggsave_publication("S1c_mesenchymal", type = "png", width = 9, height = 5)
 
 
-## Figure S1c (bottom) ----
+## Figure S1d ----
 
 subplot_nb_dots <- function(signature_col, title = NULL, top_prop = 0.05) {
   selected_cells <- union(
@@ -768,4 +768,4 @@ wrap_plots(
     
   )
 
-ggsave_publication("s1c_bottom_dots", width = 9, height = 4)
+ggsave_publication("s1d_dots", width = 9, height = 4)
