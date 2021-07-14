@@ -39,6 +39,13 @@ CELL_TYPE_COLORS <- c(
   na    = "gray80"
 )
 
+GROUP_NAMES_LONG = c(
+  C = "control",
+  M = "MYCN amplified",
+  A = "ATRX deleted",
+  S = "sporadic"
+)
+
 # color groups using one of the wesanderson color palettes
 # (https://wesandersonpalettes.tumblr.com/post/110716093015/ash-should-we-dance)
 # factors should be ordered like this vector
@@ -49,15 +56,21 @@ GROUP_COLORS <- c(
   S = "#e8c95d"
 )
 
+PATIENT_ORDER <- c("C1", "C2", "C3", "C4", "C5",
+                   "M1", "M2", "M3", "M4",
+                   "A1", "A2",
+                   "S1", "S2", "S3", "S4", "S5")
+
 # color patients using the cyclic romaO from the Scientific Colour Maps
-# TODO: select colors so that M clusters in figure 2 are clearly distinguishable
 PATIENT_COLORS <-
   scico::scico(16, palette = "romaO") %>%
   colorspace::lighten(0.3) %>% 
-  set_names(c("C1", "C2", "C3", "C4", "C5",
-              "M1", "M2", "M3", "M4",
-              "A1", "A2",
-              "S1", "S2", "S3", "S4", "S5"))
+  set_names(c("S1", "A1", "M1", "C1",
+              "S2", "C2", "S5", "A2",
+              "S3", "M3", "C3", "S4",
+              "M4", "C4", "M2", "C5")) %>% 
+  magrittr::extract(PATIENT_ORDER)
+
 
 
 
