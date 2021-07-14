@@ -119,6 +119,10 @@ df_rna %>%
     `Sequencing Saturation (%)`
   ) %>%
   filter(!is.na(Sample)) %>% 
-  mutate(Sample = factor(Sample, levels = names(PATIENT_COLORS))) %>% 
+  mutate(
+    Sample = factor(Sample, levels = names(PATIENT_COLORS)),
+    Group = GROUP_NAMES_LONG[str_sub(Sample, 1, 1)],
+    .after = Sample
+  ) %>% 
   arrange(Sample) %>% 
   save_table("S1_sequencing_statistics", "Sequencing Statistics")
