@@ -1850,3 +1850,124 @@ plot_infiltration_rate <- function(show_mean = FALSE) {
 
 plot_infiltration_rate()
 ggsave_publication("S1b_tif", width = 9, height = 4)
+
+
+
+## Figure S1e ----
+
+plot_celltype_heatmap <- function() {
+  make_matrix <- function(ref) {
+    cell_type_column <- rlang::sym(str_glue("cell_type_{ref}_broad"))
+    
+    nb_data %>% 
+      mutate(
+        cell_type =
+          as_factor(!!cell_type_column) %>%
+          fct_infreq() %>% 
+          fct_explicit_na("Unknown") %>% 
+          fct_relabel(~str_c(ref, .x, sep = "_"))
+      ) %>% 
+      count(cluster = cluster_50, cell_type) %>%
+      group_by(cluster) %>%
+      mutate(n_rel = n / sum(n)) %>%
+      select(!n) %>%
+      ungroup() %>%
+      arrange(cell_type) %>% 
+      pivot_wider(names_from = "cell_type", values_from = "n_rel") %>%
+      column_to_rownames("cluster") %>%
+      as.matrix() %>%
+      replace_na(0)
+  }
+  
+  mat <- 
+    map(
+      c("blueprint", "hpca", "dice", "dmap", "monaco"),
+      make_matrix
+    ) %>% 
+    reduce(cbind)
+  
+  col_metadata <- str_split(colnames(mat), "_", n = 2, simplify = TRUE)
+  col_split <-
+    as_factor(col_metadata[, 1]) %>% 
+    fct_recode(
+      "Human Primary Cell Atlas" = "hpca",
+      "Blueprint/ENCODE" = "blueprint",
+      "DICE" = "dice",
+      "Novershtern hematopoietic data" = "dmap",
+      "Monaco immune data" = "monaco"
+    )
+  colnames(mat) <- col_metadata[, 2]
+  
+  ht_opt(
+    simple_anno_size = unit(1.5, "mm"),
+    COLUMN_ANNO_PADDING = unit(1, "pt"),
+    DENDROGRAM_PADDING = unit(1, "pt"),
+    HEATMAP_LEGEND_PADDING = unit(1, "mm"),
+    ROW_ANNO_PADDING = unit(1, "pt"),
+    TITLE_PADDING = unit(1, "mm")
+  )
+  
+  Heatmap(
+    mat,
+    col = colorRampPalette(brewer.pal(9, "YlOrBr"))(100),
+    
+    heatmap_legend_param = list(
+      border = FALSE,
+      grid_width = unit(2, "mm"),
+      labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      legend_height = unit(15, "mm"),
+      title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+    ),
+    name = "relative\nabundance",
+    
+    row_title = "cluster",
+    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    row_dend_gp = gpar(lwd = 0.5),
+    row_dend_width = unit(3, "mm"),
+    
+    column_split = col_split,
+    column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    
+    cluster_columns = FALSE,
+    
+    width = unit(150, "mm"),
+    height = unit(146 / ncol(mat) * nrow(mat), "mm"),
+    
+    right_annotation = rowAnnotation(
+      cell_type =
+        tibble(cluster = levels(nb_data$cellont_cluster)) %>% 
+        extract(
+          cluster,
+          into = c("cell_type", "cluster"),
+          regex = "(\\w+) \\((\\d+)",
+          convert = TRUE
+        ) %>%
+        mutate(
+          cell_type =
+            cell_type %>% 
+            factor(levels = names(CELL_TYPE_COLORS)) %>% 
+            fct_drop()
+        ) %>%
+        arrange(cluster) %>%
+        pull(cell_type),
+      col = list(cell_type = CELL_TYPE_COLORS),
+      show_annotation_name = FALSE,
+      show_legend = TRUE,
+      annotation_legend_param = list(
+        cell_type = list(
+          title = "cell type",
+          grid_height = unit(2, "mm"),
+          grid_width = unit(2, "mm"),
+          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+        )
+      )
+    ),
+  )
+}
+
+p <- plot_celltype_heatmap()
+ggsave_publication("S1e_celltype_heatmap",
+                   plot = p, width = 18, height = 6)
