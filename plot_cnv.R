@@ -589,6 +589,14 @@ plot_cnv_data_comparison(infercnv_data, snparray_data,
 
 # Publication figures -----------------------------------------------------
 
+ht_opt(
+  simple_anno_size = unit(1.5, "mm"),
+  DENDROGRAM_PADDING = unit(1, "pt"),
+  ROW_ANNO_PADDING = unit(1, "pt"),
+  TITLE_PADDING = unit(1, "mm")
+)
+
+
 ## Figure 1e ----
 
 plot_resexp_tumor <- function(data,
@@ -616,11 +624,18 @@ plot_resexp_tumor <- function(data,
     slice_sample(n = cells_per_sample) %>% 
     ungroup()
   
-  # matrix with residual expression, rows ordered
+  # column splits, i.e., vector of chromosme names
+  col_split <-
+    data$final_obj@gene_order$chr %>%
+    str_sub(4) %>%
+    as_factor()
+  
+  # matrix with residual expression, rows ordered, Y chromosome removed
   cnv_mat <-
     data$final_obj@expr.data %>% 
-    magrittr::extract(, cell_metadata$cell_index) %>% 
+    magrittr::extract(col_split != "Y", cell_metadata$cell_index) %>% 
     t()
+  col_split <- col_split[col_split != "Y"]
   
   # draw heatmap
   Heatmap(
@@ -647,10 +662,7 @@ plot_resexp_tumor <- function(data,
     row_dend_gp = gpar(lwd = 0.5),
     
     cluster_columns = FALSE,
-    column_split =
-      data$final_obj@gene_order$chr %>%
-      str_sub(4) %>%
-      as_factor(),
+    column_split = col_split,
     cluster_column_slices = FALSE,
     column_gap = unit(0, "mm"),
     column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
@@ -683,12 +695,6 @@ plot_resexp_tumor <- function(data,
     ) 
 }
 
-ht_opt(
-  simple_anno_size = unit(1.5, "mm"),
-  DENDROGRAM_PADDING = unit(1, "pt"),
-  ROW_ANNO_PADDING = unit(1, "pt"),
-  TITLE_PADDING = unit(1, "mm")
-)
 p <- plot_resexp_tumor(infercnv_data, nb_data, 50L)
 ggsave_publication("1e_resexp_tumor", plot = p,
                    type = "png", width = 18, height = 8)
@@ -744,11 +750,13 @@ plot_cnv_data_comparison <- function(sc_data,
         select(!type:ploidy) %>%
         mutate(type = "snp", ymin = 1, ymax = 2)
     ) %>% 
-    mutate(fill = cn_color(delta_copy_number))
+    mutate(fill = cn_color(delta_copy_number)) %>% 
+    filter(chr != "Y")
   # return(plot_data_regions)
   
   plot_data_logrr <-
     snp_data$logrr_data %>% 
+    filter(chr != "Y") %>% 
     group_by(sample) %>% 
     slice_sample(prop = logrr_prop)
   # return(plot_data_logrr)
@@ -779,7 +787,7 @@ plot_cnv_data_comparison <- function(sc_data,
   p <-
     ggplot(NULL, aes(xmin = start, xmax = end, ymin = ymin, ymax = ymax)) +
     geom_rect(
-      data = snp_data$chromosome_size,
+      data = snp_data$chromosome_size %>% filter(chr != "Y"),
       aes(xmin = 0, ymin = -0.1, ymax = 0)
     ) +
     geom_rect(
@@ -858,7 +866,7 @@ ggsave_publication("1f_cnv_comparison", width = 18, height = 6)
 
 
 
-## Figure S1d ----
+## Figure S1f ----
 
 plot_resexp_marrow <- function(data,
                                metadata,
@@ -890,11 +898,18 @@ plot_resexp_marrow <- function(data,
     slice_sample(n = cells_per_type) %>% 
     ungroup()
   
-  # matrix with residual expression, rows ordered
+  # column splits, i.e., vector of chromosme names
+  col_split <-
+    data$final_obj@gene_order$chr %>%
+    str_sub(4) %>%
+    as_factor()
+  
+  # matrix with residual expression, rows ordered, Y chromosome removed
   cnv_mat <-
     data$final_obj@expr.data %>% 
-    magrittr::extract(, cell_metadata$cell_index) %>% 
+    magrittr::extract(col_split != "Y", cell_metadata$cell_index) %>% 
     t()
+  col_split <- col_split[col_split != "Y"]
   
   # draw heatmap
   Heatmap(
@@ -921,10 +936,7 @@ plot_resexp_marrow <- function(data,
     row_dend_gp = gpar(lwd = 0.5),
     
     cluster_columns = FALSE,
-    column_split =
-      data$final_obj@gene_order$chr %>%
-      str_sub(4) %>%
-      as_factor(),
+    column_split = col_split,
     cluster_column_slices = FALSE,
     column_gap = unit(0, "mm"),
     column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
@@ -963,7 +975,7 @@ plot_resexp_marrow <- function(data,
 }
 
 p <- plot_resexp_marrow(infercnv_data, nb_data)
-ggsave_publication("S1d_resexp_marrow", plot = p,
+ggsave_publication("S1f_resexp_marrow", plot = p,
                    type = "png", width = 18, height = 8)
 
 
@@ -981,7 +993,7 @@ infercnv_data$regions_data %>%
   ) %>%
   transmute(
     sample = sample,
-    type = "sc",
+    type = "scRNA-seq",
     chr = str_sub(chr, 4) %>%
       factor(levels = snparray_data$chromosome_size$chr),
     start = as.integer(start),
@@ -991,16 +1003,21 @@ infercnv_data$regions_data %>%
   bind_rows(
     snparray_data$cnv_regions %>%
       select(!type:ploidy) %>%
-      mutate(type = "snp")
+      mutate(type = "SNP array")
   ) %>%
-  mutate(sample = rename_patients(sample)) %>% 
+  mutate(
+    sample = rename_patients(sample),
+    group = GROUP_NAMES_LONG[str_sub(sample, 1, 1)],
+    .after = sample
+  ) %>%
   rename(
     Patient = sample,
+    Group = group,
     Type = type,
     Chromosome = chr,
     Start = start,
     End = end,
     "Copy Number Difference" = delta_copy_number
-  ) %>% 
-  arrange(Patient, Type, Chromosome, Start) %>% 
+  ) %>%
+  arrange(Patient, Type, Chromosome, Start) %>%
   save_table("S2_cnv", "CNV")
