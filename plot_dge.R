@@ -1,21 +1,17 @@
-# Differential gene expression analysis.
+# Plot DGE results.
 #
-# @DEPI rna_decontaminated.rds
-# @DEPI metadata.rds
+# @DEPI dge_pb_results.RData
+# @DEPI dge_mm_results.RData
 
 library(monocle3)
-library(muscat)
 library(scater)
-library(tidyverse)
+library(muscat)
 library(viridis)
 library(patchwork)
 library(ggpmisc)
 library(ComplexHeatmap)
-library(enrichR)
 library(latex2exp)
 library(scico)
-library(fgsea)
-library(msigdbr)
 library(openxlsx)
 library(ggrepel)
 library(ggbeeswarm)
@@ -26,214 +22,7 @@ source("styling.R")
 
 # Load data ---------------------------------------------------------------
 
-nb <-
-  readRDS("data_generated/rna_decontaminated.rds") %>% 
-  logNormCounts(assay.type = "soupx_counts")
-
-nb_metadata <- readRDS("data_generated/metadata.rds")
-
-nb@colData <-
-  nb_metadata %>%
-  mutate(
-    sample =
-      str_c(group, sample, sep = ".") %>% 
-      as_factor() %>%
-      fct_relevel(str_sort) %>% 
-      fct_relabel(~str_extract(.x, "\\d+_\\d+")),
-    Size_Factor = colData(nb)$Size_Factor
-  ) %>% 
-  column_to_rownames("cell") %>% 
-  as("DataFrame")
-rowData(nb)[["gene_short_name"]] <- rownames(nb)
-
-# clusters that contain more than 1% of total cells
-used_clusters <- 
-  nb_metadata %>% 
-  count(cellont_cluster) %>% 
-  mutate(n = n / sum(n)) %>% 
-  filter(n > 0.01) %>% 
-  pull(cellont_cluster)
-  
-# tumor infiltration rate
-tif <-
-  nb_metadata %>%
-  group_by(sample) %>%
-  summarise(tif = sum(cellont_abbr == "NB") / n())
-
-
-
-# DGE analysis ------------------------------------------------------------
-
-# create pseudobulk data
-nb <- prepSCE(                                           # on cluster level:
-  nb[, colData(nb)$cellont_cluster %in% used_clusters],  # nb
-  kid = "cellont_abbr",                                  # "cellont_cluster" 
-  gid = "group",
-  sid = "sample",
-  drop = TRUE
-)
-
-pb <- aggregateData(
-  nb,
-  assay = "counts",
-  fun = "sum",
-  by = c("cluster_id", "sample_id")
-)
-pb
-
-# assemble model matrix
-exp_info <-
-  metadata(pb)$experiment_info %>%
-  left_join(tif, by = c(sample_id = "sample")) %>% 
-  column_to_rownames("sample_id")
-
-
-# either (a) default analysis ...
-# model_mat <- model.matrix(~ group_id, data = exp_info)
-
-# ...or (b) regress out TIF
-model_mat <- model.matrix(~ group_id + tif, data = exp_info)
-
-colnames(model_mat) <-
-  colnames(model_mat) %>%
-  str_replace("group_id(.+)", "\\1_vs_I")
-model_mat
-
-
-plot_model_matrix <- function(mat, filename = NULL) {
-  p <- Heatmap(
-    mat[levels(metadata(pb)$experiment_info$sample_id), ],
-    name = "value",
-    col = circlize::colorRamp2(
-      breaks = seq(0, 1, length.out = 7),
-      colors = inferno(7)
-    ),
-    cluster_columns = FALSE,
-    cluster_rows = FALSE,
-  )
-  ggsave_default(filename, plot = p, width = 70, height = 100)
-  p
-}
-
-plot_model_matrix(model_mat, filename = "dge/model_matrix")
-
-
-# continue with common workflow: detect DE genes
-dge <- map(
-  2:ncol(model_mat),
-  ~pbDS(
-    pb,
-    design = model_mat,
-    coef = .x,
-    min_cells = 1
-  )
-)
-
-dge_results <-
-  map_dfr(
-    dge,
-    ~resDS(nb, .x, frq = TRUE) %>%
-    as_tibble()
-  ) %>% 
-  mutate(
-    cluster_id =
-      as_factor(cluster_id) %>%
-      fct_expand(levels(colData(nb)$cluster_id)) %>%
-      fct_relevel(levels(colData(nb)$cluster_id))
-  ) %>% 
-  rename(contrast = coef)
-
-
-
-# Filter DGE results ------------------------------------------------------
-
-#' Filter DGE results and add a column "direction".
-#'
-#' @param data A dataframe as returned by `muscat::resDS()`.
-#' @param contrast_frq Named list of character vectors indicating which groups
-#'   should be included for frequency filtering in each contrast.
-#' @param max_p Maximum p value.
-#' @param max_p_adj Maximum adjusted p value. Note: The FDR is calculated by
-#'   muscat/edgeR via p.adjust(method = "BH").
-#' @param min_abs_log_fc Minimum absolute log fold change.
-#' @param min_freq Minimum gene expression frequency (fracions of cells that
-#'   expresses a given gene.)
-#' @param remove_ribosomal If true, remove ribosomal proteins.
-#'
-#' @return A data frame.
-filter_dge_results <- function(data,
-                               contrast_frq,
-                               max_p = Inf,
-                               max_p_adj = 0.05,
-                               min_abs_log_fc = 1,
-                               min_freq = 0.1,
-                               remove_ribosomal = TRUE) {
-  # lookup table of gene frequencies in groups
-  gene_frq <-
-    data %>% 
-    select(gene, cluster_id, ends_with("frq")) %>%
-    distinct() %>% 
-    pivot_longer(
-      ends_with("frq"),
-      names_to = "frq_col",
-      names_pattern = "(.+)\\.",
-      values_to = "frq"
-    )
-  
-  contrast_frq <- map_dfr(
-    contrast_frq,
-    ~gene_frq %>% 
-      filter(frq_col %in% .x) %>% 
-      group_by(gene, cluster_id) %>% 
-      summarise(frq = max(frq)),
-    .id = "contrast"
-  )
-  
-  res <-
-    data %>%
-    left_join(
-      contrast_frq,
-      by = c("gene", "cluster_id", "contrast")
-    ) %>% 
-    filter(
-      frq >= min_freq,
-      p_val <= max_p,
-      p_adj.loc <= max_p_adj,
-      abs(logFC) >= min_abs_log_fc
-    ) %>% 
-    mutate(direction = if_else(logFC > 0, "up", "down")) %>% 
-    select(!matches(".frq"))
-  
-  if (remove_ribosomal) {
-    ribo_proteins <-
-      msigdbr(species = "Homo sapiens", category = "C2") %>% 
-      filter(gs_name == "KEGG_RIBOSOME") %>% 
-      pull(human_gene_symbol)
-    res <- 
-      res %>%
-      filter(!gene %in% ribo_proteins)
-  }
-  
-  res
-}
-
-contrast_frq <- list(
-  II_vs_I = c("I", "II"),
-  III_vs_I = c("I", "III"),
-  IV_vs_I = c("I", "IV"),
-  tif = c("I", "II", "III", "IV")
-)
-
-# for visualization and EnrichR analysis, filter with default settings
-dge_results_filtered <- filter_dge_results(dge_results, contrast_frq)
-
-# for GSEA, only remove low-frequent and ribosomal genes
-dge_results_filtered_gsea <- filter_dge_results(
-  dge_results,
-  contrast_frq,
-  max_p_adj = Inf,
-  min_abs_log_fc = 0
-)
+load("data_generated/dge_pb_results.RData")
 
 
 
@@ -544,93 +333,7 @@ plot_pbheatmap(dge_results_filtered, pb_log,
 
 
 
-# Enrichment analysis -----------------------------------------------------
-
-#' Perform enrichment analysis via enrichr for upregulated genes in a given
-#' contrast and cluster.
-#'
-#' @param data A DGE dataset.
-#' @param contrast The selected contrast.
-#' @param cluster The selected cluster.
-#' @param dbs Character vector containing valid enrichr databases
-#'   as returned by `enrichR::listEnrichrDbs()`.
-#' @param direction Use genes that are up- or downregulated, respectively.
-#'
-#' @return A dataframe, which combines the dataframes returned by
-#'   `enrichR::enrichr()` (empty results are removed) by adding a column "db".
-enrich_genes <- function(data,
-                         contrast,
-                         cluster,
-                         dbs,
-                         direction = c("up", "down")) {
-  info("Cluster {cluster}, contrast {contrast}, {direction}regulated genes")
-  
-  direction <- match.arg(direction)
-  
-  top_genes <- 
-    data %>% 
-    filter(
-      cluster_id == {{cluster}},
-      contrast == {{contrast}},
-      direction == {{direction}}
-    ) %>% 
-    pull(gene)
-  
-  if (length(top_genes) > 0) {
-    info("genes for enrichr: {str_c(top_genes, collapse = ', ')}")
-    enrichr(top_genes, dbs) %>% 
-      keep(~nrow(.) > 0) %>% 
-      bind_rows(.id = "db") 
-  }
-}
-
-#' Perform enrichment anlalysis for all contrasts and clusters in a dataset.
-#'
-#' @param data A DGE dataset.
-#' @param dbs Character vector containing valid enrichr databases
-#'   as returned by `enrichR::listEnrichrDbs()`.
-#'
-#' @return A dataframe, which combines the dataframes returned by
-#'   `enrichR::enrichr()` (empty results are removed) by adding three columns
-#'   "contrast", "cluster", and "db".
-enrich_all_genes <- function(data, dbs) {
-  queries <- 
-    data %>%
-    distinct(contrast, cluster = cluster_id) %>% 
-    mutate(direction = list(c("up", "down"))) %>% 
-    unnest_longer(direction)
-  
-  enrichr_data <-
-    queries %>%
-    pmap(enrich_genes, data = data, dbs = dbs)
-
-  queries %>%
-    mutate(data = enrichr_data) %>%
-    rowwise() %>%
-    filter(!is.null(data)) %>%
-    filter(nrow(data) > 0) %>%
-    unnest(data) %>%
-    mutate(contrast = as_factor(contrast) %>% fct_relevel(str_sort)) %>% 
-    separate(
-      Overlap,
-      into = c("overlap_size", "geneset_size"),
-      convert = TRUE
-    )
-}
-
-enrichr_dbs <- c(
-  "GO_Biological_Process_2018",
-  "GO_Cellular_Component_2018",
-  "GO_Molecular_Function_2018",
-  "KEGG_2019_Human",
-  "WikiPathways_2019_Human",
-  "MSigDB_Hallmark_2020",
-  "TRRUST_Transcription_Factors_2019"
-)
-
-enrichr_results <- enrich_all_genes(dge_results_filtered, enrichr_dbs)
-
-
+## Enrichment dot plot ----
 
 #' Generate a dotplot for enrichment terms.
 #' 
@@ -755,111 +458,11 @@ plot_enrichr_dots(enrichr_results,
 
 
 
-# GSEA --------------------------------------------------------------------
-
-#' Download enrichr databases in a format that can be used by fgsea.
-#'
-#' @param dbs Databases to download.
-#'
-#' @return A named list with names deriving from values in `dbs`. Each element
-#'   is a named list. Names correspond to enrichr terms, values are character
-#'   vectors that comprise all genes associated with the respective term.
-get_enrichr_genesets <- function(dbs) {
-  dbs %>% 
-    map(
-      function(db) {
-        info("Downloading {db}")
-        url <- paste0(
-          "https://maayanlab.cloud/Enrichr/geneSetLibrary",
-          "?mode=text&libraryName=",
-          db
-        )
-        read_lines(url)
-      }
-    ) %>% 
-    set_names(dbs) %>% 
-    map(
-      function(db) {
-        m <- str_match(db, "(.+?)\\t\\t(.+)")
-        terms <- m[, 2]
-        genes <- m[, 3] %>% str_split("\\t")
-        genes %>% 
-          map(stringi::stri_remove_empty) %>% 
-          set_names(terms)
-      }
-    )
-}
-
-
-#' Perform gene set enrichment analysis.
-#'
-#' @param data DGE data as returned by `filter_dge_results()`.
-#' @param gene_sets Gene set as returned by `get_enrichr_genesets()`.
-#'
-#' @return A dataframe, comprising columns "db", "contrast", "cluster", as well
-#'   as all columns in the result of `fgseaMultilevel()`.
-perform_gsea <- function(data, gene_sets) {
-  data %>% 
-    distinct(contrast, cluster_id) %>% 
-    mutate(db = list(names(gene_sets))) %>% 
-    unnest_longer(db) %>% 
-    pmap_dfr(
-      function(contrast, cluster_id, db) {
-        ranked_genes <-
-          data %>% 
-          filter(contrast == {{contrast}}, cluster_id == {{cluster_id}}) %>%
-          select(gene, logFC) %>%
-          deframe()
-        ranked_genes <- ranked_genes[!is.na(ranked_genes)]
-        
-        info("GSEA of contrast {contrast}, cluster {cluster_id}, ",
-             "db {db} ({length(ranked_genes)} genes)")
-        
-        fgseaMultilevel(
-          gene_sets[[db]],
-          ranked_genes,
-          eps = 0,
-          nPermSimple = 10000
-        ) %>%
-          as_tibble() %>%
-          mutate(
-            db = {{db}},
-            contrast = {{contrast}},
-            cluster = {{cluster_id}},
-            .before = 1
-          )
-      }
-    )
-}
-
-# already defined in secion 'enrichment analysis',
-# but we repeat it here for convenience
-enrichr_dbs <- c(
-  "GO_Biological_Process_2018",
-  "GO_Cellular_Component_2018",
-  "GO_Molecular_Function_2018",
-  "KEGG_2019_Human",
-  "WikiPathways_2019_Human",
-  "MSigDB_Hallmark_2020",
-  "TRRUST_Transcription_Factors_2019"
-)
-
-enrichr_genesets <- get_enrichr_genesets(enrichr_dbs)
-
-# remove mouse genes from TTRUST database
-enrichr_genesets$TRRUST_Transcription_Factors_2019 <-
-  enrichr_genesets$TRRUST_Transcription_Factors_2019 %>% 
-  magrittr::extract(imap_lgl(., ~str_detect(.y, "human"))) %>% 
-  set_names(str_extract, "\\w+")
-
-gsea_results <- perform_gsea(dge_results_filtered_gsea, enrichr_genesets)
-gsea_results %>% saveRDS("data_wip/gsea_results.rds")
-# gsea_results <- readRDS("data_wip/gsea_results.rds")
+## GSEA results ----
 
 gsea_results %>%
   ggplot(aes(NES, -log10(padj))) +
   geom_point(alpha = .1)
-
 
 
 #' Generate a dotplot for terms enriched by GSEA.
@@ -992,115 +595,11 @@ plot_gsea_dots(gsea_results,
                db = "TRRUST_Transcription_Factors_2019",
                height = 300)
 
-# sample plots for selecting the top 10 enriched terms
-# plot_gsea_dots(gsea_results,
-#                db = "GO_Biological_Process_2018",
-#                top_n_positive = 10L,
-#                top_n_negative = 10L,
-#                width = 600,
-#                height = 800,
-#                filename = "dge/gsea_GO_Biological_Process_2018_10")
-# 
-# plot_gsea_dots(gsea_results,
-#                db = "MSigDB_Hallmark_2020",
-#                top_n_positive = 10L,
-#                top_n_negative = 10L,
-#                width = 400,
-#                filename = "dge/gsea_MSigDB_Hallmark_2020_10")
 
 
+## DGE in tumor cluster ----
 
-#' List genes that influence GSEA the most, for all databases and separately for
-#' positively and negatively enriched terms.
-#'
-#' @param data Results from `perform_gsea()`.
-#' @param top_n Only select the terms with the highest NES per cluster.
-#' @param max_p_adj Maximum adjusted p value and …
-#' @param min_abs_NES minimum absolute NES required for selecting a term.
-#'
-#' @return A dataframe with columns "db", "direction", "gene", and "count".
-get_gsea_genes <- function(data,
-                           top_n = 5,
-                           max_p_adj = 0.05,
-                           min_abs_NES = 1) {
-  data <- 
-    data %>%
-    mutate(direction = if_else(NES > 0, "positive", "negative"))
-  
-  params <-
-    data %>% 
-    distinct(db, direction)
-  
-  pmap_dfr(
-    params,
-    function(db, direction) {
-      data %>% 
-        filter(db == {{db}}, direction == {{direction}}) %>% 
-        filter(padj <= max_p_adj & abs(NES) >= min_abs_NES) %>%
-        group_by(contrast, cluster) %>%
-        slice_max(n = top_n, order_by = abs(NES), with_ties = FALSE) %>%
-        pull(leadingEdge) %>%
-        flatten_chr() %>%
-        fct_count() %>%
-        arrange(desc(n)) %>% 
-        rename(gene = f, count = n) %>% 
-        mutate(db = db, direction = direction, .before = 1)
-    }
-  )
-}
-
-gsea_genes <- get_gsea_genes(gsea_results)
-gsea_genes
-
-
-
-# DGE in tumor cluster ----------------------------------------------------
-
-# preprocessing as above
-nb_tumor <-
-  nb[, colData(nb)$group_id != "I" & colData(nb)$cluster_id == "NB"] %>% 
-  prepSCE()
-
-pb_tumor <- aggregateData(nb_tumor, assay = "counts")
-
-model_mat_tumor <- model.matrix(
-  ~ 0 + group_id,
-  data =
-    metadata(pb_tumor)$experiment_info %>%
-    mutate(group_id = fct_drop(group_id)) %>% 
-    column_to_rownames("sample_id")
-)
-
-colnames(model_mat_tumor) <- str_sub(colnames(model_mat_tumor), start = 9L)
-
-# perform DGE
-dge_results_tumor <-
-  pb_tumor %>% 
-  pbDS(
-    design = model_mat_tumor,
-    contrast = limma::makeContrasts(
-      II_vs_III = II - III,
-      II_vs_IV = II - IV,
-      III_vs_IV = III - IV,
-      levels = model_mat_tumor
-    ),
-    min_cells = 1
-  ) %>% 
-  {resDS(nb_tumor, ., frq = TRUE)} %>%
-  as_tibble()
-
-# filter results
-dge_results_filtered_tumor <- filter_dge_results(dge_results_tumor)
-dge_results_filtered_gsea_tumor <- filter_dge_results(
-  dge_results_tumor,
-  max_p_adj = Inf,
-  min_abs_log_fc = 0
-)
-
-# plot results
 plot_volcano(dge_results_tumor, "II_vs_IV", "dge/volcano_tumor_II_vs_IV")
-plot_volcano(dge_results_tumor, "II_vs_III", "dge/volcano_tumor_II_vs_III")
-plot_volcano(dge_results_tumor, "III_vs_IV", "dge/volcano_tumor_III_vs_IV")
 
 plot_violin(
   dge_results_filtered_tumor,
@@ -1129,44 +628,16 @@ pb_log_tumor <- aggregateData(
 plot_pbheatmap(dge_results_filtered_tumor, pb_log_tumor,
                contrast = "II_vs_IV", filename = "dge/heatmap_tumor_II_vs_IV")
 
-# GSEA analysis
-gsea_results_tumor <- perform_gsea(
-  dge_results_filtered_gsea_tumor,
-  enrichr_genesets
-)
 
-plot_gsea_dots(gsea_results_tumor,
-               db = "MSigDB_Hallmark_2020",
-               height = 80,
-               filename = "dge/gsea_tumor_MSigDB_Hallmark_2020")
 
-plot_gsea_dots(gsea_results_tumor,
-               db = "GO_Biological_Process_2018",
-               height = 150,
-               filename = "dge/gsea_tumor_GO_Biological_Process_2018")
-
-plot_gsea_dots(gsea_results_tumor,
-               db = "KEGG_2019_Human",
-               height = 80,
-               filename = "dge/gsea_tumor_KEGG_2019_Human")
-
-plot_gsea_dots(gsea_results_tumor,
-               db = "WikiPathways_2019_Human",
-               height = 60,
-               filename = "dge/gsea_tumor_WikiPathways_2019_Human")
-
-plot_gsea_dots(gsea_results_tumor,
-               db = "TRRUST_Transcription_Factors_2019",
-               height = 60,
-               filename = "dge/gsea_tumor_TRRUST_Transcription_Factors_2019")
-
+## Comparson of bulk and sc data ---- 
 
 dge_results_tumor %>% 
-  filter(contrast == "II_vs_IV") %>% 
+  filter(contrast == "II_vs_IV") %>%
   inner_join(
     read_csv("metadata/rifatbegovic2018_table_s5.csv", comment = "#")
-  ) %>% 
-  rename(logfc_sc = logFC, q_sc = p_adj.loc, logfc_bulk = logfc, q_bulk = q) %>% 
+  ) %>%
+  rename(logfc_sc = logFC, q_sc = p_adj.loc, logfc_bulk = logfc, q_bulk = q) %>%
   ggplot(aes(logfc_sc, logfc_bulk)) +
   geom_point(aes(size = -log10(q_sc)), alpha = .5) +
   geom_smooth(method = "lm") +
@@ -1185,7 +656,7 @@ ggsave_default("dge/mycn_bulk_vs_sc")
 
 
 
-# LogFC correlation -------------------------------------------------------
+## LogFC correlation ----
 
 #' Plot a Heatmap showing correlations of log fold changes.
 #'
@@ -1439,6 +910,15 @@ ggsave_publication("3d_gsea", width = 8, height = 10)
 ## Figure 3e ----
 
 plot_logfc_correlation_heatmap <- function() {
+  ht_opt(
+    simple_anno_size = unit(1.5, "mm"),
+    COLUMN_ANNO_PADDING = unit(1, "pt"),
+    DENDROGRAM_PADDING = unit(1, "pt"),
+    HEATMAP_LEGEND_PADDING = unit(1, "mm"),
+    ROW_ANNO_PADDING = unit(1, "pt"),
+    TITLE_PADDING = unit(1, "mm")
+  )
+  
   corr_mat <- 
     dge_results %>% 
     filter(contrast != "tif") %>% 
@@ -1517,18 +997,98 @@ plot_logfc_correlation_heatmap <- function() {
   )
 }
 
-ht_opt(
-  simple_anno_size = unit(1.5, "mm"),
-  COLUMN_ANNO_PADDING = unit(1, "pt"),
-  DENDROGRAM_PADDING = unit(1, "pt"),
-  HEATMAP_LEGEND_PADDING = unit(1, "mm"),
-  ROW_ANNO_PADDING = unit(1, "pt"),
-  TITLE_PADDING = unit(1, "mm")
-)
 p <- plot_logfc_correlation_heatmap()
 p
 ggsave_publication("3e_logfc_correlation_heatmap",
                    plot = p, width = 6, height = 5)
+
+
+
+## Figure S2x ----
+
+plot_bulk_sc_comparison <- function() {
+  labeled_genes <- tribble(
+    ~gene, ~nudge_x, ~nudge_y,
+    "MYCN",   -1,  1,
+    "MYCNOS",  0,  2,
+    "VIP",     0,  1,
+    "NPW",     0, -4,
+    "NKAIN4",  0, -3,
+    
+    "CXorf57", 0,  3,
+    "IL7",     0,  1, 
+    "MUC15",   0, -3,
+    "KRT19",   1, -1
+  )
+  
+  data <- 
+    dge_results_tumor %>% 
+    filter(contrast == "II_vs_IV") %>%
+    inner_join(
+      read_csv("metadata/rifatbegovic2018_table_s5.csv", comment = "#")
+    ) %>%
+    rename(
+      logfc_sc = logFC,
+      q_sc = p_adj.loc,
+      logfc_bulk = logfc,
+      q_bulk = q
+    )
+   
+  label_data <- 
+    data %>%
+    filter(gene %in% labeled_genes$gene) %>% 
+    mutate(gene = factor(gene, levels = labeled_genes$gene)) %>% 
+    arrange(gene)
+   
+  ggplot(data, aes(logfc_sc, logfc_bulk)) +
+    geom_point(
+      aes(size = -log10(q_sc)),
+      color = "#e7298a",
+      shape = 16, 
+      alpha = .5
+    ) +
+    geom_smooth(
+      method = "lm",
+      fullrange = TRUE,
+      color = "#7570b3",
+      fill = "#7570b3",
+      size = BASE_LINE_SIZE
+    ) +
+    geom_text_repel(
+      data = label_data,
+      aes(label = gene),
+      nudge_x = labeled_genes$nudge_x,
+      nudge_y = labeled_genes$nudge_y,
+      seed = 42, 
+      size = BASE_TEXT_SIZE_MM,
+      segment.size = BASE_LINE_SIZE,
+      min.segment.length = unit(0, "mm")
+    ) +
+    scale_x_continuous(
+      "log fold change (scRNA-seq)",
+      limits = c(-10, 10),
+      expand = expansion(add = 0.1)
+    ) +
+    scale_y_continuous(
+      "log fold change (bulk RNA-seq)",
+      limits = c(-10, 10),
+      expand = expansion(add = 0.1)
+    ) +
+    scale_radius(
+      TeX("-log_{10} p_{adj}"),
+      range = c(0.1, 2)
+    ) +
+    coord_fixed() +
+    theme_nb(grid = FALSE) +
+    theme(
+      legend.key.height = unit(1, "mm"),
+      legend.key.width = unit(1, "mm"),
+      legend.position = c(.8, .2)
+    )
+}
+
+plot_bulk_sc_comparison()
+ggsave_publication("2x_comparison_bulk_sc", width = 4, height = 4)
 
 
 
@@ -1538,10 +1098,13 @@ ggsave_publication("3e_logfc_correlation_heatmap",
 
 dge_results_filtered_gsea %>% 
   arrange(contrast, cluster_id, desc(logFC)) %>% 
-  mutate(contrast = rename_contrast(contrast)) %>% 
+  mutate(
+    contrast = rename_contrast_long(contrast),
+    cluster_id = CELL_TYPE_ABBREVIATIONS[cluster_id]
+  ) %>% 
   select(
-    "Contrast (group vs C)" = contrast,
-    "Cell Type" = cluster_id,
+    "Contrast" = contrast,
+    "Cell type" = cluster_id,
     "Gene" = gene,
     "Log fold change" = logFC,
     "Adjusted p-value" = p_adj.loc
@@ -1553,13 +1116,18 @@ dge_results_filtered_gsea %>%
 
 gsea_results %>% 
   arrange(db, contrast, cluster, desc(NES)) %>% 
-  mutate(contrast = rename_contrast(contrast)) %>% 
+  mutate(
+    contrast = rename_contrast_long(contrast),
+    cluster = CELL_TYPE_ABBREVIATIONS[cluster],
+    leadingEdge = map_chr(leadingEdge, str_c, collapse = ", ")
+  ) %>%
   select(
     "Database" = db,
-    "Contrast (group vs C)" = contrast,
-    "Cell Type" = cluster,
+    "Contrast" = contrast,
+    "Cell type" = cluster,
     "Pathway" = pathway,
     "Normalized Enrichment Score" = NES,
-    "Adjusted p-value" = padj
+    "Adjusted p-value" = padj,
+    "Leading edge genes" = leadingEdge
   ) %>%
   save_table("S4_gsea", "Microenvironment")
