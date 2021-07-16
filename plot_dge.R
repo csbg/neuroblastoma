@@ -784,17 +784,20 @@ plot_violin <- function(gene,
     theme_nb(grid = FALSE)
 }
 
-p1 <- plot_violin("IRF9", "B", c("I", "II"), "up")
-p2 <- plot_violin("SAP30", "SC", c("I", "II"), "down")
-p3 <- plot_violin("WDR74", "B", c("I", "III"), "up")
-p4 <- plot_violin("IRF9", "B", c("I", "III"), "up")
-p5 <- plot_violin("IFI44L", "SC", c("I", "IV"), "up")
-p6 <- plot_violin("HIST1H1E", "SC", c("I", "IV"), "down")
 wrap_plots(
-  p1, p2, p3, p4, p5, p6,
-  byrow = FALSE,
-  nrow = 2,
-  widths = c(9, 7, 10)
+  textGrob(
+    "log-normalized expression",
+    rot = 90,
+    gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+  ),
+  plot_violin("IRF9", "B", c("I", "II"), "up"),
+  plot_violin("WDR74", "B", c("I", "III"), "up"),
+  plot_violin("IFI44L", "SC", c("I", "IV"), "up"),
+  plot_violin("SAP30", "SC", c("I", "II"), "down"),
+  plot_violin("IRF9", "B", c("I", "III"), "up"),
+  plot_violin("HIST1H1E", "SC", c("I", "IV"), "down"),
+  design = "ABCD\nAEFG",  
+  widths = c(.1, 9, 7, 10)
 )
 ggsave_publication("3c_exp_violin", width = 10, height = 6, type = "png")
 
