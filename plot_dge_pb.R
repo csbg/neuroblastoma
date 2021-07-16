@@ -1,11 +1,11 @@
-# Plot DGE results.
+# Plot pseudo-bulk DGE results.
 #
 # @DEPI dge_pb_results.RData
-# @DEPI dge_mm_results.RData
 
 library(monocle3)
 library(scater)
 library(muscat)
+library(tidyverse)
 library(viridis)
 library(patchwork)
 library(ggpmisc)
