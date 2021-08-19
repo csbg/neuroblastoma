@@ -39,8 +39,10 @@
   plot manually selected canonical cell type markers
 - [find_markers.R](find_markers.R) -
   automatically detect canonical cell type markers and plot them
-- [analyse_dge.R](analyse_dge.R) -
-  analyse differential genea expression
+- [analyse_dge_pb.R](analyse_dge_pb.R) -
+  analyse differential gene expression using pseudobulks
+- [analyse_dge_mm.R](analyse_dge_mm.R) -
+  analyse differential gene expression using mixed models
 - [analyse_cnv.R](analyse_cnv.R) -
   analyse copy number variations
 - [plot_cnv.R](plot_cnv.R) - 
