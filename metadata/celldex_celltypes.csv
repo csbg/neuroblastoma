@@ -1,0 +1,86 @@
+# manual assignment of overall cell types to celldex labels
+# used for the column annotation in figure S1e
+colname,abbr
+blueprint_Monocytes,M
+blueprint_B-cells,B
+blueprint_CD8+ T-cells,T
+blueprint_CD4+ T-cells,T
+blueprint_HSC,SC
+blueprint_NK cells,NK
+blueprint_Erythrocytes,E
+blueprint_Neurons,NB
+blueprint_Mesangial cells,other
+blueprint_Fibroblasts,other
+blueprint_Epithelial cells,other
+blueprint_Astrocytes,other
+blueprint_Macrophages,M
+blueprint_DC,pDC
+blueprint_Adipocytes,other
+blueprint_Endothelial cells,other
+blueprint_Neutrophils,other
+blueprint_Chondrocytes,other
+blueprint_Pericytes,other
+blueprint_Keratinocytes,other
+blueprint_Eosinophils,other
+blueprint_Unknown,other
+hpca_T_cells,T
+hpca_Monocyte,M
+hpca_B_cell,B
+hpca_Pro-B_cell_CD34+,B
+hpca_NK_cell,NK
+hpca_Pre-B_cell_CD34-,B
+hpca_Neurons,NB
+hpca_GMP,SC
+hpca_BM,other
+hpca_Erythroblast,E
+hpca_CMP,SC
+hpca_Pro-Myelocyte,other
+hpca_MEP,SC
+hpca_HSC_-G-CSF,SC
+hpca_BM & Prog.,SC
+hpca_Macrophage,M
+hpca_Neutrophils,other
+hpca_DC,other
+hpca_Platelets,other
+hpca_Tissue_stem_cells,other
+hpca_Astrocyte,other
+hpca_HSC_CD34+,SC
+hpca_Myelocyte,other
+hpca_Neuroepithelial_cell,other
+hpca_Endothelial_cells,other
+hpca_Embryonic_stem_cells,SC
+hpca_Unknown,other
+dice_Monocytes,M
+dice_B cells,B
+dice_NK cells,NK
+"dice_T cells, CD4+",T
+"dice_T cells, CD8+",T
+dice_Unknown,other
+dmap_B cells,B
+dmap_Monocytes,M
+dmap_CD8+ T cells,T
+dmap_CD4+ T cells,T
+dmap_Erythroid cells,E
+dmap_Granulocytes,other
+dmap_HSCs,SC
+dmap_NK cells,NK
+dmap_Dendritic cells,pDC
+dmap_Basophils,other
+dmap_MEPs,SC
+dmap_CMPs,SC
+dmap_Eosinophils,other
+dmap_GMPs,SC
+dmap_Megakaryocytes,other
+dmap_NK T cells,T
+dmap_Unknown,other
+monaco_Monocytes,M
+monaco_B cells,B
+monaco_Dendritic cells,pDC
+monaco_CD4+ T cells,T
+monaco_Progenitors,SC
+monaco_T cells,T
+monaco_NK cells,NK
+monaco_CD8+ T cells,T
+monaco_Basophils,other
+monaco_Neutrophils,other
+monaco_Unknown,other
