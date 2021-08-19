@@ -112,7 +112,7 @@ dge_results <- map_dfr(
 #'
 #' @return A dataframe with additional columns
 #' "frq": expression frequency in the group indicated in the respective column
-#' "frq_I": expression frequency in the control group
+#' "frq_ref": expression frequency in the reference group
 calc_expression_frequency <- function(data) {
   # required for calcExprFreqs()
   cds <- prepSCE(
@@ -142,8 +142,8 @@ calc_expression_frequency <- function(data) {
     ) %>%
     group_by(cell_type, gene, group) %>% 
     summarise(frq = min(frq)) %>% 
-    mutate(frq_I = if_else(group == "I", frq, NA_real_)) %>% 
-    fill(frq_I) %>% 
+    mutate(frq_ref = if_else(group == "I", frq, NA_real_)) %>% 
+    fill(frq_ref) %>% 
     filter(group != "I")
   
   # add columns to input
@@ -191,7 +191,7 @@ filter_dge_results <- function(data,
       p <= max_p,
       p_adj <= max_p_adj,
       frq > min_freq,
-      frq_I > min_freq
+      frq_ref > min_freq
     ) %>% 
     mutate(direction = if_else(logFC > 0, "up", "down"))
   
@@ -208,6 +208,10 @@ filter_dge_results <- function(data,
   res
 }
 
+
+dge_results_wide_filtered <- 
+  dge_results_wide %>%
+  filter_dge_results(max_p_adj = Inf, min_abs_log_fc = 0)
 
 
 # Enrichment analysis -----------------------------------------------------
@@ -399,9 +403,138 @@ enrichr_genesets$TRRUST_Transcription_Factors_2019 <-
   set_names(str_extract, "\\w+")
 
 gsea_results <-
-  dge_results_wide %>%
-  filter_dge_results(max_p_adj = Inf, min_abs_log_fc = 0) %>% 
+  dge_results_wide_filtered %>%
   perform_gsea(enrichr_genesets)
+
+
+
+# DGE in tumor cluster ----------------------------------------------------
+
+nb_tumor <-
+  nb[
+    ,
+    colData(nb)$group %in% c("II", "IV")
+    & colData(nb)$cellont_abbr == "NB"
+  ]
+colData(nb_tumor)$tumor_subcluster <- 
+  read_csv("metadata/nb_subclusters.csv") %>% 
+  deframe() %>% 
+  magrittr::extract(rownames(colData(nb_tumor)))
+colData(nb_tumor)$group <- fct_drop(colData(nb_tumor)$group)
+colData(nb_tumor)$sample <- fct_drop(colData(nb_tumor)$sample)
+
+
+analyse_dge_tumor <- function(subclusters) {
+  info("Analysing tumor subclusters {str_c(subclusters, collapse = '+')}")
+  
+  nb_sub <- nb_tumor[, colData(nb_tumor)$tumor_subcluster %in% subclusters]
+  
+  model_mat <- model.matrix(
+    ~group + tif,
+    data =
+      colData(nb_sub) %>%
+      as_tibble(rownames = "cell") %>% 
+      mutate(group = group %>% fct_drop() %>% fct_rev()) %>%
+      column_to_rownames("cell")
+  )
+  colnames(model_mat) <-
+    colnames(model_mat) %>%
+    str_replace("group(.+)", "\\1_vs_IV")
+  
+  data_grouped <- group_cell(
+    counts(nb_sub),
+    id = colData(nb_sub)$sample,
+    pred = model_mat,
+    offset = colData(nb_sub)$Size_Factor
+  )
+  
+  res <- nebula(
+    data_grouped$count,
+    id = data_grouped$id,
+    pred = data_grouped$pred,
+    offset = data_grouped$offset,
+    verbose = TRUE
+  )
+  
+  res$summary %>%
+    as_tibble() %>% 
+    mutate(
+      algorithm = res$algorithm,
+      convergence = res$convergence,
+      overdispersion_subject = res$overdispersion$Subject,
+      overdispersion_cell = res$overdispersion$cell
+    )
+}
+
+set.seed(1)
+dge_results_tumor <- map_dfr(
+  list("all" = 1:4, "1" = 1, "2" = 2, "3" = 3, "4" = 4),
+  analyse_dge_tumor,  
+  .id = "subclusters"
+)
+
+
+# similar to `calc_expression_frequency()`
+calc_expression_frequency_tumor <- function(data) {
+  cds <- prepSCE(
+    nb_tumor,
+    kid = "tumor_subcluster",
+    gid = "group",
+    sid = "sample",
+    drop = TRUE
+  )
+  
+  # generate table with frequencies on sample level
+  exp_frq_subclusters <-
+    cds %>% 
+    calcExprFreqs() %>% 
+    assays() %>%
+    as.list() %>%
+    map_dfr(as_tibble, rownames = "gene", .id = "subclusters")
+  
+  colData(cds)$cluster_id <- factor("all")
+  
+  exp_frq_all <-
+    cds %>% 
+    calcExprFreqs() %>% 
+    assay("all") %>%
+    as_tibble(rownames = "gene") %>% 
+    mutate(subclusters = "all")
+  
+  exp_frq <- 
+    bind_rows(exp_frq_subclusters, exp_frq_all) %>% 
+    select(!c(II, IV))
+  exp_frq
+  
+  # summarise at group level
+  exp_frq_groups <-
+    exp_frq %>% 
+    pivot_longer(starts_with("20"), names_to = "sample", values_to = "frq") %>% 
+    left_join(
+      nb_metadata %>% distinct(sample, group),
+      by = "sample"
+    ) %>%
+    group_by(subclusters, gene, group) %>%
+    summarise(frq = min(frq)) %>%
+    pivot_wider(
+      names_from = group,
+      names_prefix = "frq_",
+      values_from = frq
+    ) %>% 
+    rename(frq = frq_II, frq_ref = frq_IV)
+  
+  # add columns to input
+  data %>%
+    left_join(exp_frq_groups, by = c("subclusters", "gene"))
+}
+
+dge_results_tumor_wide <- 
+  dge_results_tumor %>% 
+  select(subclusters, gene, logFC = logFC_II_vs_IV, p = p_II_vs_IV) %>% 
+  group_by(subclusters) %>%
+  mutate(p_adj = p.adjust(p, method = "fdr")) %>%
+  ungroup() %>%
+  calc_expression_frequency_tumor()
 
 
 
@@ -412,8 +545,12 @@ gsea_results <-
 # used_clusters <- dge$used_clusters
 # dge_results <- dge$results
 # dge_results_wide <- dge$results_wide
+# dge_results_wide_filtered <- dge$results_wide_filtered
 # enrichr_results <- dge$enrichr
 # gsea_results <- dge$gsea
+# nb_tumor <- dge$cds_tumor
+# dge_results_tumor <- dge$results_tumor
+# dge_results_tumor_wide <- dge$results_tumor_wide
 
 list(
   cds = nb,
@@ -421,7 +558,11 @@ list(
   used_clusters = used_clusters,
   results = dge_results,
   results_wide = dge_results_wide,
+  results_wide_filtered = dge_results_wide_filtered,
   enrichr = enrichr_results,
-  gsea = gsea_results
+  gsea = gsea_results,
+  cds_tumor = nb_tumor,
+  results_tumor = dge_results_tumor,
+  results_tumor_wide = dge_results_tumor_wide
 ) %>%
   saveRDS("data_generated/dge_mm_results.rds")

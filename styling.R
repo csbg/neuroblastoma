@@ -294,13 +294,23 @@ rename_contrast <- partial(
   )
 )
 
+# rename_contrast_long <- partial(
+#   rename_str_or_fct,
+#   nm = tribble(
+#     ~old,       ~new,
+#     "II_vs_I",  "MYCN amplified vs control",
+#     "III_vs_I", "ATRX deleted vs control",
+#     "IV_vs_I",  "sporadic vs control"
+#   )
+# )
+
 rename_contrast_long <- partial(
   rename_str_or_fct,
   nm = tribble(
     ~old,       ~new,
-    "II_vs_I",  "MYCN amplified vs control",
-    "III_vs_I", "ATRX deleted vs control",
-    "IV_vs_I",  "sporadic vs control"
+    "II",  "MYCN amplified vs control",
+    "III", "ATRX deleted vs control",
+    "IV",  "sporadic vs control"
   )
 )
 
