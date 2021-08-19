@@ -665,6 +665,7 @@ plot_resexp_tumor <- function(data,
     column_split = col_split,
     cluster_column_slices = FALSE,
     column_gap = unit(0, "mm"),
+    column_title_side = "bottom",
     column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     
     border = TRUE,
@@ -674,7 +675,7 @@ plot_resexp_tumor <- function(data,
       group = cell_metadata$group,
       col = list(group = GROUP_COLORS),
       annotation_name_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-      annotation_name_side = "top",
+      annotation_name_side = "bottom",
       annotation_legend_param = list(
         group = list(
           grid_width = unit(2, "mm"),
@@ -691,6 +692,7 @@ plot_resexp_tumor <- function(data,
       row_title = "patient",
       row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
       column_title = "chromosome",
+      column_title_side = "bottom",
       column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
     ) 
 }
@@ -717,7 +719,7 @@ plot_cnv_data_comparison <- function(sc_data,
       0, "neutral",                      "#F7F7F7FF",
       1, "gain of one copy",             "#DFC27DFF",
       2, "gain of two copies",           "#BF812DFF",
-      3, "gain of more than two copies", "#8C510AFF",
+      3, "gain of >2 copies",            "#8C510AFF",
       38, "amplification",               "#543005FF"
     ) %>%
     mutate(label = as_factor(label))
@@ -825,7 +827,7 @@ plot_cnv_data_comparison <- function(sc_data,
     ) +
     scale_fill_identity(
       name = NULL,
-      guide = guide_legend(nrow = 1),
+      guide = guide_legend(ncol = 1),
       breaks = cn_metadata$color,
       labels = cn_metadata$label
     ) +
@@ -845,8 +847,7 @@ plot_cnv_data_comparison <- function(sc_data,
       axis.text.x = element_blank(),
       legend.key.height = unit(2, "mm"),
       legend.key.width = unit(2, "mm"),
-      legend.margin = margin(0, 1, -2, 1, "mm"),
-      legend.position = "top",
+      legend.margin = margin(0, 0, -3, -1, "mm"),
       panel.spacing.x = unit(-.5, "pt"),
       panel.spacing.y = unit(1, "mm"),
       panel.background = element_rect(color = NA, fill = cn_color(0)),
@@ -939,6 +940,7 @@ plot_resexp_marrow <- function(data,
     column_split = col_split,
     cluster_column_slices = FALSE,
     column_gap = unit(0, "mm"),
+    column_title_side = "bottom",
     column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     
     border = TRUE,
@@ -949,7 +951,7 @@ plot_resexp_marrow <- function(data,
       patient = cell_metadata$sample,
       col = list(group = GROUP_COLORS, patient = PATIENT_COLORS),
       annotation_name_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-      annotation_name_side = "top",
+      annotation_name_side = "bottom",
       annotation_legend_param = list(
         group = list(
           grid_width = unit(2, "mm"),
@@ -970,6 +972,7 @@ plot_resexp_marrow <- function(data,
       row_title = "cell type",
       row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
       column_title = "chromosome",
+      column_title_side = "bottom",
       column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
     ) 
 }

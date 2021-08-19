@@ -583,7 +583,7 @@ plot_canonical_markers <- function() {
       panel_annotation = x_annotation_data
     ) +
     scale_x_discrete(
-      name = "cluster / cell type",
+      name = "cluster / assigned cell type",
       labels = function(x) str_replace(x, "(.+) \\((.+)\\)", "\\2\n\\1"),
       expand = expansion(add = 0.5)
     ) +
@@ -622,9 +622,9 @@ plot_canonical_markers <- function() {
       legend.box.just = "bottom",
       legend.key.height = unit(1, "mm"),
       legend.key.width = unit(1, "mm"),
-      legend.position = "top",
+      legend.position = "bottom",
       legend.spacing = unit(0, "mm"),
-      legend.margin = margin(0, 1, -2, 1, "mm"),
+      legend.margin = margin(-2, 1, 0, 1, "mm"),
       panel.border = element_rect(color = "black", size = .25)
     )
   p
@@ -669,7 +669,7 @@ plot_mesenchymal <- function(top_prop = 0.05) {
     scale_x_continuous("UMAP1", breaks = c(-10, 0, 10)) +
     scale_y_continuous("UMAP2", breaks = c(-10, 0, 10)) +
     scale_color_distiller(
-      name = "gene\nsign.\nscore",
+      name = "gene\nsignature\nscore",
       palette = "RdPu",
       guide = guide_colorbar(
         barwidth = unit(2, "mm"),
@@ -685,7 +685,7 @@ plot_mesenchymal <- function(top_prop = 0.05) {
 }
 
 plot_mesenchymal()
-ggsave_publication("S1c_mesenchymal", type = "png", width = 9, height = 5)
+ggsave_publication("S1c_signature_umap", type = "png", width = 9, height = 5)
 
 
 ## Figure S1d ----
@@ -724,7 +724,7 @@ subplot_nb_dots <- function(signature_col, title = NULL, top_prop = 0.05) {
         barheight = unit(2, "mm"),
         barwidth = unit(15, "mm"),
         label.position = "top",
-        title.vjust = 0.1
+        title.vjust = 0.2
       )
     ) +
     scale_radius(
@@ -745,27 +745,27 @@ subplot_nb_dots <- function(signature_col, title = NULL, top_prop = 0.05) {
 }
 
 wrap_plots(
-  guide_area(),
   subplot_nb_dots(signature_mesenchymal, "mesenchymal"),
   subplot_nb_dots(signature_ncc_like, "NCC-like") +
     theme(
       axis.text.y = element_blank(),
       axis.ticks.y = element_blank()
     ),
+  guide_area(),
   guides = "collect",
-  design = "AA\nBC",
-  heights = c(0.2, 0.8),
+  design = "AB\nCC",
+  heights = c(0.8, 0.2),
   widths = c(12, 19)
 ) &
   theme(
     legend.box.just = "bottom",
     legend.key.height = unit(1, "mm"),
     legend.key.width = unit(1, "mm"),
-    legend.position = "top",
+    legend.position = "bottom",
     legend.spacing = unit(0, "mm"),
-    legend.margin = margin(0, 1, 0, 1, "mm"),
+    legend.margin = margin(-1, 1, 0, 1, "mm"),
     plot.margin = margin(0, 1, 0, 1, "mm"),
     
   )
 
-ggsave_publication("s1d_dots", width = 9, height = 4)
+ggsave_publication("s1d_signature_dots", width = 9, height = 4)

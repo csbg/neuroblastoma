@@ -2,7 +2,7 @@
 #
 # @DEPI rna_decontaminated.rds
 # @DEPI metadata.rds
-# @DEPO dge_pb_results.RData
+# @DEPO dge_pb_results.rds
 
 library(monocle3)
 library(muscat)
@@ -56,7 +56,7 @@ used_clusters <-
 
 
 
-# DGE analysis ------------------------------------------------------------
+# Analyse data ------------------------------------------------------------
 
 # create pseudobulk data
 nb <- prepSCE(                                           # on cluster level:
@@ -138,7 +138,8 @@ dge_results <-
   rename(contrast = coef)
 
 
-# Filter DGE results ------------------------------------------------------
+
+# Filter results ----------------------------------------------------------
 
 #' Filter DGE results and add a column "direction".
 #'
@@ -464,29 +465,21 @@ dge_results_filtered_tumor <- filter_dge_results(
   list(II_vs_IV = c("II", "IV"))
 )
 
-dge_results_filtered_gsea_tumor <- filter_dge_results(
-  dge_results_tumor,
-  list(II_vs_IV = c("II", "IV")),
-  max_p_adj = Inf,
-  min_abs_log_fc = 0
-)
-
 
 
 # Save results ------------------------------------------------------------
 
-save(
-  nb,
-  nb_metadata,
-  nb_tumor,
-  used_clusters,
-  dge_results,
-  dge_results_filtered,
-  dge_results_filtered_gsea,
-  dge_results_tumor,
-  dge_results_filtered_tumor,
-  dge_results_filtered_gsea_tumor,
-  enrichr_results,
-  gsea_results,
-  file = "data_generated/dge_pb_results.RData"
-)
+list(
+  cds = nb,
+  metadata = nb_metadata,
+  used_clusters = used_clusters,
+  results = dge_results,
+  results_filtered = dge_results_filtered,
+  results_filtered_gsea = dge_results_filtered_gsea,
+  enrichr = enrichr_results,
+  gsea = gsea_results,
+  cds_tumor = nb_tumor,
+  results_tumor = dge_results_tumor,
+  results_tumor_filtered = dge_results_filtered_tumor
+) %>% 
+  saveRDS("data_generated/dge_pb_results.rds")

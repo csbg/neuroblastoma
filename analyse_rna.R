@@ -1836,13 +1836,15 @@ plot_infiltration_rate <- function(show_mean = FALSE) {
     xlab(NULL) +
     scale_y_continuous(
       name = "tumor infiltration rate",
-      limits = c(0, 0.6)
+      limits = c(0, 0.6),
+      expand = expansion(mult = c(0.03, 0.01))
     ) +
     scale_color_manual(values = GROUP_COLORS) +
     facet_wrap(vars(group), nrow = 1) +
     theme_nb(grid = FALSE) +
     theme(
-      panel.grid.major.y = element_line(color = "grey92", size = BASE_LINE_SIZE)
+      panel.grid.major.y = element_line(color = "grey92", size = BASE_LINE_SIZE),
+      panel.border = element_blank()
     )
   
   p
@@ -1855,11 +1857,13 @@ ggsave_publication("S1b_tif", width = 9, height = 4)
 
 ## Figure S1e ----
 
-plot_celltype_heatmap <- function() {
+plot_celltype_heatmap <- function(clusters = 1:21, body_width = 150) {
+  # generate matrix of cell type abundances
   make_matrix <- function(ref) {
     cell_type_column <- rlang::sym(str_glue("cell_type_{ref}_broad"))
     
     nb_data %>% 
+      filter(cluster_50 %in% {{clusters}}) %>% 
       mutate(
         cell_type =
           as_factor(!!cell_type_column) %>%
@@ -1874,6 +1878,7 @@ plot_celltype_heatmap <- function() {
       ungroup() %>%
       arrange(cell_type) %>% 
       pivot_wider(names_from = "cell_type", values_from = "n_rel") %>%
+      arrange(cluster) %>% 
       column_to_rownames("cluster") %>%
       as.matrix() %>%
       replace_na(0)
@@ -1886,18 +1891,58 @@ plot_celltype_heatmap <- function() {
     ) %>% 
     reduce(cbind)
   
-  col_metadata <- str_split(colnames(mat), "_", n = 2, simplify = TRUE)
-  col_split <-
-    as_factor(col_metadata[, 1]) %>% 
-    fct_recode(
-      "Human Primary Cell Atlas" = "hpca",
-      "Blueprint/ENCODE" = "blueprint",
-      "DICE" = "dice",
-      "Novershtern hematopoietic data" = "dmap",
-      "Monaco immune data" = "monaco"
-    )
-  colnames(mat) <- col_metadata[, 2]
+  # set up column metadata
+  col_metadata <-
+    tibble(colname = colnames(mat)) %>% 
+    left_join(
+      read_csv("metadata/celldex_celltypes.csv", comment = "#"),
+      by = "colname"
+    ) %>% 
+    separate(
+      colname,
+      into = c("ref", "cell_type"),
+      extra = "merge",
+      remove = FALSE
+    ) %>% 
+    mutate(
+      ref =
+        as_factor(ref) %>% 
+        fct_recode(
+          "Human Primary Cell Atlas" = "hpca",
+          "Blueprint/ENCODE" = "blueprint",
+          "DICE" = "dice",
+          "Novershtern hematopoietic data" = "dmap",
+          "Monaco immune data" = "monaco"
+        ),
+      abbr = factor(abbr, levels = names(CELL_TYPE_COLORS))
+    ) %>% 
+    group_by(ref) %>% 
+    arrange(abbr, .by_group = TRUE) %>% 
+    ungroup()
   
+  mat <- mat[, col_metadata$colname]
+  colnames(mat) <- col_metadata$cell_type
+  
+  # set up row metadata
+  row_metadata <- 
+    tibble(cluster = levels(nb_data$cellont_cluster)) %>% 
+    extract(
+      cluster,
+      into = c("cell_type", "cluster"),
+      regex = "(\\w+) \\((\\d+)",
+      convert = TRUE
+    ) %>%
+    filter(cluster %in% {{clusters}}) %>% 
+    mutate(
+      cell_type =
+        cell_type %>% 
+        factor(levels = names(CELL_TYPE_COLORS)) %>% 
+        fct_drop()
+    ) %>%
+    arrange(cluster) %>%
+    pull(cell_type)
+
+  # draw heatmap  
   ht_opt(
     simple_anno_size = unit(1.5, "mm"),
     COLUMN_ANNO_PADDING = unit(1, "pt"),
@@ -1907,6 +1952,7 @@ plot_celltype_heatmap <- function() {
     TITLE_PADDING = unit(1, "mm")
   )
   
+  set.seed(2)
   Heatmap(
     mat,
     col = colorRampPalette(brewer.pal(9, "YlOrBr"))(100),
@@ -1925,33 +1971,19 @@ plot_celltype_heatmap <- function() {
     row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     row_dend_gp = gpar(lwd = 0.5),
     row_dend_width = unit(3, "mm"),
+    row_km = 5,
     
-    column_split = col_split,
+    column_split = col_metadata$ref,
     column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     
     cluster_columns = FALSE,
     
-    width = unit(150, "mm"),
-    height = unit(146 / ncol(mat) * nrow(mat), "mm"),
+    width = unit(body_width, "mm"),
+    height = unit((body_width - 4) / ncol(mat) * nrow(mat) + 4, "mm"),
     
     right_annotation = rowAnnotation(
-      cell_type =
-        tibble(cluster = levels(nb_data$cellont_cluster)) %>% 
-        extract(
-          cluster,
-          into = c("cell_type", "cluster"),
-          regex = "(\\w+) \\((\\d+)",
-          convert = TRUE
-        ) %>%
-        mutate(
-          cell_type =
-            cell_type %>% 
-            factor(levels = names(CELL_TYPE_COLORS)) %>% 
-            fct_drop()
-        ) %>%
-        arrange(cluster) %>%
-        pull(cell_type),
+      cell_type = row_metadata,
       col = list(cell_type = CELL_TYPE_COLORS),
       show_annotation_name = FALSE,
       show_legend = TRUE,
@@ -1965,9 +1997,25 @@ plot_celltype_heatmap <- function() {
         )
       )
     ),
+    
+    bottom_annotation = HeatmapAnnotation(
+      cell_type = col_metadata$abbr,
+      col = list(cell_type = CELL_TYPE_COLORS),
+      show_annotation_name = FALSE,
+      show_legend = FALSE,
+      annotation_legend_param = list(
+        cell_type = list(
+          title = "cell type",
+          grid_height = unit(2, "mm"),
+          grid_width = unit(2, "mm"),
+          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+        )
+      )
+    ),
   )
 }
 
-p <- plot_celltype_heatmap()
+p <- plot_celltype_heatmap(body_width = 130)
 ggsave_publication("S1e_celltype_heatmap",
                    plot = p, width = 18, height = 6)

@@ -1,6 +1,6 @@
 # Plot pseudo-bulk DGE results.
 #
-# @DEPI dge_pb_results.RData
+# @DEPI dge_pb_results.rds
 
 library(monocle3)
 library(scater)
@@ -22,7 +22,7 @@ source("styling.R")
 
 # Load data ---------------------------------------------------------------
 
-load("data_generated/dge_pb_results.RData")
+dge <- readRDS("data_generated/dge_pb_results.rds")
 
 
 
@@ -139,9 +139,9 @@ plot_volcano <- function(data,
   p
 }
 
-plot_volcano(dge_results, "II_vs_I", filename = "dge/volcano_II")
-plot_volcano(dge_results, "III_vs_I", filename = "dge/volcano_III")
-plot_volcano(dge_results, "IV_vs_I", filename = "dge/volcano_IV")
+plot_volcano(dge$results, "II_vs_I", filename = "dge_pb/volcano_II")
+plot_volcano(dge$results, "III_vs_I", filename = "dge_pb/volcano_III")
+plot_volcano(dge$results, "IV_vs_I", filename = "dge_pb/volcano_IV")
 
 
 
@@ -152,6 +152,7 @@ plot_volcano(dge_results, "IV_vs_I", filename = "dge/volcano_IV")
 #' @param data A DGE dataset.
 #' @param contrast A contrast and ...
 #' @param cluster ... cluster for which all samples should be plotted.
+#' @param cds Cell dataset.
 #' @param top_n Plot the top differentially expressed genes.
 #' @param direction Plot up- or downregulated genes.
 #' @param filename Name of output file.
@@ -160,6 +161,7 @@ plot_volcano(dge_results, "IV_vs_I", filename = "dge/volcano_IV")
 plot_violin <- function(data,
                         contrast,
                         cluster,
+                        cds = dge$cds,
                         top_n = 10,
                         direction = c("up", "down"),
                         filename = NULL) {
@@ -180,8 +182,8 @@ plot_violin <- function(data,
   
   p <-
     plotExpression(
-      nb[, nb$cluster_id == cluster &
-           nb$group_id %in% c(group_left, group_right)],
+      cds[, cds$cluster_id == cluster &
+            cds$group_id %in% c(group_left, group_right)],
       top_genes,
       x = "sample_id",
       colour_by = "group_id",
@@ -206,21 +208,21 @@ plot_violin <- function(data,
 }
 
 # plot_violin(dge_results_filtered, "II_vs_I", cluster = "1",
-#             filename = "dge/violin_II_vs_I_c1_up")
+#             filename = "dge_pb/violin_II_vs_I_c1_up")
 
-dge_results_filtered %>% 
+dge$results_filtered %>% 
   distinct(contrast, cluster = as.character(cluster_id), direction) %>% 
   pwalk(
     function(contrast, cluster, direction) {
       info("Plotting {direction}regulated genes ",
            "in cluster {cluster} in contrast {contrast}")
       plot_violin(
-        dge_results_filtered,
+        dge$results_filtered,
         top_n = Inf,
         contrast = contrast,
         cluster = cluster,
         direction = direction,
-        filename = str_glue("dge/violin_{contrast}_c{cluster}_{direction}")
+        filename = str_glue("dge_pb/violin_{contrast}_c{cluster}_{direction}")
       )
     }
   )
@@ -268,7 +270,9 @@ plot_pbheatmap <- function(data,
   
   mat <- 
     top_genes %>% 
-    group_map(~assays(pb_data)[[.y$cluster_id]][.x$gene, sample_data$sample]) %>%
+    group_map(
+      ~assays(pb_data)[[.y$cluster_id]][.x$gene, sample_data$sample]
+    ) %>%
     reduce(rbind) %>% 
     t() %>% 
     scale() %>% 
@@ -318,22 +322,22 @@ plot_pbheatmap <- function(data,
 }
 
 pb_log <- aggregateData(
-  nb,
+  dge$cds,
   assay = "logcounts",
   fun = "mean",
   by = c("cluster_id", "sample_id")
 )
 
-plot_pbheatmap(dge_results_filtered, pb_log,
-               contrast = "II_vs_I", filename = "dge/heatmap_II")
-plot_pbheatmap(dge_results_filtered, pb_log,
-               contrast = "III_vs_I", filename = "dge/heatmap_III")
-plot_pbheatmap(dge_results_filtered, pb_log,
-               contrast = "IV_vs_I", filename = "dge/heatmap_IV")
+plot_pbheatmap(dge$results_filtered, pb_log,
+               contrast = "II_vs_I", filename = "dge_pb/heatmap_II")
+plot_pbheatmap(dge$results_filtered, pb_log,
+               contrast = "III_vs_I", filename = "dge_pb/heatmap_III")
+plot_pbheatmap(dge$results_filtered, pb_log,
+               contrast = "IV_vs_I", filename = "dge_pb/heatmap_IV")
 
 
 
-## Enrichment dot plot ----
+## Enrichr results ----
 
 #' Generate a dotplot for enrichment terms.
 #' 
@@ -425,34 +429,34 @@ plot_enrichr_dots <- function(data,
     NULL
   
   if (filename == "auto") {
-    filename <- str_glue("dge/enrichr_{db}")
+    filename <- str_glue("dge_pb/enrichr_{db}")
   }
   ggsave_default(filename, ...)
   p
 }
 
 
-plot_enrichr_dots(enrichr_results,
+plot_enrichr_dots(dge$enrichr,
                   db = "GO_Biological_Process_2018",
                   height = 400,
                   width = 400)
 
-plot_enrichr_dots(enrichr_results,
+plot_enrichr_dots(dge$enrichr,
                   db = "GO_Cellular_Component_2018")
 
-plot_enrichr_dots(enrichr_results,
+plot_enrichr_dots(dge$enrichr,
                   db = "GO_Molecular_Function_2018",
                   width = 420)
 
-plot_enrichr_dots(enrichr_results,
+plot_enrichr_dots(dge$enrichr,
                   db = "KEGG_2019_Human")
 
-plot_enrichr_dots(enrichr_results,
+plot_enrichr_dots(dge$enrichr,
                   db = "WikiPathways_2019_Human",
                   width = 420,
                   height = 250)
 
-plot_enrichr_dots(enrichr_results,
+plot_enrichr_dots(dge$enrichr,
                   db = "MSigDB_Hallmark_2020",
                   width = 420)
 
@@ -460,7 +464,7 @@ plot_enrichr_dots(enrichr_results,
 
 ## GSEA results ----
 
-gsea_results %>%
+dge$gsea %>%
   ggplot(aes(NES, -log10(padj))) +
   geom_point(alpha = .1)
 
@@ -569,29 +573,29 @@ plot_gsea_dots <- function(data,
     NULL
   
   if (filename == "auto") {
-    filename <- str_glue("dge/gsea_{db}")
+    filename <- str_glue("dge_pb/gsea_{db}")
   }
   ggsave_default(filename, width = 400, ...)
   p
 }
 
 
-plot_gsea_dots(gsea_results,
+plot_gsea_dots(dge$gsea,
                db = "MSigDB_Hallmark_2020")
 
-plot_gsea_dots(gsea_results,
+plot_gsea_dots(dge$gsea,
                db = "GO_Biological_Process_2018",
                height = 500)
 
-plot_gsea_dots(gsea_results,
+plot_gsea_dots(dge$gsea,
                db = "KEGG_2019_Human",
                height = 300)
 
-plot_gsea_dots(gsea_results,
+plot_gsea_dots(dge$gsea,
                db = "WikiPathways_2019_Human",
                height = 300)
 
-plot_gsea_dots(gsea_results,
+plot_gsea_dots(dge$gsea,
                db = "TRRUST_Transcription_Factors_2019",
                height = 300)
 
@@ -599,40 +603,48 @@ plot_gsea_dots(gsea_results,
 
 ## DGE in tumor cluster ----
 
-plot_volcano(dge_results_tumor, "II_vs_IV", "dge/volcano_tumor_II_vs_IV")
+plot_volcano(
+  dge$results_tumor,
+  "II_vs_IV",
+  filename = "dge_pb/volcano_tumor_II_vs_IV"
+)
 
 plot_violin(
-  dge_results_filtered_tumor,
+  dge$results_tumor_filtered,
   contrast = "II_vs_IV",
   cluster = "NB",
   direction = "up",
   top_n = Inf,
-  filename = "dge/violin_tumor_II_vs_IV_up"
+  filename = "dge_pb/violin_tumor_II_vs_IV_up"
 )
 plot_violin(
-  dge_results_filtered_tumor,
+  dge$results_tumor_filtered,
   contrast = "II_vs_IV",
   cluster = "NB",
   direction = "down",
   top_n = Inf,
-  filename = "dge/violin_tumor_II_vs_IV_down"
+  filename = "dge_pb/violin_tumor_II_vs_IV_down"
 )
 
 pb_log_tumor <- aggregateData(
-  nb_tumor,
+  dge$cds_tumor,
   assay = "logcounts",
   fun = "mean",
   by = c("cluster_id", "sample_id")
 )
 
-plot_pbheatmap(dge_results_filtered_tumor, pb_log_tumor,
-               contrast = "II_vs_IV", filename = "dge/heatmap_tumor_II_vs_IV")
+plot_pbheatmap(
+  dge$results_tumor_filtered,
+  pb_log_tumor,
+  contrast = "II_vs_IV",
+  filename = "dge_pb/heatmap_tumor_II_vs_IV"
+)
 
 
 
 ## Comparson of bulk and sc data ---- 
 
-dge_results_tumor %>% 
+dge$results_tumor %>% 
   filter(contrast == "II_vs_IV") %>%
   inner_join(
     read_csv("metadata/rifatbegovic2018_table_s5.csv", comment = "#")
@@ -652,7 +664,7 @@ dge_results_tumor %>%
   ) +
   theme_bw()
 
-ggsave_default("dge/mycn_bulk_vs_sc")
+ggsave_default("dge_pb/mycn_bulk_vs_sc")
 
 
 
@@ -686,8 +698,8 @@ plot_logfc_correlation_heatmap <- function(data, filename = NULL) {
   p
 }
 
-plot_logfc_correlation_heatmap(dge_results,
-                               filename = "dge/logfc_correlation_heatmap")
+plot_logfc_correlation_heatmap(dge$results,
+                               filename = "dge_pb/logfc_correlation_heatmap")
 
 
 #' Scatter plots of gene expression log-flod change in two clusters.
@@ -717,10 +729,10 @@ plot_logfc_correlation_scatter <- function(data, x, y, filename = NULL) {
   p
 }
 
-plot_logfc_correlation_scatter(dge_results, NK_III, E_II,
-                               filename = "dge/logfc_correlation_example_1")
-plot_logfc_correlation_scatter(dge_results, NK_III, T_III,
-                               filename = "dge/logfc_correlation_example_2")
+plot_logfc_correlation_scatter(dge$results, NK_III, E_II,
+                               filename = "dge_pb/logfc_correlation_example_1")
+plot_logfc_correlation_scatter(dge$results, NK_III, T_III,
+                               filename = "dge_pb/logfc_correlation_example_2")
 
 
 
@@ -728,78 +740,88 @@ plot_logfc_correlation_scatter(dge_results, NK_III, T_III,
 
 ## Figure 3c ----
 
-plot_violin <- function(gene,
+make_matrix <- function(gene,
                         cell_type,
-                        groups = c("I", "II", "III", "IV"),
-                        direction = c("up", "down")) {
+                        groups,
+                        direction = c("up", "down"),
+                        row = 1,
+                        col = 1) {
   direction <- match.arg(direction)
   
   barcodes <- 
-    nb_metadata %>% 
+    dge$metadata %>% 
     filter(
-      cellont_cluster %in% used_clusters,
+      cellont_cluster %in% dge$used_clusters,
       cellont_abbr == {{cell_type}}
     ) %>% 
     pull(cell)
   
-  logcounts(nb)[gene, barcodes, drop = FALSE] %>%
+  logcounts(dge$cds)[gene, barcodes, drop = FALSE] %>%
     t() %>%
     as.matrix() %>%
     magrittr::set_colnames("logexp") %>%
     as_tibble(rownames = "cell") %>%
-    left_join(nb_metadata, by = "cell") %>%
+    left_join(dge$metadata, by = "cell") %>%
     filter(group %in% {{groups}}) %>%
-    mutate(
+    transmute(
+      row = row,
+      col = col,
+      label = str_glue("{cell_type}, {gene} ({direction})"),
+      logexp = logexp / max(logexp),
       sample = rename_patients(sample),
       group = rename_groups(group)
-    ) %>%
-    ggplot(aes(sample, logexp)) +
+    )
+}
+
+
+plot_violin <- function(genes) {
+  plot_data <- pmap_dfr(genes, make_matrix)
+  
+  ggplot(plot_data, aes(sample, logexp)) +
     geom_violin(
+      aes(fill = group),
       size = BASE_LINE_SIZE,
-      color = "gray60",
+      # color = "gray60",
       scale = "width",
-      width = 0.8
-    ) +
-    geom_quasirandom(
-      aes(color = group),
-      width = 0.4,
-      bandwidth = 1,
-      alpha = 0.5,
-      show.legend = FALSE,
-      size = 0.2,
-      shape = 16
+      width = 0.8,
+      show.legend = FALSE
     ) +
     stat_summary(geom = "point", fun = mean, size = .2) +
-    annotate(
-      "text_npc",
-      label = str_glue("{cell_type}, {gene} ({direction})"),
+    geom_text_npc(
+      data = distinct(plot_data, row, col, label),
+      aes(label = label),
       npcx = 0.05,
       npcy = 0.95,
       size = BASE_TEXT_SIZE_MM,
       hjust = 0
     ) +
-    xlab(NULL) +
-    ylab(NULL) +
-    scale_color_manual(values = GROUP_COLORS) +
-    theme_nb(grid = FALSE)
+    xlab("patient") +
+    scale_y_continuous(
+      "log-normalized expression",
+      limits = c(0, 1.1)
+    ) +
+    scale_fill_manual(values = GROUP_COLORS) +
+    facet_grid(vars(row), vars(col), scales = "free_x", space = "free_x") +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      strip.text.x = element_blank(),
+      strip.text.y = element_blank()
+    )
 }
 
-wrap_plots(
-  textGrob(
-    "log-normalized expression",
-    rot = 90,
-    gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
-  ),
-  plot_violin("IRF9", "B", c("I", "II"), "up"),
-  plot_violin("WDR74", "B", c("I", "III"), "up"),
-  plot_violin("IFI44L", "SC", c("I", "IV"), "up"),
-  plot_violin("SAP30", "SC", c("I", "II"), "down"),
-  plot_violin("IRF9", "B", c("I", "III"), "up"),
-  plot_violin("HIST1H1E", "SC", c("I", "IV"), "down"),
-  design = "ABCD\nAEFG",  
-  widths = c(.1, 9, 7, 10)
-)
-ggsave_publication("3c_exp_violin", width = 10, height = 6, type = "png")
+tribble(
+  ~row, ~col, ~gene, ~cell_type, ~groups, ~direction,
+  1,    1,    "IRF9",     "B",  c("I", "II"),  "up",
+  1,    2,    "WDR74",    "B",  c("I", "III"), "up",
+  1,    3,    "IFI44L",   "SC", c("I", "IV"),  "up",
+  2,    1,    "SAP30",    "SC", c("I", "II"),  "down",
+  2,    2,    "IRF9",     "B",  c("I", "III"), "up",
+  2,    3,    "HIST1H1E", "SC", c("I", "IV"),  "down"
+) %>% 
+  plot_violin()
+ggsave_publication("3c_exp_violin", width = 10, height = 6)
 
 
 
@@ -877,6 +899,7 @@ plot_gsea <- function(data,
     xlab("vs C (contrast)") +
     ylab(NULL) +
     scale_color_gsea(
+      "normalized enrichment score",
       limits = c(-color_limit, color_limit),
       guide = guide_colorbar(
         barheight = unit(2, "mm"),
@@ -894,18 +917,19 @@ plot_gsea <- function(data,
     theme_nb(grid = FALSE) +
     theme(
       legend.box.just = "bottom",
+      legend.box.margin = margin(0, 0, 0, -25, "mm"),
       legend.key.height = unit(1, "mm"),
       legend.key.width = unit(1, "mm"),
-      legend.position = "top",
+      legend.position = "bottom",
       legend.spacing = unit(0, "mm"),
-      legend.margin = margin(0, 1, -3, 1, "mm"),
+      legend.margin = margin(-3, 1, 0, 1, "mm"),
       panel.spacing = unit(-.5, "pt"),
     )
   
   p
 }
 
-plot_gsea(gsea_results, "MSigDB_Hallmark_2020")
+plot_gsea(dge$gsea, "MSigDB_Hallmark_2020")
 ggsave_publication("3d_gsea", width = 8, height = 10)
 
 
@@ -923,7 +947,7 @@ plot_logfc_correlation_heatmap <- function() {
   )
   
   corr_mat <- 
-    dge_results %>% 
+    dge$results %>% 
     filter(contrast != "tif") %>% 
     select(gene, cluster_id, contrast, logFC) %>%
     mutate(contrast = rename_contrast(contrast)) %>% 
@@ -1025,7 +1049,7 @@ plot_bulk_sc_comparison <- function() {
   )
   
   data <- 
-    dge_results_tumor %>% 
+    dge$results_tumor %>% 
     filter(contrast == "II_vs_IV") %>%
     inner_join(
       read_csv("metadata/rifatbegovic2018_table_s5.csv", comment = "#")
@@ -1099,7 +1123,8 @@ ggsave_publication("2x_comparison_bulk_sc", width = 4, height = 4)
 
 ## Table S3 ----
 
-dge_results_filtered_gsea %>% 
+dge$results_filtered_gsea %>% 
+  filter(contrast != "tif") %>% 
   arrange(contrast, cluster_id, desc(logFC)) %>% 
   mutate(
     contrast = rename_contrast_long(contrast),
@@ -1117,7 +1142,7 @@ dge_results_filtered_gsea %>%
 
 ## Table S4 ----
 
-gsea_results %>% 
+dge$gsea %>% 
   arrange(db, contrast, cluster, desc(NES)) %>% 
   mutate(
     contrast = rename_contrast_long(contrast),
