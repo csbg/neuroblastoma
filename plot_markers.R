@@ -10,6 +10,8 @@ library(tidyverse)
 library(scico)
 library(ggnewscale)
 library(patchwork)
+library(ComplexHeatmap)
+
 source("common_functions.R")
 source("styling.R")
 
@@ -66,6 +68,7 @@ subdivide_tumor_cluster <- function(metadata,
     ) %>%
     select(!tumor_subcluster)
 }
+
 
 
 # Load data ---------------------------------------------------------------
@@ -530,6 +533,77 @@ plot_pathway_genes(
 # CellChat::CellChatDB.human$interaction %>%
 #   as_tibble() %>% 
 #   filter(receptor == "CD8A")
+
+
+
+# Gene expression heatmaps ------------------------------------------------
+
+plot_celltype_genes <- function(cell_type,
+                                cells_per_patient = 100,
+                                n_genes = 500) {
+  metadata <-
+    nb_metadata %>% 
+    filter(cellont_abbr == {{cell_type}})
+  
+  nb_sub <- nb[, metadata$cell]
+  nb_sub <- nb_sub[rowSums(counts(nb_sub) > 0) > 0, ]
+  
+  mat_metadata <- 
+    metadata %>%
+    group_by(group, sample) %>% 
+    slice_sample(n = cells_per_patient) %>% 
+    arrange(sample) %>% 
+    mutate(group = rename_groups(group), sample = rename_patients(sample))
+  
+  mat <-
+    nb_sub[
+      nb_sub %>%
+        logcounts() %>%
+        rowSums() %>%
+        sort(TRUE) %>%
+        names() %>%
+        magrittr::extract(1:n_genes),
+      mat_metadata$cell
+    ] %>% 
+    logcounts() %>% 
+    as.matrix()
+  
+  
+  Heatmap(
+    mat,
+    col = circlize::colorRamp2(
+      seq(0, quantile(mat, 0.95), length.out = 9),
+      scico(9, palette = "oslo", direction = -1),
+    ),
+    name = "log expression",
+    
+    show_row_names = FALSE,
+    cluster_rows = TRUE,
+    show_row_dend = FALSE,
+    
+    show_column_names = FALSE,
+    cluster_columns = TRUE,
+    cluster_column_slices = FALSE,
+    column_split = mat_metadata$sample,
+    show_column_dend = FALSE,
+    show_parent_dend_line = FALSE,
+    
+    top_annotation = HeatmapAnnotation(
+      group = mat_metadata$group,
+      # patient = mat_metadata$sample,
+      col = list(
+        group = GROUP_COLORS
+        # patient = PATIENT_COLORS
+      )
+    )
+  )
+}
+
+(p <- plot_celltype_genes("NK"))
+ggsave_default("markers/genes_NK", plot = p)
+
+(p <- plot_celltype_genes("M"))
+ggsave_default("markers/genes_M", plot = p)
 
 
 
