@@ -190,8 +190,7 @@ filter_dge_results <- function(data,
       abs(logFC) >= min_abs_log_fc,
       p <= max_p,
       p_adj <= max_p_adj,
-      frq > min_freq,
-      frq_ref > min_freq
+      frq >= min_freq | frq_ref >= min_freq
     ) %>% 
     mutate(direction = if_else(logFC > 0, "up", "down"))
   
@@ -548,6 +547,7 @@ dge_results_tumor_wide <-
 # dge_results_wide_filtered <- dge$results_wide_filtered
 # enrichr_results <- dge$enrichr
 # gsea_results <- dge$gsea
+# enrichr_genesets <- dge$gene_sets
 # nb_tumor <- dge$cds_tumor
 # dge_results_tumor <- dge$results_tumor
 # dge_results_tumor_wide <- dge$results_tumor_wide
@@ -561,6 +561,7 @@ list(
   results_wide_filtered = dge_results_wide_filtered,
   enrichr = enrichr_results,
   gsea = gsea_results,
+  gene_sets = enrichr_genesets,
   cds_tumor = nb_tumor,
   results_tumor = dge_results_tumor,
   results_tumor_wide = dge_results_tumor_wide

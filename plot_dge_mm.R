@@ -4,9 +4,11 @@
 # @DEPI dge_pb_results.rds
 
 library(scater)
+library(monocle3)
 library(tidyverse)
 library(latex2exp)
 library(ComplexHeatmap)
+library(muscat)
 library(ggrepel)
 library(scico)
 library(ggpmisc)
@@ -63,10 +65,6 @@ plot_violin <- function(gene, cluster, left_group) {
   )  
 }
 
-dge$results_wide %>% 
-  arrange(desc(logFC)) %>% 
-  filter(abs(logFC) > 20, cell_type == "T")
-
 # high absolute logFC
 # ... unfiltered
 plot_violin("CKAP4", "pDC", "II")
@@ -90,11 +88,15 @@ plot_violin("JUND", "E", "II")
 plot_violin("TCL1A", "B", "III")
 plot_violin("HIST1H1E", "B", "IV")
 
+# ... cases that still have extreme log fold changes
+plot_violin("HIST1H1B", "SC", "III")
+plot_violin("PTPN6", "NK", "III")
+
 
 
 ## Comparison to pseudobulk ----
 
-plot_comparison <- function(lim = NULL, filename = NULL) {
+plot_comparison <- function(data, lim = NULL, filename = NULL) {
   p <-
     dge_pb$results %>% 
     filter(contrast != "tif") %>% 
@@ -102,7 +104,7 @@ plot_comparison <- function(lim = NULL, filename = NULL) {
            contrast, logFC_pb = logFC, p_pb = p_val) %>% 
     extract(contrast, into = "group", regex = "(.+)_vs_I") %>% 
     left_join(
-      dge$results_wide %>% rename(logFC_mm = logFC, p_mm = p),
+      data %>% rename(logFC_mm = logFC, p_mm = p),
       by = c("gene", "cell_type", "group")
     ) %>% 
     ggplot(aes(logFC_pb, logFC_mm)) +
@@ -116,8 +118,21 @@ plot_comparison <- function(lim = NULL, filename = NULL) {
   p
 }
 
-plot_comparison(lim = NULL, filename = "dge_mm/comparison_pb_mm_full")
-plot_comparison(lim = c(-10, 10), filename = "dge_mm/comparison_pb_mm")
+plot_comparison(
+  dge$results_wide,
+  lim = NULL,
+  filename = "dge_mm/comparison_pb_mm_full"
+)
+plot_comparison(
+  dge$results_wide_filtered,
+  lim = NULL,
+  filename = "dge_mm/comparison_pb_mm_full_filtered"
+)
+plot_comparison(
+  dge$results_wide,
+  lim = c(-10, 10),
+  filename = "dge_mm/comparison_pb_mm"
+)
 
 
 
@@ -282,7 +297,8 @@ plot_gsea_dots <- function(data,
         abs(NES) >= min_abs_NES,
       pathway =
         as_factor(pathway) %>%
-        fct_reorder(NES * -log10(padj), sum, na.rm = TRUE)
+        fct_reorder(NES * -log10(padj), sum, na.rm = TRUE),
+      cell_type = factor(cell_type, names(CELL_TYPE_ABBREVIATIONS))
     )
   
   if (nlevels(data_vis$pathway) > 5) {
@@ -391,7 +407,7 @@ plot_lfcc_heatmap_subclusters <- function() {
       names_prefix = "NB_",
       values_from = c(logFC)
     ) %>% 
-    select(NB_1:NB_4) %>% 
+    select(!gene) %>%
     cor(use = "pairwise.complete.obs")
   
   distance <- as.dist(1 - corr_mat)
@@ -409,7 +425,8 @@ plot_lfcc_heatmap_subclusters <- function() {
   )
 }
 
-plot_lfcc_heatmap_subclusters()
+(p <- plot_lfcc_heatmap_subclusters())
+ggsave_default("dge_mm/tumor_subcluster_logfc_correlation", plot = p)
 
 
 
