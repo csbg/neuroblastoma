@@ -361,6 +361,217 @@ plot_gsea_dots(dge$gsea,
 
 
 
+## Pathway genes ----
+
+plot_gsea_genes_logfc <- function(db,
+                                  top_n = 5L,
+                                  top_n_positive = 5L,
+                                  top_n_negative = 5L,
+                                  max_p_adj = 0.05,
+                                  min_abs_NES = 1,
+                                  filename = "auto",
+                                  ...) {
+  data_top_terms <-
+    dge$gsea %>% 
+    filter(db == {{db}}, padj <= max_p_adj, abs(NES) >= min_abs_NES) %>% 
+    group_by(group, cell_type)
+  
+  top_terms_pos <- 
+    data_top_terms %>% 
+    slice_max(n = top_n_positive, order_by = NES, with_ties = FALSE) %>%
+    pull(pathway) %>%
+    unique()
+  
+  top_terms_neg <- 
+    data_top_terms %>% 
+    slice_min(n = top_n_negative, order_by = NES, with_ties = FALSE) %>%
+    pull(pathway) %>%
+    unique()
+  
+  pathways <-
+    dge$gsea %>% 
+    filter(db == {{db}}, pathway %in% c(top_terms_pos, top_terms_neg)) %>% 
+    mutate(
+      pathway =
+        as_factor(pathway) %>%
+        fct_reorder(NES * -log10(padj), sum, na.rm = TRUE)
+    ) %>% 
+    pull(pathway) %>% 
+    levels() %>% 
+    rev() %>% 
+    magrittr::extract(-((top_n + 1):(length(.) - top_n)))
+  
+  row_metadata <-
+    dge$gene_sets[[db]][pathways] %>% 
+    enframe("pathway", "gene") %>% 
+    unnest_longer(gene) %>% 
+    mutate(pathway = as_factor(pathway)) %>% 
+    filter(gene %in% dge$results_wide_filtered$gene)
+  
+  mat <-
+    dge$results_wide_filtered %>% 
+    mutate(
+      cell_type = factor(cell_type, names(CELL_TYPE_ABBREVIATIONS)),
+      group = as_factor(group) %>% rename_groups()
+    ) %>% 
+    arrange(cell_type, group) %>% 
+    select(gene, cell_type, group, logFC) %>% 
+    pivot_wider(names_from = c(cell_type, group), values_from = logFC) %>%
+    column_to_rownames("gene") %>% 
+    as.matrix() %>% 
+    replace_na(0) %>% 
+    magrittr::extract(row_metadata$gene, )
+  
+  col_metadata <- 
+    tibble(data = colnames(mat)) %>% 
+    separate(data, into = c("cell_type", "group")) %>% 
+    mutate(
+      cell_type = factor(cell_type, names(CELL_TYPE_ABBREVIATIONS)),
+      group = factor(group, names(GROUP_COLORS))
+    )
+  
+  Heatmap(
+    mat,
+    name = "logFC",
+    
+    show_row_names = FALSE,
+    row_split = row_metadata$pathway,
+    row_title_rot = 0,
+    cluster_row_slices = FALSE,
+    
+    cluster_columns = FALSE,
+    column_split = col_metadata$cell_type,
+    show_column_names = FALSE,
+    
+    top_annotation = HeatmapAnnotation(
+      group = col_metadata$group,
+      col = list(group = GROUP_COLORS)
+    )
+  )
+}
+
+(p <- plot_gsea_genes_logfc("MSigDB_Hallmark_2020"))
+ggsave_default("dge_mm/gsea_heatmap_dge", plot = p)
+
+
+
+plot_gsea_genes_expression <- function(db,
+                                  top_n = 5L,
+                                  top_n_positive = 5L,
+                                  top_n_negative = 5L,
+                                  max_p_adj = 0.05,
+                                  min_abs_NES = 1,
+                                  filename = "auto",
+                                  ...) {
+  data_top_terms <-
+    dge$gsea %>% 
+    filter(db == {{db}}, padj <= max_p_adj, abs(NES) >= min_abs_NES) %>% 
+    group_by(group, cell_type)
+  
+  top_terms_pos <- 
+    data_top_terms %>% 
+    slice_max(n = top_n_positive, order_by = NES, with_ties = FALSE) %>%
+    pull(pathway) %>%
+    unique()
+  
+  top_terms_neg <- 
+    data_top_terms %>% 
+    slice_min(n = top_n_negative, order_by = NES, with_ties = FALSE) %>%
+    pull(pathway) %>%
+    unique()
+  
+  pathways <-
+    dge$gsea %>% 
+    filter(db == {{db}}, pathway %in% c(top_terms_pos, top_terms_neg)) %>% 
+    mutate(
+      pathway =
+        as_factor(pathway) %>%
+        fct_reorder(NES * -log10(padj), sum, na.rm = TRUE)
+    ) %>% 
+    pull(pathway) %>% 
+    levels() %>% 
+    rev() %>% 
+    magrittr::extract(-((top_n + 1):(length(.) - top_n)))
+  
+  row_metadata <-
+    dge$gsea %>%
+    filter(pathway %in% pathways) %>%
+    unnest_longer(leadingEdge) %>%
+    distinct(pathway, gene = leadingEdge) %>%
+    mutate(pathway = factor(pathway, levels = pathways)) %>%
+    filter(gene %in% rownames(pb_data))
+    
+  # row_metadata <-
+  #   dge$gene_sets[[db]][pathways] %>%
+  #   enframe("pathway", "gene") %>%
+  #   unnest_longer(gene) %>%
+  #   mutate(pathway = as_factor(pathway)) %>%
+  #   filter(gene %in% rownames(pb_data))
+  # return(row_metadata)
+  
+  mat <-
+    assays(pb_data)[1:7] %>%
+    as.list() %>%
+    imap(
+      ~magrittr::set_colnames(
+        .x,
+        str_c(
+          colnames(.x),
+          .y,
+          colData(pb_data)$group,
+          sep = "."
+        )
+      )
+    ) %>% 
+    reduce(cbind) %>% 
+    magrittr::extract(row_metadata$gene, )
+  # mat
+  
+  col_metadata <-
+    tibble(data = colnames(mat)) %>%
+    separate(data, into = c("patient", "cell_type", "group"), sep = "\\.") %>%
+    mutate(
+      cell_type = factor(cell_type, names(CELL_TYPE_ABBREVIATIONS)),
+      group = factor(group) %>% rename_groups()
+    )
+  # col_metadata
+  
+  Heatmap(
+    mat,
+    name = "log expression",
+    col = circlize::colorRamp2(
+      seq(0, quantile(mat, 0.95), length.out = 9),
+      scico(9, palette = "oslo", direction = -1),
+    ),
+
+    show_row_names = FALSE,
+    row_split = row_metadata$pathway,
+    row_title_rot = 0,
+    cluster_row_slices = FALSE,
+    show_row_dend = FALSE,
+
+    cluster_columns = FALSE,
+    column_split = col_metadata$cell_type,
+    show_column_names = FALSE,
+    
+    top_annotation = HeatmapAnnotation(
+      group = col_metadata$group,
+      col = list(group = GROUP_COLORS)
+    )
+  )
+}
+
+pb_data <- aggregateData(
+  dge$cds,
+  assay = "logcounts",
+  fun = "mean",
+  by = c("cellont_abbr", "sample")
+)
+
+(p <- plot_gsea_genes_expression("MSigDB_Hallmark_2020"))
+ggsave_default("dge_mm/gsea_heatmap_exp", plot = p)
+
+
 ## DGE in tumor cluster ----
 
 dge$results_tumor %>% 
