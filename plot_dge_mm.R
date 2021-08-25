@@ -12,6 +12,7 @@ library(muscat)
 library(ggrepel)
 library(scico)
 library(ggpmisc)
+library(patchwork)
 source("common_functions.R")
 source("styling.R")
 
@@ -572,7 +573,8 @@ pb_data <- aggregateData(
 ggsave_default("dge_mm/gsea_heatmap_exp", plot = p)
 
 
-## DGE in tumor cluster ----
+
+## Tumor: DGE ----
 
 dge$results_tumor %>% 
   ggplot(aes(logFC_II_vs_IV, -log10(p_II_vs_IV))) +
@@ -608,6 +610,9 @@ dge$results_tumor_wide %>%
 ggsave_default("dge_mm/mycn_bulk_vs_sc")
 
 
+
+## Tumor: LogFC correlation ----
+
 plot_lfcc_heatmap_subclusters <- function() {
   corr_mat <- 
     dge$results_tumor_wide %>% 
@@ -626,7 +631,7 @@ plot_lfcc_heatmap_subclusters <- function() {
   Heatmap(
     corr_mat,
     col = circlize::colorRamp2(
-      seq(0, max(corr_mat[lower.tri(corr_mat)]), length.out = 9),
+      seq(0, 1, length.out = 9),
       scico(9, palette = "davos", direction = -1),
     ),
     name = "log fold change\ncorrelation",
@@ -638,6 +643,60 @@ plot_lfcc_heatmap_subclusters <- function() {
 
 (p <- plot_lfcc_heatmap_subclusters())
 ggsave_default("dge_mm/tumor_subcluster_logfc_correlation", plot = p)
+
+
+
+dge$results_tumor_wide %>% 
+  filter(
+    subclusters != "all",
+    frq >= 0.05 | frq_ref >= 0.05,
+    abs(logFC) < 10,
+    p_adj <= 0.05
+  ) %>%
+  select(gene, subclusters, logFC) %>%
+  pivot_wider(
+    names_from = subclusters,
+    names_prefix = "c",
+    values_from = logFC
+  ) %>%
+  mutate(
+    c2_vs_c1_abs = abs(c2 - c1),
+    c2_vs_c1_same_dir = c2 * c1 >= 0,
+    c3_vs_c1_abs = abs(c3 - c1),
+    c3_vs_c1_same_dir = c3 * c1 >= 0,
+    c3_vs_c2_abs = abs(c3 - c2),
+    c3_vs_c2_same_dir = c3 * c2 >= 0,
+  ) %>%
+  save_table("nb_logfc_differences")
+
+
+plot_violin_tumor <- function(gene, subcluster) {
+  plotExpression(
+    dge$cds_tumor[, dge$cds_tumor$tumor_subcluster == subcluster],
+    gene,
+    x = "sample",
+    colour_by = "group"
+  ) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+wrap_plots(
+  plot_violin_tumor("CCDC184", 1),
+  plot_violin_tumor("CCDC184", 2)  
+)
+ggsave_default("dge_mm/nb_subcluster_violin1", height = 130)
+
+wrap_plots(
+  plot_violin_tumor("CCDC68", 1),
+  plot_violin_tumor("CCDC68", 3)
+)
+ggsave_default("dge_mm/nb_subcluster_violin2", height = 130)
+
+wrap_plots(
+  plot_violin_tumor("SST", 2),
+  plot_violin_tumor("SST", 3)  
+)
+ggsave_default("dge_mm/nb_subcluster_violin3", height = 130)
 
 
 
