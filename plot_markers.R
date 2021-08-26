@@ -607,6 +607,30 @@ ggsave_default("markers/genes_M", plot = p)
 
 
 
+# NB markers in patients --------------------------------------------------
+
+plot_dots(
+  logcounts(nb),
+  markers %>%
+    filter(cell_type == "neuroblastoma") %>%
+    pull(gene),
+  # read.xlsx("plots/markers/conserved/genes.xlsx", "NB (8)") %>% 
+  #   as_tibble() %>% 
+  #   slice_max(logFC, n = 100) %>% 
+  #   pull(gene),
+  if_else(
+    colData(nb)$cellont_abbr == "NB",
+    as.character(colData(nb)$sample),
+    as.character(colData(nb)$cellont_abbr)
+  ) %>% 
+    rename_patients() %>% 
+    as_factor() %>% 
+    fct_relevel(PATIENT_ORDER, names(CELL_TYPE_ABBREVIATIONS))
+)
+ggsave_default("markers/nb_markers_patients", height = 80)
+
+
+
 # Publication figures -----------------------------------------------------
 
 ## Figure 1d ----
