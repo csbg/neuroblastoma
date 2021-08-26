@@ -29,9 +29,7 @@ any(dge$results_tumor$convergence <= -20)
 
 
 
-# Plot results ------------------------------------------------------------
-
-## Volcano plots ----
+# Volcano plots -----------------------------------------------------------
 
 ggplot(dge$results_wide, aes(logFC, -log10(p))) +
   geom_point(size = 0.1) +
@@ -54,7 +52,7 @@ ggsave_default("dge_mm/volcano_all")
 
 
 
-## Violin plots ----
+# Violin plots ------------------------------------------------------------
 
 plot_violin <- function(gene, cluster, left_group) {
   plotExpression(
@@ -95,7 +93,7 @@ plot_violin("PTPN6", "NK", "III")
 
 
 
-## Comparison to pseudobulk ----
+# Comparison to pseudobulk ------------------------------------------------
 
 plot_comparison <- function(data, lim = NULL, filename = NULL) {
   p <-
@@ -137,7 +135,7 @@ plot_comparison(
 
 
 
-## Enrichr results ----
+# Enrichr results ---------------------------------------------------------
 
 #' Generate a dotplot for enrichment terms.
 #' 
@@ -240,7 +238,8 @@ plot_enrichr_dots(dge$enrichr,
                   width = 420)
 
 
-## GSEA results ----
+
+# GSEA results ------------------------------------------------------------
 
 dge$gsea %>%
   ggplot(aes(NES, -log10(padj))) +
@@ -362,7 +361,7 @@ plot_gsea_dots(dge$gsea,
 
 
 
-## Pathway genes ----
+# Pathway genes -----------------------------------------------------------
 
 plot_gsea_genes_logfc <- function(db,
                                   top_n = 5L,
@@ -574,7 +573,7 @@ ggsave_default("dge_mm/gsea_heatmap_exp", plot = p)
 
 
 
-## Tumor: DGE ----
+# Tumor: DGE --------------------------------------------------------------
 
 dge$results_tumor %>% 
   ggplot(aes(logFC_II_vs_IV, -log10(p_II_vs_IV))) +
@@ -611,7 +610,7 @@ ggsave_default("dge_mm/mycn_bulk_vs_sc")
 
 
 
-## Tumor: LogFC correlation ----
+# Tumor: LogFC correlation ------------------------------------------------
 
 plot_lfcc_heatmap_subclusters <- function() {
   corr_mat <- 
@@ -697,6 +696,81 @@ wrap_plots(
   plot_violin_tumor("SST", 3)  
 )
 ggsave_default("dge_mm/nb_subcluster_violin3", height = 130)
+
+
+
+# Tumor: Pseudobulk correlation -------------------------------------------
+
+plot_expc_heatmap_samples <- function() {
+  pb_tumor <- aggregateData(
+    dge$cds[, colData(dge$cds)$cellont_abbr == "NB"],
+    assay = "logcounts",
+    fun = "mean",
+    by = "sample"
+  )
+  colnames(pb_tumor) <-
+    colnames(pb_tumor) %>%
+    rename_patients()
+  
+  hvgs <-
+    dge$cds_tumor %>%
+    scran::modelGeneVar() %>% 
+    scran::getTopHVGs()
+  
+  corr_mat <-
+    assay(pb_tumor, 1) %>%
+    magrittr::extract(hvgs, ) %>% 
+    cor(use = "pairwise.complete.obs")
+  
+  distance <- as.dist(1 - corr_mat)
+  
+  group_names <-
+    colnames(corr_mat) %>%
+    map_chr(str_sub, 1, 1)
+  
+  Heatmap(
+    corr_mat,
+    col = circlize::colorRamp2(
+      seq(min(corr_mat), 1, length.out = 9),
+      scico(9, palette = "davos", direction = -1),
+    ),
+    name = "correlation of\npseudobulk\nexpression",
+    heatmap_legend_param = list(
+      at = c(round(min(corr_mat), 2), 0.9, 1)
+    ),
+    
+    clustering_distance_rows = distance,
+    clustering_distance_columns = distance,
+    
+    width = unit(60, "mm"),
+    height = unit(60, "mm"),
+    
+    right_annotation = rowAnnotation(
+      group = group_names,
+      col = list(group = GROUP_COLORS),
+      show_annotation_name = FALSE,
+      show_legend = TRUE,
+      annotation_legend_param = list(
+        group = list(
+          title = "vs C\n(contrast)"
+        )
+      )
+    ),
+    
+    bottom_annotation = HeatmapAnnotation(
+      group = group_names,
+      col = list(group = GROUP_COLORS),
+      show_annotation_name = FALSE,
+      show_legend = FALSE
+    )
+  )
+}
+
+(p <- plot_expc_heatmap_samples())
+ggsave_default(
+  "dge_mm/pseudobulk_correlation_tumor",
+  plot = p
+)
 
 
 
