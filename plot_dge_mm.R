@@ -29,6 +29,36 @@ any(dge$results_tumor$convergence <= -20)
 
 
 
+# Number of DE genes ------------------------------------------------------
+
+dge$results_wide_filtered %>% 
+  filter(logFC > 1, p_adj <= 0.05) %>% 
+  count(cell_type, group) %>% 
+  complete(cell_type, group, fill = list(n = 0L)) %>% 
+  mutate(
+    group =
+      rename_groups(group) %>%
+      factor(levels = names(GROUP_COLORS))
+  ) %>% 
+  ggplot(aes(cell_type, n)) +
+  geom_col(aes(fill = group), position = "dodge") +
+  xlab(NULL) +
+  ylab("number of DE genes") +
+  scale_fill_manual(
+    "vs C\n(contrast)",
+    values = GROUP_COLORS,
+    guide = guide_legend(title.position = "bottom", label.position = "bottom", title.hjust = 0.5)
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = c(0.83, 0.75),
+    legend.direction = "horizontal",
+    panel.grid = element_blank()
+  )
+ggsave_default("dge_mm/number_of_de_genes", height = 60, width = 100)
+
+
+
 # Volcano plots -----------------------------------------------------------
 
 ggplot(dge$results_wide, aes(logFC, -log10(p))) +
