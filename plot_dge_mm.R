@@ -123,6 +123,35 @@ plot_violin("PTPN6", "NK", "III")
 
 
 
+plot_top_violins <- function(cell_type, n = 10, direction = c("up", "down")) {
+  direction <- match.arg(direction)
+  
+  dge$results_wide_filtered %>% 
+    filter(
+      p_adj <= 0.05,
+      cell_type == {{cell_type}},
+      direction == {{direction}}
+    ) %>% 
+    arrange(desc(abs(logFC))) %>% 
+    mutate(
+      groups = map(group, ~c("I", .)),
+      col = factor(group) %>% as.integer()
+    ) %>% 
+    group_by(col) %>% 
+    mutate(row = row_number()) %>% 
+    ungroup() %>% 
+    select(row, col, gene, cell_type, groups, direction) %>%
+    filter(row <= n) %>% 
+    plot_violin()  
+}
+
+plot_top_violins("B")
+ggsave_default("dge_mm/violins_B", height = 120, width = 150)
+plot_top_violins("M")
+ggsave_default("dge_mm/violins_M", height = 120, width = 150)
+
+
+
 # Comparison to pseudobulk ------------------------------------------------
 
 plot_comparison <- function(data, lim = NULL, filename = NULL) {
