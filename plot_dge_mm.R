@@ -422,13 +422,6 @@ plot_gsea_dots(dge$gsea,
 
 # Pathway genes -----------------------------------------------------------
 
-pb_data <- aggregateData(
-  dge$cds,
-  assay = "logcounts",
-  fun = "mean",
-  by = c("cellont_abbr", "sample")
-)
-
 pathways <- c(
   "TNF-alpha Signaling via NF-kB",
   "Interferon Gamma Response",
@@ -438,83 +431,9 @@ pathways <- c(
   "p53 Pathway"
 )
 
-plot_gsea_genes_expression_pb <- function(db, pathways) {
-  sig_genes <- 
-    dge$results_wide_filtered %>% 
-    filter(logFC > 1, p_adj <= 0.05) %>% 
-    pull(gene)
-  
-  row_metadata <-
-    dge$gene_sets[[db]][pathways] %>%
-    enframe("pathway", "gene") %>%
-    unnest_longer(gene) %>%
-    mutate(pathway = as_factor(pathway)) %>%
-    filter(gene %in% rownames(pb_data), gene %in% sig_genes)
-  
-  mat <-
-    assays(pb_data)[1:7] %>%
-    as.list() %>%
-    imap(
-      ~magrittr::set_colnames(
-        .x,
-        str_c(
-          colnames(.x),
-          .y,
-          colData(pb_data)$group,
-          sep = "."
-        )
-      ) %>% 
-        t() %>% 
-        scale() %>%
-        t()
-    ) %>%
-    reduce(cbind) %>%
-    magrittr::extract(row_metadata$gene, )
-  
-  col_metadata <-
-    tibble(data = colnames(mat)) %>%
-    separate(data, into = c("patient", "cell_type", "group"), sep = "\\.") %>%
-    mutate(
-      cell_type = factor(cell_type, names(CELL_TYPE_ABBREVIATIONS)),
-      group = factor(group) %>% rename_groups()
-    )
-  
-  Heatmap(
-    mat,
-    name = "log expression",
-    col = circlize::colorRamp2(
-      seq(
-        quantile(mat, 0.05, na.rm = TRUE),
-        quantile(mat, 0.95, na.rm = TRUE),
-        length.out = 9
-      ),
-      scico(9, palette = "oslo", direction = -1),
-    ),
-    
-    show_row_names = FALSE,
-    row_split = row_metadata$pathway,
-    row_title_rot = 0,
-    cluster_row_slices = FALSE,
-    show_row_dend = FALSE,
-    
-    cluster_columns = FALSE,
-    column_split = col_metadata$cell_type,
-    show_column_names = FALSE,
-    
-    top_annotation = HeatmapAnnotation(
-      group = col_metadata$group,
-      col = list(group = GROUP_COLORS)
-    )
-  )
-}
-
-(p <- plot_gsea_genes_expression_pb("MSigDB_Hallmark_2020", pathways))
-ggsave_default("dge_mm/gsea_heatmap_expression_pb", plot = p)
-
-
-plot_gsea_genes_expression_sc <- function(db,
-                                          pathways,
-                                          scale_by_cell_type = TRUE) {
+plot_gsea_genes_expression <- function(db,
+                                       pathways,
+                                       scale_by_cell_type = TRUE) {
   sig_genes <- 
     dge$results_wide_filtered %>% 
     filter(logFC > 1, p_adj <= 0.05) %>% 
@@ -537,12 +456,16 @@ plot_gsea_genes_expression_sc <- function(db,
       cellont_abbr %in% c("T", "NK", "B", "M"),
       cell %in% colnames(dge$cds)
     ) %>% 
-    group_by(cellont_abbr, group) %>% 
-    slice_sample(n = 1000) %>% 
+    group_by(cellont_abbr, group, sample) %>% 
+    slice_sample(n = 150) %>% 
+    group_by(cellont_abbr, group) %>%
+    slice_sample(prop = 1) %>%
     mutate(
       cell_type = factor(cellont_abbr, names(CELL_TYPE_ABBREVIATIONS)),
-      group = rename_groups(group)
-    )
+      group = rename_groups(group),
+      sample = rename_patients(sample) %>% factor(levels = PATIENT_ORDER)
+    ) %>% 
+    arrange(group)
   
   mat <-
     dge$cds %>% 
@@ -573,34 +496,38 @@ plot_gsea_genes_expression_sc <- function(db,
     col = circlize::colorRamp2(
       seq(
         # quantile(mat, 0.1, na.rm = TRUE),
+        # quantile(mat, 0.9, na.rm = TRUE),
         0,
-        quantile(mat, 0.9, na.rm = TRUE),
+        1.5,
         length.out = 9
       ),
       scico(9, palette = "oslo", direction = -1),
     ),
+    border = TRUE,
     
     show_row_names = FALSE,
     row_split = row_metadata$pathway,
     row_title_rot = 0,
     cluster_row_slices = FALSE,
     show_row_dend = FALSE,
+    row_gap = unit(0, "mm"),
     
     cluster_columns = FALSE,
     column_split = col_metadata$cell_type,
     show_column_names = FALSE,
+    column_gap = unit(0, "mm"),
     
     top_annotation = HeatmapAnnotation(
       group = col_metadata$group,
-      col = list(group = GROUP_COLORS)
+      col = list(
+        group = GROUP_COLORS
+      )
     )
   )
 }
 
-(p <- plot_gsea_genes_expression_sc("MSigDB_Hallmark_2020", pathways, FALSE))
-ggsave_default("dge_mm/gsea_heatmap_expression_sc_scale_all", plot = p)
-(p <- plot_gsea_genes_expression_sc("MSigDB_Hallmark_2020", pathways, TRUE))
-ggsave_default("dge_mm/gsea_heatmap_expression_sc_scale_ct", plot = p)
+(p <- plot_gsea_genes_expression("MSigDB_Hallmark_2020", pathways, FALSE))
+ggsave_default("dge_mm/gsea_heatmap_expression", plot = p)
 
 
 
