@@ -247,7 +247,8 @@ projectils_data <-
       rename_patients(sample) %>%
       rename_dong() %>%
       as_factor() %>% 
-      fct_relevel(c(PATIENT_ORDER, files_dong$tumor_id))
+      fct_relevel(c(PATIENT_ORDER, files_dong$tumor_id)),
+    group = if_else(str_ends(sample, ".M."), "Tm", str_sub(sample, 1, 1))
   )
 
 Embeddings(ref, "umap") %>%
@@ -258,14 +259,8 @@ Embeddings(ref, "umap") %>%
     aes(color = cell_type),
     size = 0.1
   ) +
-  # geom_point(
-  #   data = projectils_data %>% filter(sample %in% c("M1", "T200 (M)")),
-  #   size = 0.1
-  # ) +
   geom_density_2d(
-    data = projectils_data %>%
-      # filter(sample %in% c("M1", "T200 (M)")) %>% 
-      {.},
+    data = projectils_data %>% filter(confidence_score >= 0.5),
     contour_var = "ndensity",
     color = "black",
     na.rm = TRUE,
@@ -276,43 +271,17 @@ Embeddings(ref, "umap") %>%
     guide = guide_legend(override.aes = list(size = 3))
   ) +
   coord_fixed() +
-  facet_wrap(vars(sample), nrow = 4) +
+  facet_wrap(vars(group), nrow = 2) +
   theme_bw() +
   theme(
     panel.grid = element_blank(),
     strip.background = element_blank()
   )
-ggsave_default("comparison/projection", width = 420, height = 297)
+ggsave_default("comparison/projection")
 
 
 projectils_data %>%
-  mutate(
-    predicted_type = factor(
-      predicted_type,
-      levels = levels(ref$functional.cluster)
-    )
-  ) %>%
-  ggplot(aes(predicted_type)) +
-  geom_bar(aes(fill = predicted_type), show.legend = FALSE) +
-  geom_hline(yintercept = 0) +
-  xlab(NULL) +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
-  scale_fill_manual(values = ADRENAL_MEDULLA_COLORS) +
-  coord_flip() +
-  facet_wrap(vars(sample), scales = "free_x", nrow = 4) +
-  theme_bw() +
-  theme(
-    axis.ticks.y = element_blank(),
-    panel.grid.major.y = element_blank(),
-    panel.grid.minor.y = element_blank(),
-    panel.grid.minor.x = element_blank(),
-    panel.border = element_blank(),
-    strip.background = element_blank()
-  )
-ggsave_default("comparison/predicted_cell_types", width = 350)
-
-
-projectils_data %>%
+  filter(confidence_score >= 0.5) %>%
   mutate(
     predicted_type = factor(
       predicted_type,
@@ -340,7 +309,7 @@ projectils_data %>%
     panel.border = element_blank(),
     strip.background = element_blank()
   )
-ggsave_default("comparison/predicted_cell_types2", height = 210, width = 297)
+ggsave_default("comparison/predicted_cell_types", height = 210, width = 297)
 
 
 
@@ -432,99 +401,3 @@ p <- Heatmap(
 )
 p
 ggsave_default("comparison/correlation", plot = p)
-
-
-
-# Integration -------------------------------------------------------------
-
-## Analysis ----
-
-cds <-
-  readRDS("data_wip/tumor_data.rds") %>%
-  {merge(.[[1]], .[-1])} %>% 
-  {new_cell_data_set(.$RNA@counts, cell_metadata = .@meta.data)}
-
-cds <- 
-  preprocess_cds(cds, verbose = TRUE) %>% 
-  reduce_dimension(preprocess_method = "PCA", verbose = TRUE)
-plot_cells(cds) + coord_fixed()
-
-set.seed(42)
-cds_aligned <-
-  align_cds(cds, alignment_group = "sample", verbose = TRUE) %>% 
-  reduce_dimension(
-    reduction_method = "UMAP",
-    preprocess_method = "Aligned",
-    verbose = TRUE
-  ) %>% 
-  cluster_cells(k = 20, random_seed = 42, verbose = TRUE)
-  
-plot_cells(cds_aligned) + coord_fixed()  
-
-list(
-  colData(cds) %>%
-    as_tibble(rownames = "cell") %>%
-    select(cell, sample),
-  reducedDim(cds, "UMAP") %>%
-    magrittr::set_colnames(c("umap_1_unaligned", "umap_2_unaligned")) %>% 
-    as_tibble(rownames = "cell"),
-  reducedDim(cds_aligned, "UMAP") %>%
-    magrittr::set_colnames(c("umap_1_aligned", "umap_2_aligned")) %>% 
-    as_tibble(rownames = "cell"),
-  clusters(cds_aligned) %>%
-    enframe(name = "cell", value = "cluster")
-) %>%
-  reduce(left_join, by = "cell") %>% 
-  saveRDS("data_wip/metadata_tumor_aligned.rds")
-
-
-## Plots ----
-
-tumor_metadata <-
-  readRDS("data_wip/metadata_tumor_aligned.rds") %>% 
-  mutate(
-    sample =
-      rename_patients(sample) %>%
-      rename_dong() %>%
-      as_factor() %>% 
-      fct_relevel(c(PATIENT_ORDER, files_dong$tumor_id)),
-    group = str_sub(sample, 1, 1),
-    mycn_high = group == "M" | sample %in% c("T162", "T200", "T230")
-  ) %>% 
-  slice_sample(prop = 1)
-tumor_metadata
-
-ggplot(tumor_metadata, aes(umap_1_unaligned, umap_2_unaligned)) +
-  geom_point(aes(color = sample), size = 0.1) +
-  scale_color_hue(guide = guide_legend(override.aes = list(size = 3))) +
-  coord_fixed() +
-  theme_bw() +
-  theme(panel.grid = element_blank())
-ggsave_default("comparison/umap_unaligned")
-
-ggplot(tumor_metadata, aes(umap_1_aligned, umap_2_aligned)) +
-  geom_point(aes(color = sample), size = 0.1) +
-  coord_fixed() +
-  scale_color_hue(guide = guide_legend(override.aes = list(size = 4))) +
-  theme_bw() +
-  theme(panel.grid = element_blank())
-ggsave_default("comparison/umap_aligned")
-
-tumor_metadata %>%
-  # filter(sample %in% c("M1", "T230 (M)")) %>% 
-  ggplot(aes(umap_1_aligned, umap_2_aligned)) +
-  geom_point(
-    data = tumor_metadata %>% select(!sample),
-    size = 0.1,
-    color = "gray80"
-  ) +
-  geom_point(aes(color = sample), size = 0.1) +
-  coord_fixed() +
-  scale_color_hue(guide = guide_legend(override.aes = list(size = 4))) +
-  facet_wrap(vars(sample), nrow = 4) +
-  theme_bw() +
-  theme(
-    panel.grid = element_blank(),
-    strip.background = element_blank()
-  )
-ggsave_default("comparison/umap_samples", width = 420, height = 297)
