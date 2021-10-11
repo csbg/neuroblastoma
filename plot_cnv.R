@@ -673,7 +673,7 @@ plot_resexp_tumor <- function(data,
     
     left_annotation = rowAnnotation(
       group = cell_metadata$group,
-      col = list(group = GROUP_COLORS),
+      col = list(group = GROUP_COLORS[c("M", "A", "S")]),
       annotation_name_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
       annotation_name_side = "bottom",
       annotation_legend_param = list(
@@ -697,7 +697,7 @@ plot_resexp_tumor <- function(data,
     ) 
 }
 
-p <- plot_resexp_tumor(infercnv_data, nb_data, 50L)
+(p <- plot_resexp_tumor(infercnv_data, nb_data, 50L))
 ggsave_publication("1e_resexp_tumor", plot = p,
                    type = "png", width = 18, height = 8)
 
