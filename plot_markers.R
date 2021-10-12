@@ -108,16 +108,8 @@ plot_canonical_markers <- function(cluster_col, filename = NULL) {
   y_annotation_data <-
     markers %>%
     arrange(desc(row_number())) %>%
-    mutate(
-      super_type = case_when(
-        str_starts(cell_type, "l") ~ "leukocyte",
-        str_starts(cell_type, "T") ~ "T cell",
-        str_starts(cell_type, "m") ~ "myeloid",
-        TRUE ~ cell_type
-      ),
-      r = row_number()
-    ) %>%
-    group_by(label = super_type) %>%
+    mutate(r = row_number()) %>%
+    group_by(label = cell_type) %>%
     summarise(
       yintercept = first(r) - 0.5,
       label_y = mean(r)
@@ -241,7 +233,7 @@ plot_features <- function(counts, x, y, features,
 
 nb_markers <-
   markers %>%
-  filter(cell_type == "neuroblastoma") %>%
+  filter(cell_type == "NB") %>%
   pull(gene)
 
 plot_features(
@@ -280,7 +272,7 @@ plot_nb_markers_of_high_signature_cells <- function(signature_col,
   
   nb_markers <-
     markers %>% 
-    filter(cell_type == "neuroblastoma") %>% 
+    filter(cell_type == "NB") %>% 
     pull(gene)
   
   p <- plot_dots(
@@ -481,7 +473,7 @@ ggsave_default("markers/genes_M", plot = p)
 plot_dots(
   logcounts(nb),
   markers %>%
-    filter(cell_type == "neuroblastoma") %>%
+    filter(cell_type == "NB") %>%
     pull(gene),
   if_else(
     colData(nb)$cellont_abbr == "NB",
@@ -500,8 +492,7 @@ ggsave_default("markers/nb_markers_patients", height = 80)
 
 ## Figure 1d ----
 
-selected_markers <-
-  read_csv("metadata/cell_markers_publication.csv", comment = "#")
+selected_markers <- read_csv("metadata/cell_markers.csv", comment = "#")
 
 plot_cm_dots <- function(counts, features, groups,
                          min_exp = -2.5, max_exp = 2.5,
@@ -740,7 +731,7 @@ subplot_nb_dots <- function(signature_col, title = NULL, top_prop = 0.05) {
   
   nb_markers <-
     markers %>% 
-    filter(cell_type == "neuroblastoma") %>% 
+    filter(cell_type == "NB") %>% 
     pull(gene)
   
   plot_dots(
