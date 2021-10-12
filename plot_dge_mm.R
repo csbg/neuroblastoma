@@ -509,7 +509,7 @@ plot_gsea_genes_expression <- function(db,
     row_split = row_metadata$pathway,
     row_title_rot = 0,
     cluster_row_slices = FALSE,
-    show_row_dend = FALSE,
+    show_row_dend = TRUE,
     row_gap = unit(0, "mm"),
     
     cluster_columns = FALSE,
@@ -700,26 +700,21 @@ plot_expc_heatmap_samples <- function() {
     clustering_distance_rows = distance,
     clustering_distance_columns = distance,
     
+    show_column_dend = FALSE,
+    
     width = unit(60, "mm"),
     height = unit(60, "mm"),
     
-    right_annotation = rowAnnotation(
+    left_annotation = rowAnnotation(
       group = group_names,
       col = list(group = GROUP_COLORS),
       show_annotation_name = FALSE,
       show_legend = TRUE,
       annotation_legend_param = list(
         group = list(
-          title = "vs C\n(contrast)"
+          title = "group"
         )
       )
-    ),
-    
-    bottom_annotation = HeatmapAnnotation(
-      group = group_names,
-      col = list(group = GROUP_COLORS),
-      show_annotation_name = FALSE,
-      show_legend = FALSE
     )
   )
 }
@@ -925,7 +920,7 @@ plot_gsea <- function(data,
   
   p
 }
-dge$gsea
+
 plot_gsea(dge$gsea, "MSigDB_Hallmark_2020")
 ggsave_publication("3d_gsea", width = 8, height = 10)
 
