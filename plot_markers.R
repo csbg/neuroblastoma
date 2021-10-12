@@ -461,10 +461,8 @@ plot_celltype_genes <- function(cell_type,
     
     top_annotation = HeatmapAnnotation(
       group = mat_metadata$group,
-      # patient = mat_metadata$sample,
       col = list(
         group = GROUP_COLORS
-        # patient = PATIENT_COLORS
       )
     )
   )
@@ -485,10 +483,6 @@ plot_dots(
   markers %>%
     filter(cell_type == "neuroblastoma") %>%
     pull(gene),
-  # read.xlsx("plots/markers/conserved/genes.xlsx", "NB (8)") %>% 
-  #   as_tibble() %>% 
-  #   slice_max(logFC, n = 100) %>% 
-  #   pull(gene),
   if_else(
     colData(nb)$cellont_abbr == "NB",
     as.character(colData(nb)$sample),
@@ -508,6 +502,102 @@ ggsave_default("markers/nb_markers_patients", height = 80)
 
 selected_markers <-
   read_csv("metadata/cell_markers_publication.csv", comment = "#")
+
+plot_cm_dots <- function(counts, features, groups,
+                         min_exp = -2.5, max_exp = 2.5,
+                         panel_annotation = NULL) {
+  scale_and_limit <- function(x) {
+    scale(x)[,1] %>% 
+      pmax(min_exp) %>% 
+      pmin(max_exp)
+  }
+  
+  known_features <- intersect(features, rownames(counts))
+  missing_features <- setdiff(features, rownames(counts))
+  if (length(missing_features) > 0)
+    warn(
+      "The following requested features are missing: ",
+      "{str_c(missing_features, collapse = ', ')}"
+    )
+  
+  vis_data <- 
+    counts[known_features, , drop = FALSE] %>% 
+    Matrix::t() %>% 
+    as.matrix() %>% 
+    as_tibble(rownames = "cell") %>% 
+    group_by(id = groups) %>% 
+    summarise(
+      across(
+        where(is.numeric),
+        list(
+          avg_exp = ~mean(expm1(.)),
+          pct_exp = ~length(.[. > 0]) / length(.) * 100
+        ),
+        .names = "{.col}__{.fn}"
+      )
+    ) %>% 
+    mutate(across(ends_with("avg_exp"), scale_and_limit)) %>%
+    pivot_longer(
+      !id,
+      names_to = c("feature", ".value"),
+      names_pattern = "(.+)__(.+)"
+    ) %>% 
+    mutate(feature = factor(feature, levels = features))
+  
+  if (!is.null(panel_annotation)) {
+    panel_bg <- list(
+      geom_point(color = "white"),  # initialize discrete coordinate system
+      geom_rect(
+        data = panel_annotation,
+        aes(xmin = xmin, xmax = xmax,
+            ymin = 0.5, ymax = nlevels(vis_data$feature) + 0.5,
+            fill = fill),
+        show.legend = FALSE,
+        inherit.aes = FALSE,
+      ),
+      scale_fill_identity()
+    )
+  } else {
+    panel_bg <- NULL
+  }
+  
+  color_limits <- c(min(vis_data$avg_exp), max(vis_data$avg_exp))
+  
+  ggplot(vis_data, aes(id, feature)) +
+    panel_bg +
+    geom_point(aes(size = pct_exp, color = avg_exp)) +
+    scale_x_discrete(
+      name = "cluster / assigned cell type",
+      labels = function(x) str_replace(x, "(.+) \\((.+)\\)", "\\2\n\\1"),
+      expand = expansion(add = 0.5)
+    ) +
+    scale_y_discrete(NULL, expand = expansion(add = 0.5)) +
+    scale_color_dotplot(
+      "scaled average expression",
+      guide = guide_colorbar(
+        barheight = unit(2, "mm"),
+        barwidth = unit(15, "mm"),
+        label.position = "top",
+        title.vjust = 0.1,
+        ticks = FALSE
+      ),
+      breaks = color_limits,
+      labels = function(x) round(x, 1)
+    ) +
+    scale_radius("% expressed", range = c(0, 2.5)) +
+    theme_nb(grid = FALSE) +
+    theme(panel.grid = element_blank()) +
+    theme(
+      legend.box.just = "bottom",
+      legend.key.height = unit(1, "mm"),
+      legend.key.width = unit(1, "mm"),
+      legend.position = "bottom",
+      legend.spacing = unit(0, "mm"),
+      legend.margin = margin(-2, 1, 0, 1, "mm"),
+      panel.border = element_rect(color = "black", size = .25)
+    )
+}
+
 
 plot_canonical_markers <- function() {
   # remove other cells
@@ -545,31 +635,11 @@ plot_canonical_markers <- function() {
   n_col <- nlevels(colData(nb)$cellont_cluster)
   
   p <-
-    plot_dots(
+    plot_cm_dots(
       logcounts(nb),
       rev(selected_markers$gene),
       colData(nb)$cellont_cluster,
       panel_annotation = x_annotation_data
-    ) +
-    scale_x_discrete(
-      name = "cluster / assigned cell type",
-      labels = function(x) str_replace(x, "(.+) \\((.+)\\)", "\\2\n\\1"),
-      expand = expansion(add = 0.5)
-    ) +
-    scale_y_discrete(NULL, expand = expansion(add = 0.5)) +
-    scale_color_dotplot(
-      "scaled average expression",
-      guide = guide_colorbar(
-        barheight = unit(2, "mm"),
-        barwidth = unit(15, "mm"),
-        label.position = "top",
-        title.vjust = 0.1
-      )
-    ) +
-    scale_radius("% expressed", range = c(0, 2.5)) +
-    coord_fixed(
-      xlim = c(1, n_col),
-      clip = "off"
     ) +
     geom_hline(
       yintercept = y_annotation_data$yintercept,
@@ -586,21 +656,16 @@ plot_canonical_markers <- function() {
       size = BASE_TEXT_SIZE_MM,
       hjust = 0
     ) +
-    theme_nb(grid = FALSE) +
-    theme(
-      legend.box.just = "bottom",
-      legend.key.height = unit(1, "mm"),
-      legend.key.width = unit(1, "mm"),
-      legend.position = "bottom",
-      legend.spacing = unit(0, "mm"),
-      legend.margin = margin(-2, 1, 0, 1, "mm"),
-      panel.border = element_rect(color = "black", size = .25)
+    coord_fixed(
+      xlim = c(1, n_col),
+      clip = "off"
     )
   p
 }
 
 plot_canonical_markers()
 ggsave_publication("1d_markers", height = 12, width = 7)
+
 
 
 ## Figure S1c ----
