@@ -12,7 +12,7 @@ load("data_raw/bulk_rnaseq/decon_eda_keyDataFrames.RData")
 
 sample_metadata <-
   read_xlsx(
-    "metadata/tables_ira/BulkRNA_seq_HR_NB_DX_TU_DTC_MNC_annotations_STM_090921.xlsx",
+    "metadata/original_tables/BulkRNA_seq_HR_NB_DX_TU_DTC_MNC_annotations_STM_090921.xlsx",
     na = "NA"
   ) %>% 
   filter(
@@ -90,21 +90,61 @@ ggsave_default("comparison/bulk_heatmap", plot = p, height = 90, width = 350)
 
 # Heatmap of all markers --------------------------------------------------
 
-ADRENAL_MEDULLA_COLORS <- c(
-  "cycling Neuroblasts" = "#aacedc",
-  "Neuroblasts" = "#244a94",
-  "late Neuroblasts" = "#303d63"
-)
+plot_heatmap <- function(selected_markers, show_row_names = FALSE) {
+  ADRENAL_MEDULLA_COLORS <- c(
+    "cycling Neuroblasts" = "#aacedc",
+    "Neuroblasts" = "#244a94",
+    "late Neuroblasts" = "#303d63"
+  )
+  
+  dtc_counts <-
+    vst_counts_removedBatchEffect_df %>%
+    as_tibble() %>% 
+    select(ensembl_id, all_of(sample_metadata$sample)) %>% 
+    left_join(
+      ensemblAnnot %>% select(ensembl_id, hgnc_symbol),
+      by = "ensembl_id"  
+    ) %>% 
+    select(!ensembl_id)
 
-dtc_counts <-
-  vst_counts_removedBatchEffect_df %>%
-  as_tibble() %>% 
-  select(ensembl_id, all_of(sample_metadata$sample)) %>% 
-  left_join(
-    ensemblAnnot %>% select(ensembl_id, hgnc_symbol),
-    by = "ensembl_id"  
-  ) %>% 
-  select(!ensembl_id)
+  
+  mat <-
+    dtc_counts %>% 
+    filter(hgnc_symbol %in% selected_markers$gene) %>%
+    column_to_rownames("hgnc_symbol") %>%
+    magrittr::extract(selected_markers$gene, sample_metadata$sample) %>%
+    as.matrix() %>%
+    t() %>% scale() %>% t()
+  
+  p <- Heatmap(
+    mat,
+    name = "scaled\nexpression",
+    col = circlize::colorRamp2(
+      seq(min(mat), max(mat), length.out = 9),
+      RColorBrewer::brewer.pal(9, "RdBu"), # Reds or RdBu
+    ),
+    
+    show_row_names = show_row_names,
+    cluster_columns = FALSE,
+    cluster_rows = TRUE,
+    cluster_row_slices = FALSE,
+    row_split = selected_markers$cell_type,
+    show_row_dend = TRUE,
+    row_title_rot = 0,
+    
+    bottom_annotation = HeatmapAnnotation(
+      group = sample_metadata$group,
+      site = sample_metadata$site,
+      col = list(
+        group = GROUP_COLORS[c("M", "A", "S")],
+        site = c(TUM = "black", DTC = "gray75")
+      ),
+      show_annotation_name = TRUE,
+      show_legend = TRUE
+    )
+  )
+  p
+}
 
 all_neuroblast_markers <- 
   markers %>% 
@@ -114,48 +154,29 @@ all_neuroblast_markers <-
   ) %>% 
   distinct(gene, .keep_all = TRUE)
 
-mat <-
-  dtc_counts %>% 
-  filter(hgnc_symbol %in% all_neuroblast_markers$gene) %>%
-  column_to_rownames("hgnc_symbol") %>%
-  magrittr::extract(all_neuroblast_markers$gene, sample_metadata$sample) %>%
-  as.matrix() %>%
-  t() %>% scale() %>% t()
-
-p <- Heatmap(
-  mat,
-  name = "scaled\nexpression",
-  col = circlize::colorRamp2(
-    seq(min(mat), max(mat), length.out = 9),
-    RColorBrewer::brewer.pal(9, "RdBu"), # Reds or RdBu
-  ),
-  
-  show_row_names = FALSE,
-  cluster_columns = FALSE,
-  cluster_rows = TRUE,
-  cluster_row_slices = FALSE,
-  row_split = all_neuroblast_markers$cell_type,
-  show_row_dend = TRUE,
-  row_title_rot = 0,
-  
-  bottom_annotation = HeatmapAnnotation(
-    group = sample_metadata$group,
-    site = sample_metadata$site,
-    col = list(
-      group = GROUP_COLORS[c("M", "A", "S")],
-      site = c(TUM = "black", DTC = "gray75")
-    ),
-    show_annotation_name = TRUE,
-    show_legend = TRUE
-  )
-)
-p
+(p1 <- plot_heatmap(all_neuroblast_markers))
 ggsave_default(
   "comparison/bulk_heatmap_all_markers",
-  plot = p, width = 350
+  plot = p1, width = 350
 )
 
 
+interesting_markers <- tibble(
+  cell_type = "late Neuroblasts",
+  gene =
+    row_dend(p1) %>%
+    pluck("late Neuroblasts") %>%
+    dendextend::cutree(h = 10) %>% 
+    magrittr::extract(. == 14) %>% 
+    names()
+)
+
+(p2 <- plot_heatmap(interesting_markers, show_row_names = TRUE))
+ggsave_default(
+  "comparison/bulk_heatmap_interesting_markers",
+  plot = p2, width = 350, height = 130
+)
+  
 
 
 # Single-cell expression of Jansky markers --------------------------------
