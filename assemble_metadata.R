@@ -7,7 +7,6 @@
 #
 # @DEPI metadata_monocle.csv
 # @DEPI cell_types_[ref]_[labels].csv
-# @DEPI subclusters.csv
 # @DEPO metadata.csv
 # @DEPO metadata.rds
 # @DEPO celltype_details.rds
@@ -151,21 +150,6 @@ add_cell_types <- function(df_metadata,
 }
 
 
-#' Add subclusters.
-#'
-#' @param df_metadata Dataframe returned by `load_cell_metadata()`.
-#' @param subcluster_file CSV file with subclustering results.
-#'
-#' @return The dataframe provided by `df_metadata`, with additional columns.
-add_subclusters <- function(df_metadata, subcluster_file) {
-  df_metadata %>%
-    left_join(
-      read_csv(subcluster_file),
-      by = "cell"
-    )
-}
-
-
 
 #' Label all cells in a cluster with the same cell type. To this end, perform a
 #' majority vote on cell ontology IDs associated with all cell type labels in
@@ -284,7 +268,6 @@ modify_clusters <- function(df_metadata) {
 
 folder <- "data_generated"
 metadata_files <- "metadata_monocle.csv"
-subcluster_file <- "subclusters.csv"
 
 ancestors <- c(
   "CL:0000576",
@@ -317,7 +300,6 @@ nb_data <-
   load_cell_metadata(str_glue("{folder}/{metadata_files}")) %>% 
   modify_clusters() %>% 
   add_cell_types(singler_data) %>%
-  add_subclusters(path_join(c(folder, subcluster_file))) %>% 
   add_unified_labels(cluster_50, ancestors, cell_type_abbreviations)
 
 
