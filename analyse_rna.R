@@ -1857,7 +1857,8 @@ ggsave_publication("S1b_tif", width = 9, height = 4)
 
 ## Figure S1e ----
 
-plot_celltype_heatmap <- function(clusters = 1:21, body_width = 150) {
+plot_celltype_heatmap <- function(clusters = 1:21, body_width = 150,
+                                  collapse = FALSE) {
   # generate matrix of cell type abundances
   make_matrix <- function(ref) {
     cell_type_column <- rlang::sym(str_glue("cell_type_{ref}_broad"))
@@ -1921,6 +1922,27 @@ plot_celltype_heatmap <- function(clusters = 1:21, body_width = 150) {
     ungroup()
   
   mat <- mat[, col_metadata$colname]
+  
+  if (collapse) {
+    mat <-
+      mat %>% 
+      t() %>% 
+      as_tibble(rownames = "colname") %>% 
+      left_join(col_metadata, by = "colname") %>% 
+      group_by(ref, abbr) %>% 
+      summarise(across(where(is.numeric), sum)) %>%
+      ungroup() %>%
+      unite(ref, abbr, col = "ref_abbr") %>% 
+      column_to_rownames("ref_abbr") %>%
+      as.matrix() %>%
+      t()
+    
+    col_metadata <- 
+      col_metadata %>% 
+      distinct(ref, abbr) %>% 
+      mutate(cell_type = abbr)
+  }
+  
   colnames(mat) <- col_metadata$cell_type
   
   # set up row metadata
@@ -2016,6 +2038,10 @@ plot_celltype_heatmap <- function(clusters = 1:21, body_width = 150) {
   )
 }
 
-p <- plot_celltype_heatmap(body_width = 130)
+(p <- plot_celltype_heatmap(body_width = 130))
 ggsave_publication("S1e_celltype_heatmap",
+                   plot = p, width = 18, height = 6)
+
+(p <- plot_celltype_heatmap(body_width = 80, collapse = TRUE))
+ggsave_publication("S1e_celltype_heatmap_coll",
                    plot = p, width = 18, height = 6)
