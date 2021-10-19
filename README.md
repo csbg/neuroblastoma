@@ -18,8 +18,6 @@
 
 ## Main workflow
 
-![workflow](plots/dependency_graph.png)
-
 - [perform_qc.R](perform_qc.R) -
   perform QC filtering, ensure unique cell names
 - [integrate_rna.R](integrate_rna.R) -
@@ -56,7 +54,7 @@
 - [common_functions.R](common_functions.R) -
   functions used throughout the project
 - [plot_dependencies.R](plot_dependencies.R) –
-  plot the dependency graph, which is shown above
+  plot the dependency graph
 - [styling.R](styling.R) –
   functions for generating publication-quality figures and tables
 - R scripts starting with `wip` represent work in progress
