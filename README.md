@@ -55,17 +55,9 @@
 
 - [common_functions.R](common_functions.R) -
   functions used throughout the project
-- [compare_reads.Rmd](compare_reads.Rmd) -
-  compare two samples that differ in read length (50 vs 75 bp)
-- [download_data.R](download_data.R) -
-  download raw data from the BSF
 - [plot_dependencies.R](plot_dependencies.R) –
   plot the dependency graph, which is shown above
 - [styling.R](styling.R) –
   functions for generating publication-quality figures and tables
-- [summarize_cellranger_metrics.R](summarize_cellranger_metrics.R) -
-  generate summary plots of Cell Ranger QC metrics
-- [summarize_cellranger_tsne.R](summarize_cellranger_tsne.R) -
-  generate overview of tSNEs calculated by Cell Ranger
 - R scripts starting with `wip` represent work in progress
   that has not yet been integrated into the main workflow
