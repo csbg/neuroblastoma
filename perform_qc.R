@@ -38,8 +38,9 @@ samples <-
   tibble(
     sample_file = dir_ls(
       data_dir,
+      type = "directory",
       recurse = TRUE,
-      regexp = "filtered_feature_bc_matrix.h5"
+      regexp = "filtered_feature_bc_matrix"
     ),
     bsf_id = str_match(sample_file, "([\\w\\d_]*)_trans")[, 2]
   ) %>%
@@ -118,7 +119,7 @@ datasets <-
     function(bsf_order, sample_file, sample_name, group) {
       info("Loading ", sample_file)
       data <- 
-        Read10X_h5(sample_file) %>% 
+        Read10X(sample_file) %>% 
         magrittr::set_colnames(
           str_replace(colnames(.), "\\d+$", as.character(bsf_order))
         ) %>% 
