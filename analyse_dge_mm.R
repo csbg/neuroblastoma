@@ -60,12 +60,33 @@ nb <- nb[, colData(nb)$cellont_cluster %in% used_clusters]
 
 # Analyse data ------------------------------------------------------------
 
-analyse_dge <- function(cell_type) {
-  info("Analysing cell type {cell_type}")
+#' Perform DGE analysis.
+#'
+#' @param cell_type Selected cell type.
+#' @param ref_group Reference patient group.
+#' @param other_groups Patient groups that are compared to the reference.
+#'
+#' @return A data frame with DGE results.
+analyse_dge <- function(cell_type, ref_group, other_groups) {
+  info("Analysing cell type {cell_type}, ",
+       "{str_c(other_groups, collapse = '/')} vs {ref_group}")
   
-  nb_sub <- nb[, colData(nb)$cellont_abbr == cell_type]
+  # subset data
+  selected_cells <-
+    colData(nb)$cellont_abbr == cell_type &
+    colData(nb)$group %in% c(ref_group, other_groups)
+  
+  nb_sub <- nb[, selected_cells]
+  
+  # set correct factor levels (reference must be first)
+  colData(nb_sub)$group <-
+    colData(nb_sub)$group %>%
+    fct_relevel(ref_group, other_groups) %>% 
+    fct_drop()
+  
   model_mat <- model.matrix(~group + tif, data = colData(nb_sub))
   
+  # reorder count matrix as required by nebula
   data_grouped <- group_cell(
     counts(nb_sub),
     id = colData(nb_sub)$sample,
@@ -73,6 +94,7 @@ analyse_dge <- function(cell_type) {
     offset = colData(nb_sub)$Size_Factor
   )
   
+  # run analysis
   res <- nebula(
     data_grouped$count,
     id = data_grouped$id,
@@ -81,6 +103,7 @@ analyse_dge <- function(cell_type) {
     verbose = TRUE
   )
   
+  # format results
   res$summary %>%
     as_tibble() %>% 
     mutate(
@@ -92,12 +115,26 @@ analyse_dge <- function(cell_type) {
 }
 
 set.seed(1)
-dge_results <- map_dfr(
+
+dge_results_all_vs_C <- map_dfr(
   colData(nb)$cellont_abbr %>%
     unique() %>%
     setdiff("NB") %>%
     set_names(),
   analyse_dge,
+  ref_group = "I",
+  other_groups = c("II", "III", "IV"),
+  .id = "cell_type"
+)
+
+dge_results_M_vs_S <- map_dfr(
+  colData(nb)$cellont_abbr %>%
+    unique() %>%
+    setdiff("NB") %>%
+    set_names(),
+  analyse_dge,
+  ref_group = "IV",
+  other_groups = "II",
   .id = "cell_type"
 )
 
@@ -141,27 +178,35 @@ calc_expression_frequency <- function(data) {
       by = "sample"
     ) %>%
     group_by(cell_type, gene, group) %>% 
-    summarise(frq = min(frq)) %>% 
-    mutate(frq_ref = if_else(group == "I", frq, NA_real_)) %>% 
-    fill(frq_ref) %>% 
-    filter(group != "I")
+    summarise(frq = min(frq))
   
   # add columns to input
-  data %>%
-    left_join(exp_frq_groups, by = c("cell_type", "gene", "group"))
+  data %>% 
+    extract(comparison, into = c("group", "group_ref"), regex = "(.+)_vs_(.+)", remove = FALSE) %>% 
+    left_join(exp_frq_groups, by = c("cell_type", "gene", "group")) %>% 
+    left_join(exp_frq_groups, by = c("cell_type", "gene", group_ref = "group")) %>% 
+    select(!c(group, group_ref)) %>% 
+    rename(frq = frq.x, frq_ref = frq.y)
 }
 
-dge_results_wide <- 
-  dge_results %>% 
-  select(cell_type, gene, starts_with("logFC_g"), starts_with("p_g")) %>% 
-  pivot_longer(
-    !c(cell_type, gene),
-    names_to = c(".value", "group"),
-    names_pattern = "(.+)_group(.+)"
+dge_results_wide <-
+  bind_rows(
+    dge_results_all_vs_C %>%
+      select(cell_type, gene, starts_with("logFC_g"), starts_with("p_g")) %>%
+      pivot_longer(
+        !c(cell_type, gene),
+        names_to = c(".value", "comparison"),
+        names_pattern = "(.+)_group(.+)"
+      ) %>%
+      mutate(comparison = str_c(comparison, "_vs_I")),
+    dge_results_M_vs_S %>% 
+      select(cell_type, gene, logFC = logFC_groupII, p = p_groupII) %>%
+      mutate(comparison = "II_vs_IV", .after = gene)
   ) %>% 
-  group_by(group, cell_type) %>% 
-  mutate(p_adj = p.adjust(p, method = "fdr")) %>% 
-  ungroup() %>% 
+  arrange(cell_type, gene) %>% 
+  group_by(comparison, cell_type) %>%
+  mutate(p_adj = p.adjust(p, method = "fdr")) %>%
+  ungroup() %>%
   calc_expression_frequency()
 
 
@@ -213,13 +258,14 @@ dge_results_wide_filtered <-
   filter_dge_results(max_p_adj = Inf, min_abs_log_fc = 0)
 
 
+
 # Enrichment analysis -----------------------------------------------------
 
 #' Perform enrichment analysis via enrichr for upregulated genes in a given
 #' contrast and cluster.
 #'
 #' @param data A DGE dataset.
-#' @param group The selected contrast.
+#' @param comparison The selected comparison.
 #' @param cell_type The selected cell type
 #' @param dbs Character vector containing valid enrichr databases
 #'   as returned by `enrichR::listEnrichrDbs()`.
@@ -228,11 +274,12 @@ dge_results_wide_filtered <-
 #' @return A dataframe, which combines the dataframes returned by
 #'   `enrichR::enrichr()` (empty results are removed) by adding a column "db".
 enrich_genes <- function(data,
-                         group,
+                         comparison,
                          cell_type,
                          dbs,
                          direction = c("up", "down")) {
-  info("Cell type {cell_type}, group {group}, {direction}regulated genes")
+  info("Cell type {cell_type}, comparison {comparison}, ",
+       "{direction}regulated genes")
   
   direction <- match.arg(direction)
   
@@ -240,7 +287,7 @@ enrich_genes <- function(data,
     data %>% 
     filter(
       cell_type == {{cell_type}},
-      group == {{group}},
+      comparison == {{comparison}},
       direction == {{direction}}
     ) %>% 
     pull(gene)
@@ -261,11 +308,11 @@ enrich_genes <- function(data,
 #'
 #' @return A dataframe, which combines the dataframes returned by
 #'   `enrichR::enrichr()` (empty results are removed) by adding three columns
-#'   "group", "cell_type", and "db".
+#'   "comparison", "cell_type", and "db".
 enrich_all_genes <- function(data, dbs) {
   queries <- 
     data %>%
-    distinct(group, cell_type) %>% 
+    distinct(comparison, cell_type) %>% 
     mutate(direction = list(c("up", "down"))) %>% 
     unnest_longer(direction)
   
@@ -279,7 +326,7 @@ enrich_all_genes <- function(data, dbs) {
     filter(!is.null(data)) %>%
     filter(nrow(data) > 0) %>%
     unnest(data) %>%
-    mutate(group = as_factor(group)) %>% 
+    mutate(comparison = as_factor(comparison)) %>% 
     separate(
       Overlap,
       into = c("overlap_size", "geneset_size"),
@@ -345,23 +392,23 @@ get_enrichr_genesets <- function(dbs) {
 #' @param data DGE data as returned by `filter_dge_results()`.
 #' @param gene_sets Gene set as returned by `get_enrichr_genesets()`.
 #'
-#' @return A dataframe, comprising columns "db", "group", "cell_type", as well
-#'   as all columns in the result of `fgseaMultilevel()`.
+#' @return A dataframe, comprising columns "db", "comparison", "cell_type", as
+#'   well as all columns in the result of `fgseaMultilevel()`.
 perform_gsea <- function(data, gene_sets) {
   data %>% 
-    distinct(group, cell_type) %>% 
+    distinct(comparison, cell_type) %>% 
     mutate(db = list(names(gene_sets))) %>% 
     unnest_longer(db) %>% 
     pmap_dfr(
-      function(group, cell_type, db) {
+      function(comparison, cell_type, db) {
         ranked_genes <-
           data %>% 
-          filter(group == {{group}}, cell_type == {{cell_type}}) %>%
+          filter(comparison == {{comparison}}, cell_type == {{cell_type}}) %>%
           select(gene, logFC) %>%
           deframe()
         ranked_genes <- ranked_genes[!is.na(ranked_genes)]
         
-        info("GSEA of group {group}, cell type {cell_type}, ",
+        info("GSEA of comparison {comparison}, cell type {cell_type}, ",
              "db {db} ({length(ranked_genes)} genes)")
         
         fgseaMultilevel(
@@ -373,7 +420,7 @@ perform_gsea <- function(data, gene_sets) {
           as_tibble() %>%
           mutate(
             db = {{db}},
-            group = {{group}},
+            comparison = {{comparison}},
             cell_type = {{cell_type}},
             .before = 1
           )
@@ -542,7 +589,8 @@ dge_results_tumor_wide <-
 # nb <- dge$cds
 # nb_metadata <- dge$metadata
 # used_clusters <- dge$used_clusters
-# dge_results <- dge$results
+# dge_results_all_vs_C <- dge$results_all_vs_C
+# dge_results_M_vs_S <- dge$results_M_vs_S
 # dge_results_wide <- dge$results_wide
 # dge_results_wide_filtered <- dge$results_wide_filtered
 # enrichr_results <- dge$enrichr
@@ -556,7 +604,8 @@ list(
   cds = nb,
   metadata = nb_metadata,
   used_clusters = used_clusters,
-  results = dge_results,
+  results_all_vs_C = dge_results_all_vs_C,
+  results_M_vs_S = dge_results_M_vs_S,
   results_wide = dge_results_wide,
   results_wide_filtered = dge_results_wide_filtered,
   enrichr = enrichr_results,

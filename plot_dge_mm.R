@@ -5,6 +5,7 @@
 
 library(scater)
 library(monocle3)
+library(CellChat)
 library(tidyverse)
 library(latex2exp)
 library(ComplexHeatmap)
@@ -24,7 +25,8 @@ dge <- readRDS("data_generated/dge_mm_results.rds")
 dge_pb <- readRDS("data_generated/dge_pb_results.rds")
 
 # are there problematic genes with convergence <= -20 ?
-any(dge$results$convergence <= -20)
+any(dge$results_all_vs_C$convergence <= -20)
+any(dge$results_M_vs_S$convergence <= -20)
 any(dge$results_tumor$convergence <= -20)
 
 
@@ -33,21 +35,25 @@ any(dge$results_tumor$convergence <= -20)
 
 dge$results_wide_filtered %>% 
   filter(logFC > 1, p_adj <= 0.05) %>% 
-  count(cell_type, group) %>% 
-  complete(cell_type, group, fill = list(n = 0L)) %>% 
+  count(cell_type, comparison) %>% 
+  complete(cell_type, comparison, fill = list(n = 0L)) %>% 
   mutate(
-    group =
-      rename_groups(group) %>%
-      factor(levels = names(GROUP_COLORS))
+    comparison =
+      rename_contrast(comparison) %>% 
+      factor(levels = names(CONTRAST_COLORS))
   ) %>% 
   ggplot(aes(cell_type, n)) +
-  geom_col(aes(fill = group), position = "dodge") +
+  geom_col(aes(fill = comparison), position = "dodge") +
   xlab(NULL) +
   ylab("number of DE genes") +
   scale_fill_manual(
     "vs C\n(contrast)",
-    values = GROUP_COLORS,
-    guide = guide_legend(title.position = "bottom", label.position = "bottom", title.hjust = 0.5)
+    values = CONTRAST_COLORS,
+    guide = guide_legend(
+      title.position = "bottom",
+      label.position = "bottom",
+      title.hjust = 0.5
+    )
   ) +
   theme_bw() +
   theme(
@@ -63,7 +69,7 @@ ggsave_default("dge_mm/number_of_de_genes", height = 60, width = 100)
 
 ggplot(dge$results_wide, aes(logFC, -log10(p))) +
   geom_point(size = 0.1) +
-  facet_grid(vars(group), vars(cell_type)) +
+  facet_grid(vars(comparison), vars(cell_type)) +
   coord_cartesian(xlim = c(-10, 10), ylim = c(0, 25)) +
   theme_bw() +
   theme(panel.grid = element_blank())
@@ -84,10 +90,10 @@ ggsave_default("dge_mm/volcano_all")
 
 # Violin plots ------------------------------------------------------------
 
-plot_violin <- function(gene, cluster, left_group) {
+plot_violin <- function(gene, cell_type, group, ref_group = "I") {
   plotExpression(
-    dge$cds[, dge$cds$cellont_abbr == cluster &
-              dge$cds$group %in% c(left_group, "I")],
+    dge$cds[, dge$cds$cellont_abbr == cell_type &
+              dge$cds$group %in% c(group, ref_group)],
     gene,
     x = "sample",
     colour_by = "group"
@@ -123,32 +129,36 @@ plot_violin("PTPN6", "NK", "III")
 
 
 
-plot_top_violins <- function(cell_type, n = 10, direction = c("up", "down")) {
-  direction <- match.arg(direction)
-  
-  dge$results_wide_filtered %>% 
-    filter(
-      p_adj <= 0.05,
-      cell_type == {{cell_type}},
-      direction == {{direction}}
-    ) %>% 
-    arrange(desc(abs(logFC))) %>% 
-    mutate(
-      groups = map(group, ~c("I", .)),
-      col = factor(group) %>% as.integer()
-    ) %>% 
-    group_by(col) %>% 
-    mutate(row = row_number()) %>% 
-    ungroup() %>% 
-    select(row, col, gene, cell_type, groups, direction) %>%
-    filter(row <= n) %>% 
-    plot_violin()  
-}
-
-plot_top_violins("B")
-ggsave_default("dge_mm/violins_B", height = 120, width = 150)
-plot_top_violins("M")
-ggsave_default("dge_mm/violins_M", height = 120, width = 150)
+# plot_top_violins <- function(cell_type, n = 10, direction = c("up", "down")) {
+#   direction <- match.arg(direction)
+#   
+#   dge$results_wide_filtered %>% 
+#     filter(
+#       p_adj <= 0.05,
+#       cell_type == "B",
+#       direction == "up"
+#     ) %>% 
+#     arrange(desc(abs(logFC))) %>% 
+#     mutate(col = factor(comparison) %>% as.integer()) %>%
+#     extract(
+#       comparison,
+#       into = c("group", "ref_group"),
+#       regex = "(.+)_vs_(.+)"
+#     ) %>%
+#     group_by(col) %>%
+#     mutate(row = row_number()) %>%
+#     ungroup() %>%
+#     arrange(col, row) %>% 
+#     select(row, col, gene, cell_type, ref_group, group, direction) %>%
+#     filter(row <= n) %>% 
+#     # plot_violin() %>% 
+#     {.}
+# }
+# 
+# plot_top_violins("B")
+# ggsave_default("dge_mm/violins_B", height = 120, width = 150)
+# plot_top_violins("M")
+# ggsave_default("dge_mm/violins_M", height = 120, width = 150)
 
 
 
@@ -162,7 +172,10 @@ plot_comparison <- function(data, lim = NULL, filename = NULL) {
            contrast, logFC_pb = logFC, p_pb = p_val) %>% 
     extract(contrast, into = "group", regex = "(.+)_vs_I") %>% 
     left_join(
-      data %>% rename(logFC_mm = logFC, p_mm = p),
+      data %>%
+        rename(logFC_mm = logFC, p_mm = p) %>% 
+        filter(comparison != "II_vs_IV") %>% 
+        extract(comparison, "group", "(.+)_vs"),
       by = c("gene", "cell_type", "group")
     ) %>% 
     ggplot(aes(logFC_pb, logFC_mm)) +
@@ -233,7 +246,7 @@ plot_enrichr_dots <- function(data,
   
   top_terms <- 
     data_selected %>% 
-    group_by(group, cell_type) %>%
+    group_by(comparison, cell_type) %>%
     slice_max(n = top_n, order_by = Odds.Ratio, with_ties = FALSE) %>%
     pull(Term) %>% 
     unique()
@@ -249,11 +262,11 @@ plot_enrichr_dots <- function(data,
       Odds.Ratio = pmin(Odds.Ratio, 10^log_odds_cap),
       Term =
         as_factor(Term) %>%
-        fct_reorder(str_c(cell_type, group), n_distinct)
+        fct_reorder(str_c(cell_type, comparison), n_distinct)
     )
   
   p <- 
-    ggplot(data_vis, aes(group, Term, size = -log10(Adjusted.P.value))) +
+    ggplot(data_vis, aes(comparison, Term, size = -log10(Adjusted.P.value))) +
     geom_point(aes(color = log10(Odds.Ratio))) +
     geom_point(data = data_vis %>% filter(is_significant), shape = 1) +
     scale_color_distiller(
@@ -333,7 +346,7 @@ plot_gsea_dots <- function(data,
   data_top_terms <-
     data %>% 
     filter(db == {{db}}, padj <= max_p_adj, abs(NES) >= min_abs_NES) %>% 
-    group_by(group, cell_type)
+    group_by(comparison, cell_type)
   
   top_terms_pos <- 
     data_top_terms %>% 
@@ -373,7 +386,7 @@ plot_gsea_dots <- function(data,
   color_limit <- max(abs(data_vis$NES))
   
   p <- 
-    ggplot(data_vis, aes(group, pathway, size = -log10(padj))) +
+    ggplot(data_vis, aes(comparison, pathway, size = -log10(padj))) +
     scale_y_discrete() +
     horizontal_grid +    
     geom_point(aes(color = NES)) +
@@ -828,7 +841,7 @@ plot_gsea <- function(data,
   data_top_terms <-
     data %>% 
     filter(db == {{db}}, padj <= max_p_adj, abs(NES) >= min_abs_NES) %>% 
-    group_by(group, cell_type)
+    group_by(comparison, cell_type)
   
   top_terms_pos <- 
     data_top_terms %>% 
@@ -845,7 +858,7 @@ plot_gsea <- function(data,
   data_vis <- 
     data %>% 
     filter(
-      group != "tif",
+      comparison != "tif",
       db == {{db}},
       pathway %in% c(top_terms_pos, top_terms_neg)
     ) %>% 
@@ -856,7 +869,7 @@ plot_gsea <- function(data,
       pathway =
         as_factor(pathway) %>%
         fct_reorder(NES * -log10(padj), sum, na.rm = TRUE),
-      group = factor(group) %>% rename_groups(),
+      comparison = factor(comparison) %>% rename_contrast(),
       cell_type = factor(cell_type, levels = names(CELL_TYPE_ABBREVIATIONS))
     )
   
@@ -883,7 +896,7 @@ plot_gsea <- function(data,
   }
   
   p <- 
-    ggplot(data_vis, aes(group, pathway, size = -log10(padj))) +
+    ggplot(data_vis, aes(comparison, pathway, size = -log10(padj))) +
     scale_y_discrete() +
     horizontal_grid +    
     geom_point(aes(color = NES)) +
@@ -940,10 +953,10 @@ plot_logfc_correlation_heatmap <- function() {
   
   corr_mat <- 
     dge$results_wide %>% 
-    filter(abs(logFC) < 8) %>%
-    select(gene, cell_type, group, logFC) %>%
-    mutate(group = rename_groups(group)) %>%
-    unite(cell_type, group, col = "cluster_group", sep = "_") %>%
+    filter(abs(logFC) < 8, comparison != "II_vs_IV") %>%
+    select(gene, cell_type, comparison, logFC) %>%
+    mutate(comparison = rename_contrast(comparison)) %>%
+    unite(cell_type, comparison, col = "cluster_group", sep = "_") %>%
     pivot_wider(names_from = "cluster_group", values_from = "logFC") %>%
     select(!gene) %>%
     cor(use = "pairwise.complete.obs")
@@ -1016,8 +1029,7 @@ plot_logfc_correlation_heatmap <- function() {
   )
 }
 
-p <- plot_logfc_correlation_heatmap()
-p
+(p <- plot_logfc_correlation_heatmap())
 ggsave_publication("3e_logfc_correlation_heatmap",
                    plot = p, width = 6, height = 5)
 
@@ -1116,34 +1128,50 @@ ggsave_publication("2x_comparison_bulk_sc", width = 4, height = 4)
 
 ## Table S3 ----
 
+gene_pathways <- 
+  CellChatDB.human$interaction %>% 
+  as_tibble() %>% 
+  select(interaction_name, pathway_name) %>% 
+  mutate(genes = str_split(interaction_name, "_")) %>% 
+  unnest_longer(genes) %>% 
+  distinct(pathway_name, genes) %>% 
+  group_by(Gene = genes) %>% 
+  summarise(
+    Pathways =
+      unique(pathway_name) %>%
+      str_sort() %>%
+      str_c(collapse = ", ")
+  )
+
 dge$results_wide_filtered %>% 
-  arrange(group, cell_type, desc(logFC)) %>%
+  arrange(comparison, cell_type, desc(logFC)) %>%
   mutate(
-    group = rename_contrast_long(group),
+    comparison = rename_contrast_long(comparison),
     cell_type = CELL_TYPE_ABBREVIATIONS[cell_type]
   ) %>%
   select(
-    "Contrast" = group,
+    "Comparison" = comparison,
     "Cell type" = cell_type,
     "Gene" = gene,
     "Log fold change" = logFC,
     "Adjusted p-value" = p_adj
   ) %>%
+  left_join(gene_pathways, by = "Gene") %>% 
   save_table("S3_dge", "Microenvironment")
 
 
 ## Table S4 ----
 
 dge$gsea %>% 
-  arrange(db, group, cell_type, desc(NES)) %>%
+  arrange(db, comparison, cell_type, desc(NES)) %>%
   mutate(
-    group = rename_contrast_long(group),
+    comparison = rename_contrast_long(comparison),
     cell_type = CELL_TYPE_ABBREVIATIONS[cell_type],
     leadingEdge = map_chr(leadingEdge, str_c, collapse = ", ")
   ) %>%
   select(
     "Database" = db,
-    "Contrast" = group,
+    "Comparison" = comparison,
     "Cell type" = cell_type,
     "Pathway" = pathway,
     "Normalized Enrichment Score" = NES,

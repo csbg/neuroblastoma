@@ -56,6 +56,14 @@ GROUP_COLORS <- c(
   S = "#e8c95d"
 )
 
+# same as group colors; Y (M vs S) is a blend between M and S
+CONTRAST_COLORS <- c(
+  M = "#a9d8c8",
+  A = "#d16b54",
+  S = "#e8c95d",
+  Y = "#c9d193"
+)
+
 PATIENT_ORDER <- c("C1", "C2", "C3", "C4", "C5",
                    "M1", "M2", "M3", "M4",
                    "A1", "A2",
@@ -290,27 +298,19 @@ rename_contrast <- partial(
     ~old,       ~new,
     "II_vs_I",  "M",
     "III_vs_I", "A",
-    "IV_vs_I",  "S"
+    "IV_vs_I",  "S",
+    "II_vs_IV", "Y",
   )
 )
-
-# rename_contrast_long <- partial(
-#   rename_str_or_fct,
-#   nm = tribble(
-#     ~old,       ~new,
-#     "II_vs_I",  "MYCN amplified vs control",
-#     "III_vs_I", "ATRX deleted vs control",
-#     "IV_vs_I",  "sporadic vs control"
-#   )
-# )
 
 rename_contrast_long <- partial(
   rename_str_or_fct,
   nm = tribble(
     ~old,       ~new,
-    "II",  "MYCN amplified vs control",
-    "III", "ATRX deleted vs control",
-    "IV",  "sporadic vs control"
+    "II_vs_I",  "MYCN amplified vs control",
+    "III_vs_I", "ATRX deleted vs control",
+    "IV_vs_I",  "sporadic vs control",
+    "II_vs_IV", "MYCN amplified vs sporadic",
   )
 )
 
