@@ -544,6 +544,168 @@ ggsave_default("dge_mm/gsea_heatmap_expression", plot = p)
 
 
 
+# Significant pathway genes -----------------------------------------------
+
+plot_pathway_dots <- function(db, pathway,
+                              min_exp = -2.5, max_exp = 2.5) {
+  scale_and_limit <- function(x) {
+    scale(x)[,1] %>% 
+      pmax(min_exp) %>% 
+      pmin(max_exp)
+  }
+  
+  # assemble row and col metadata
+  sig_genes <-
+    dge$results_wide_filtered %>% 
+    filter(logFC > 1, p_adj <= 0.05) %>% 
+    pull(gene)
+  
+  row_metadata <-
+    dge$gene_sets[[db]][pathway] %>%
+    enframe("pathway", "gene") %>%
+    unnest_longer(gene) %>%
+    mutate(pathway = as_factor(pathway)) %>%
+    filter(
+      gene %in% rownames(dge$cds),
+      gene %in% sig_genes
+    )
+  
+  col_metadata <-
+    dge$metadata %>% 
+    filter(
+      cellont_abbr %in% c("T", "NK", "B", "M"),
+      cell %in% colnames(dge$cds)
+    ) %>%
+    # mutate(group_type = fct_cross(group, cellont_abbr))
+    mutate(group_type = fct_cross(cellont_abbr, group))
+  
+  sig_genes_per_group <-
+    dge$results_wide_filtered %>%
+    filter(logFC > 1, p_adj <= 0.05) %>%
+    mutate(
+      group = str_match(comparison, "(.+)_vs")[, 2],
+      is_significant = TRUE
+    ) %>%
+    # unite(group, cell_type, col = "id", sep = ":") %>%
+    unite(cell_type, group, col = "id", sep = ":") %>%
+    select(id, feature = gene, is_significant)
+  
+  panel_annotation <- tribble(
+    ~xmin, ~xmax, ~fill,
+    4.5, 8.5, "grey90",
+    12.5, 16.5, "grey90"
+  )
+  counts <- logcounts(dge$cds[, col_metadata$cell])
+  features <- row_metadata$gene
+  groups <- col_metadata$group_type
+  
+  
+  # basically code of plot_dots, with counts, features, groups,
+  # and panel_annotation prefilled and features sorted by percent expressed
+  known_features <- intersect(features, rownames(counts))
+  missing_features <- setdiff(features, rownames(counts))
+  if (length(missing_features) > 0)
+    warn(
+      "The following requested features are missing: ",
+      "{str_c(missing_features, collapse = ', ')}"
+    )
+  
+  vis_data <- 
+    counts[known_features, , drop = FALSE] %>% 
+    Matrix::t() %>% 
+    as.matrix() %>% 
+    as_tibble(rownames = "cell") %>% 
+    group_by(id = groups) %>% 
+    summarise(
+      across(
+        where(is.numeric),
+        list(
+          avg_exp = ~mean(expm1(.)),
+          pct_exp = ~length(.[. > 0]) / length(.) * 100
+        ),
+        .names = "{.col}__{.fn}"
+      )
+    ) %>% 
+    mutate(across(ends_with("avg_exp"), scale_and_limit)) %>%
+    pivot_longer(
+      !id,
+      names_to = c("feature", ".value"),
+      names_pattern = "(.+)__(.+)"
+    ) %>% 
+    # new from here
+    left_join(sig_genes_per_group, by = c("id", "feature")) %>%
+    replace_na(list(is_significant = FALSE)) %>%
+    mutate(
+      feature = factor(feature, levels = features) %>% fct_reorder(pct_exp)
+    )
+  
+  if (!is.null(panel_annotation)) {
+    panel_bg <- list(
+      geom_point(color = "white"),  # initialize discrete coordinate system
+      geom_rect(
+        data = panel_annotation,
+        aes(xmin = xmin, xmax = xmax,
+            ymin = 0.5, ymax = nlevels(vis_data$feature) + 0.5,
+            fill = fill),
+        show.legend = FALSE,
+        inherit.aes = FALSE,
+      ),
+      scale_fill_identity()
+    )
+  } else {
+    panel_bg <- NULL
+  }
+  
+  ggplot(vis_data, aes(id, feature)) +
+    panel_bg +
+    geom_point(aes(size = pct_exp, color = avg_exp)) +
+    geom_point(
+      data = vis_data %>% filter(is_significant),
+      aes(size = pct_exp),
+      shape = 1,
+      color = "red"
+    ) +
+    scale_x_discrete("cluster", expand = expansion(add = 0.5)) +
+    scale_y_discrete("feature", expand = expansion(add = 0.5)) +
+    scale_color_scico(
+      "scaled\naverage\nexpression",
+      palette = "oslo",
+      direction = -1,
+      aesthetics = "color"
+    ) +
+    scale_radius("% expressed", range = c(0, 6)) +
+    coord_fixed(
+      # xlim = c(0.5, nlevels(vis_data$id) + 0.5),
+      # ylim = c(0.5, nlevels(vis_data$feature) + 0.5),
+      clip = "off"
+    ) +
+    theme_classic() +
+    theme(
+      axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5),
+      panel.grid = element_blank()
+    )
+}
+
+plot_pathway_dots("MSigDB_Hallmark_2020", pathways[1])
+ggsave_default("dge_mm/dots_tnf")
+
+plot_pathway_dots("MSigDB_Hallmark_2020", pathways[2])
+ggsave_default("dge_mm/dots_ifng")
+
+plot_pathway_dots("MSigDB_Hallmark_2020", pathways[3])
+ggsave_default("dge_mm/dots_ifna")
+
+plot_pathway_dots("MSigDB_Hallmark_2020", pathways[4])
+ggsave_default("dge_mm/dots_inflammatory")
+
+plot_pathway_dots("MSigDB_Hallmark_2020", pathways[5])
+ggsave_default("dge_mm/dots_il2stat5")
+
+plot_pathway_dots("MSigDB_Hallmark_2020", pathways[6])
+ggsave_default("dge_mm/dots_p53")
+
+
+
 # Tumor: DGE --------------------------------------------------------------
 
 dge$results_tumor %>% 
