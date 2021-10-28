@@ -56,12 +56,15 @@ GROUP_COLORS <- c(
   S = "#e8c95d"
 )
 
-# same as group colors; Y (M vs S) is a blend between M and S
+# same as group colors; Ma (M vs A) etc are blends
 CONTRAST_COLORS <- c(
-  M = "#a9d8c8",
-  A = "#d16b54",
-  S = "#e8c95d",
-  Y = "#c9d193"
+  Mc = "#a9d8c8",
+  Ac = "#d16b54",
+  Sc = "#e8c95d",
+  Ma = "#bda28e",
+  Ms = "#c9d193",
+  As = "#dd9a59",
+  Mas = "#c3b991"
 )
 
 PATIENT_ORDER <- c("C1", "C2", "C3", "C4", "C5",
@@ -296,10 +299,13 @@ rename_contrast <- partial(
   rename_str_or_fct,
   nm = tribble(
     ~old,       ~new,
-    "II_vs_I",  "M",
-    "III_vs_I", "A",
-    "IV_vs_I",  "S",
-    "II_vs_IV", "Y",
+    "II_vs_I",  "Mc",
+    "III_vs_I", "Ac",
+    "IV_vs_I",  "Sc",
+    "II_vs_IV", "Ms",
+    "III_vs_IV", "As",
+    "II_vs_III", "Ma",
+    "MNA_vs_other", "Mas",
   )
 )
 
@@ -311,6 +317,9 @@ rename_contrast_long <- partial(
     "III_vs_I", "ATRX deleted vs control",
     "IV_vs_I",  "sporadic vs control",
     "II_vs_IV", "MYCN amplified vs sporadic",
+    "III_vs_IV", "ATRX deleted vs sporadic",
+    "II_vs_III", "MYCN amplified vs ATRX deleted",
+    "MNA_vs_other", "MYCN amplified vs MYCN normal"
   )
 )
 
@@ -318,23 +327,44 @@ rename_contrast_long <- partial(
 
 # Tables ------------------------------------------------------------------
 
-#' Save a data frame as well-formatted XLSX file.
+#' Save a (list of) data frame as well-formatted XLSX file.
 #' 
-#' @param df Data frame to be saved.
+#' @param tables Data frames to be saved. A list of dataframes is saved into
+#'   separate worksheets, whose names equal the list names. If the list is
+#'   unnamed, worksheets will be named "Sheet1" etc.
 #' @param filename Filename without extension; will be saved to `tables/`.
-#' @param sheet_name Name of the sheet that contains exported datas.
+#' @param sheet_name Sheet name if a single unnamed table should be saved.
 #'
 #' @return Nothing.
-save_table <- function(df, filename, sheet_name = "Sheet1") {
+save_table <- function(tables, filename, sheet_name = "Sheet1") {
   filename <- str_glue("tables/{filename}.xlsx")
-  
   wb <- createWorkbook()
-  addWorksheet(wb, sheet_name)
-  writeData(wb, sheet_name, df,
-            headerStyle = createStyle(textDecoration = "bold")
+  
+  # ensure that tables is a named list
+  if (inherits(tables, "list")) {
+    if (is.null(names(tables)))
+      tables <- set_names(tables, paste0("Sheet", seq_along(tables)))
+  } else if (inherits(tables, "data.frame")) {
+    tables <- list(tables) %>% set_names(sheet_name)
+  } else {
+    stop("'tables' must be a data frame or list of data frames.")
+  }
+
+  # populate Excel file with worksheets  
+  iwalk(
+    tables,
+    function(table, sheet_name) {
+      addWorksheet(wb, sheet_name)
+      writeData(
+        wb,
+        sheet_name,
+        table,
+        headerStyle = createStyle(textDecoration = "bold")
+      )
+      freezePane(wb, sheet_name, firstRow = TRUE)
+      setColWidths(wb, sheet_name, 1:ncol(table), "auto")
+    }
   )
-  freezePane(wb, sheet_name, firstRow = TRUE)
-  setColWidths(wb, sheet_name, 1:ncol(df), "auto")
   
   saveWorkbook(wb, filename, overwrite = TRUE)
 }

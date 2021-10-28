@@ -25,43 +25,50 @@ dge <- readRDS("data_generated/dge_mm_results.rds")
 dge_pb <- readRDS("data_generated/dge_pb_results.rds")
 
 # are there problematic genes with convergence <= -20 ?
-any(dge$results_all_vs_C$convergence <= -20)
-any(dge$results_M_vs_S$convergence <= -20)
-any(dge$results_tumor$convergence <= -20)
+any(dge$results_vs_C$convergence <= -20)
+any(dge$results_vs_S$convergence <= -20)
+any(dge$results_vs_A$convergence <= -20)
+any(dge$results_MNA_vs_other$convergence <= -20)
 
 
 
 # Number of DE genes ------------------------------------------------------
 
-dge$results_wide_filtered %>% 
-  filter(logFC > 1, p_adj <= 0.05) %>% 
-  count(cell_type, comparison) %>% 
-  complete(cell_type, comparison, fill = list(n = 0L)) %>% 
+bind_rows(
+  "p_adj <= 0.05, log2 FC > 1" = 
+    dge$results_wide_filtered %>% 
+    filter(logFC > log(2), p_adj <= 0.05) %>%
+    count(cell_type, comparison),
+  "p_adj <= 0.05" = 
+    dge$results_wide_filtered %>% 
+    filter(p_adj <= 0.05) %>%
+    count(cell_type, comparison),
+  .id = "filter"
+) %>% 
+  complete(filter, cell_type, comparison, fill = list(n = 0L)) %>% 
   mutate(
     comparison =
-      rename_contrast(comparison) %>% 
+      rename_contrast(comparison) %>%
       factor(levels = names(CONTRAST_COLORS))
-  ) %>% 
+  ) %>%
   ggplot(aes(cell_type, n)) +
   geom_col(aes(fill = comparison), position = "dodge") +
   xlab(NULL) +
   ylab("number of DE genes") +
+  ylim(0, 2300) +
   scale_fill_manual(
-    "vs C\n(contrast)",
+    NULL,
     values = CONTRAST_COLORS,
-    guide = guide_legend(
-      title.position = "bottom",
-      label.position = "bottom",
-      title.hjust = 0.5
-    )
+    guide = guide_legend(nrow = 1)
   ) +
+  facet_wrap(vars(filter)) +
   theme_bw() +
   theme(
-    legend.position = c(0.83, 0.75),
-    legend.direction = "horizontal",
-    panel.grid = element_blank()
+    legend.position = "bottom",
+    panel.grid = element_blank(),
+    strip.background = element_blank()
   )
-ggsave_default("dge_mm/number_of_de_genes", height = 60, width = 100)
+ggsave_default("dge_mm/number_of_de_genes", height = 80, width = 150)
 
 
 
@@ -129,6 +136,7 @@ plot_violin("PTPN6", "NK", "III")
 
 
 
+# currently, the commented code below does not work!
 # plot_top_violins <- function(cell_type, n = 10, direction = c("up", "down")) {
 #   direction <- match.arg(direction)
 #   
@@ -165,6 +173,8 @@ plot_violin("PTPN6", "NK", "III")
 # Comparison to pseudobulk ------------------------------------------------
 
 plot_comparison <- function(data, lim = NULL, filename = NULL) {
+  # note that nebula returns natural log fold changes
+  # -> add reference line with slope log(2)
   p <-
     dge_pb$results %>% 
     filter(contrast != "tif") %>% 
@@ -174,12 +184,13 @@ plot_comparison <- function(data, lim = NULL, filename = NULL) {
     left_join(
       data %>%
         rename(logFC_mm = logFC, p_mm = p) %>% 
-        filter(comparison != "II_vs_IV") %>% 
+        filter(comparison %in% c("II_vs_I", "III_vs_I", "IV_vs_I")) %>% 
         extract(comparison, "group", "(.+)_vs"),
       by = c("gene", "cell_type", "group")
     ) %>% 
     ggplot(aes(logFC_pb, logFC_mm)) +
     geom_point(size = 0.1) +
+    geom_abline(intercept = 0, slope = log(2), color = "blue", alpha = .25) +
     facet_grid(vars(group), vars(cell_type)) +
     coord_fixed(xlim = lim, ylim = lim) +
     theme_bw() +
@@ -444,9 +455,12 @@ pathways <- c(
   "p53 Pathway"
 )
 
-plot_gsea_genes_expression <- function(db,
-                                       pathways,
-                                       scale_by_cell_type = TRUE) {
+
+## Single-cell heatmap ----
+
+plot_pathway_heatmap <- function(db,
+                                 pathways,
+                                 scale_by_cell_type = TRUE) {
   sig_genes <- 
     dge$results_wide_filtered %>% 
     filter(logFC > 1, p_adj <= 0.05) %>% 
@@ -539,12 +553,12 @@ plot_gsea_genes_expression <- function(db,
   )
 }
 
-(p <- plot_gsea_genes_expression("MSigDB_Hallmark_2020", pathways, FALSE))
-ggsave_default("dge_mm/gsea_heatmap_expression", plot = p)
+(p <- plot_pathway_heatmap("MSigDB_Hallmark_2020", pathways, FALSE))
+ggsave_default("dge_mm/pathway_heatmap", plot = p)
 
 
 
-# Significant pathway genes -----------------------------------------------
+## Dotplot ----
 
 plot_pathway_dots <- function(db, pathway,
                               min_exp = -2.5, max_exp = 2.5) {
@@ -555,40 +569,14 @@ plot_pathway_dots <- function(db, pathway,
   }
   
   # assemble row and col metadata
-  sig_genes <-
-    dge$results_wide_filtered %>% 
-    filter(logFC > 1, p_adj <= 0.05) %>% 
-    pull(gene)
-  
-  row_metadata <-
-    dge$gene_sets[[db]][pathway] %>%
-    enframe("pathway", "gene") %>%
-    unnest_longer(gene) %>%
-    mutate(pathway = as_factor(pathway)) %>%
-    filter(
-      gene %in% rownames(dge$cds),
-      gene %in% sig_genes
-    )
-  
   col_metadata <-
     dge$metadata %>% 
     filter(
       cellont_abbr %in% c("T", "NK", "B", "M"),
       cell %in% colnames(dge$cds)
     ) %>%
-    # mutate(group_type = fct_cross(group, cellont_abbr))
-    mutate(group_type = fct_cross(cellont_abbr, group))
-  
-  sig_genes_per_group <-
-    dge$results_wide_filtered %>%
-    filter(logFC > 1, p_adj <= 0.05) %>%
-    mutate(
-      group = str_match(comparison, "(.+)_vs")[, 2],
-      is_significant = TRUE
-    ) %>%
-    # unite(group, cell_type, col = "id", sep = ":") %>%
-    unite(cell_type, group, col = "id", sep = ":") %>%
-    select(id, feature = gene, is_significant)
+    mutate(group_type = fct_cross(group, cellont_abbr))
+    # mutate(group_type = fct_cross(cellont_abbr, group))
   
   panel_annotation <- tribble(
     ~xmin, ~xmax, ~fill,
@@ -596,7 +584,7 @@ plot_pathway_dots <- function(db, pathway,
     12.5, 16.5, "grey90"
   )
   counts <- logcounts(dge$cds[, col_metadata$cell])
-  features <- row_metadata$gene
+  features <- intersect(dge$gene_sets[[db]][[pathway]], rownames(counts))
   groups <- col_metadata$group_type
   
   
@@ -633,8 +621,6 @@ plot_pathway_dots <- function(db, pathway,
       names_pattern = "(.+)__(.+)"
     ) %>% 
     # new from here
-    left_join(sig_genes_per_group, by = c("id", "feature")) %>%
-    replace_na(list(is_significant = FALSE)) %>%
     mutate(
       feature = factor(feature, levels = features) %>% fct_reorder(pct_exp)
     )
@@ -659,12 +645,6 @@ plot_pathway_dots <- function(db, pathway,
   ggplot(vis_data, aes(id, feature)) +
     panel_bg +
     geom_point(aes(size = pct_exp, color = avg_exp)) +
-    geom_point(
-      data = vis_data %>% filter(is_significant),
-      aes(size = pct_exp),
-      shape = 1,
-      color = "red"
-    ) +
     scale_x_discrete("cluster", expand = expansion(add = 0.5)) +
     scale_y_discrete("feature", expand = expansion(add = 0.5)) +
     scale_color_scico(
@@ -687,39 +667,78 @@ plot_pathway_dots <- function(db, pathway,
 }
 
 plot_pathway_dots("MSigDB_Hallmark_2020", pathways[1])
-ggsave_default("dge_mm/dots_tnf")
+ggsave_default("dge_mm/pathway_dots_tnf", height = 900)
 
 plot_pathway_dots("MSigDB_Hallmark_2020", pathways[2])
-ggsave_default("dge_mm/dots_ifng")
+ggsave_default("dge_mm/pathway_dots_ifng", height = 900)
 
 plot_pathway_dots("MSigDB_Hallmark_2020", pathways[3])
-ggsave_default("dge_mm/dots_ifna")
+ggsave_default("dge_mm/pathway_dots_ifna", height = 600)
 
 plot_pathway_dots("MSigDB_Hallmark_2020", pathways[4])
-ggsave_default("dge_mm/dots_inflammatory")
+ggsave_default("dge_mm/pathway_dots_inflammatory", height = 900)
 
 plot_pathway_dots("MSigDB_Hallmark_2020", pathways[5])
-ggsave_default("dge_mm/dots_il2stat5")
+ggsave_default("dge_mm/pathway_dots_il2stat5", height = 900)
 
 plot_pathway_dots("MSigDB_Hallmark_2020", pathways[6])
-ggsave_default("dge_mm/dots_p53")
+ggsave_default("dge_mm/pathway_dots_p53", height = 900)
 
 
 
-# Tumor: DGE --------------------------------------------------------------
+## logFC ----
 
-dge$results_tumor %>% 
-  ggplot(aes(logFC_II_vs_IV, -log10(p_II_vs_IV))) +
-  geom_point() +
-  facet_wrap(vars(subclusters)) +
-  coord_cartesian(xlim = c(-10, 10), ylim = c(0, 25)) +
-  theme_bw() +
-  theme(panel.grid = element_blank())
-ggsave_default("dge_mm/volcano_tumor")
+plot_pathway_genes <- function(db, pathway, filename = "auto", ...) {
+  vis_data <- 
+    dge$results_wide %>% 
+    filter(
+      gene %in% dge$gene_sets[[db]][[pathway]],
+      abs(logFC) < 8,
+      comparison %>% str_ends("_I")
+    ) %>% 
+    mutate(comparison = rename_contrast(comparison))
+  
+  p <-
+    vis_data %>% 
+    mutate(gene = factor(gene) %>% fct_reorder(logFC)) %>% 
+    ggplot(aes(comparison, gene, size = -log10(p_adj), color = logFC)) +
+    geom_point() +
+    scale_color_gsea(limits = c(-3, 3)) +
+    scale_size_area() +
+    facet_wrap(vars(cell_type), nrow = 1) +
+    theme_bw() +
+    theme(
+      axis.text.x = element_text(angle = 90, vjust = .5),
+      panel.grid = element_blank(),
+      panel.spacing = unit(0, "mm"),
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold")
+    )
+  
+  if (filename == "auto") {
+    pathway_name <- str_replace_all(pathway, "/", "_")
+    filename <- str_glue("dge_mm/pathway_genes_{db}_{pathway_name}")
+  }
+  ggsave_default(filename, width = 120, ...)
+  p
+}
+
+plot_pathway_genes("MSigDB_Hallmark_2020", pathways[1], height = 700)
+plot_pathway_genes("MSigDB_Hallmark_2020", pathways[2], height = 600)
+plot_pathway_genes("MSigDB_Hallmark_2020", pathways[3], height = 300)
+plot_pathway_genes("MSigDB_Hallmark_2020", pathways[4], height = 600)
+plot_pathway_genes("MSigDB_Hallmark_2020", pathways[5], height = 500)
+plot_pathway_genes("MSigDB_Hallmark_2020", pathways[6], height = 600)
 
 
-dge$results_tumor_wide %>% 
-  filter(subclusters == "all", logFC < 10) %>%
+
+
+# Tumor cells -------------------------------------------------------------
+
+## Comparison to bulk data ----
+
+dge$results_wide %>% 
+  filter(cell_type == "NB", comparison == "II_vs_IV", logFC < 10) %>% 
   inner_join(
     read_csv("metadata/rifatbegovic2018_table_s5.csv", comment = "#"),
     by = "gene"
@@ -743,100 +762,13 @@ ggsave_default("dge_mm/mycn_bulk_vs_sc")
 
 
 
-# Tumor: LogFC correlation ------------------------------------------------
-
-plot_lfcc_heatmap_subclusters <- function() {
-  corr_mat <- 
-    dge$results_tumor_wide %>% 
-    select(gene, logFC, subclusters) %>%
-    filter(abs(logFC) <= 8) %>% 
-    pivot_wider(
-      names_from = subclusters,
-      names_prefix = "NB_",
-      values_from = c(logFC)
-    ) %>% 
-    select(!gene) %>%
-    cor(use = "pairwise.complete.obs")
-  
-  distance <- as.dist(1 - corr_mat)
-  
-  Heatmap(
-    corr_mat,
-    col = circlize::colorRamp2(
-      seq(0, 1, length.out = 9),
-      scico(9, palette = "davos", direction = -1),
-    ),
-    name = "log fold change\ncorrelation",
-    
-    clustering_distance_rows = distance,
-    clustering_distance_columns = distance,
-  )
-}
-
-(p <- plot_lfcc_heatmap_subclusters())
-ggsave_default("dge_mm/tumor_subcluster_logfc_correlation", plot = p)
-
-
-
-dge$results_tumor_wide %>% 
-  filter(
-    subclusters != "all",
-    frq >= 0.05 | frq_ref >= 0.05,
-    abs(logFC) < 10,
-    p_adj <= 0.05
-  ) %>%
-  select(gene, subclusters, logFC) %>%
-  pivot_wider(
-    names_from = subclusters,
-    names_prefix = "c",
-    values_from = logFC
-  ) %>%
-  mutate(
-    c2_vs_c1_abs = abs(c2 - c1),
-    c2_vs_c1_same_dir = c2 * c1 >= 0,
-    c3_vs_c1_abs = abs(c3 - c1),
-    c3_vs_c1_same_dir = c3 * c1 >= 0,
-    c3_vs_c2_abs = abs(c3 - c2),
-    c3_vs_c2_same_dir = c3 * c2 >= 0,
-  ) %>%
-  save_table("nb_logfc_differences")
-
-
-plot_violin_tumor <- function(gene, subcluster) {
-  plotExpression(
-    dge$cds_tumor[, dge$cds_tumor$tumor_subcluster == subcluster],
-    gene,
-    x = "sample",
-    colour_by = "group"
-  ) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
-}
-
-wrap_plots(
-  plot_violin_tumor("CCDC184", 1),
-  plot_violin_tumor("CCDC184", 2)  
-)
-ggsave_default("dge_mm/nb_subcluster_violin1", height = 130)
-
-wrap_plots(
-  plot_violin_tumor("CCDC68", 1),
-  plot_violin_tumor("CCDC68", 3)
-)
-ggsave_default("dge_mm/nb_subcluster_violin2", height = 130)
-
-wrap_plots(
-  plot_violin_tumor("SST", 2),
-  plot_violin_tumor("SST", 3)  
-)
-ggsave_default("dge_mm/nb_subcluster_violin3", height = 130)
-
-
-
-# Tumor: Pseudobulk correlation -------------------------------------------
+## Pseudobulk correlation ----
 
 plot_expc_heatmap_samples <- function() {
+  cds_tumor <- dge$cds[, colData(dge$cds)$cellont_abbr == "NB"]
+  
   pb_tumor <- aggregateData(
-    dge$cds[, colData(dge$cds)$cellont_abbr == "NB"],
+    cds_tumor,
     assay = "logcounts",
     fun = "mean",
     by = "sample"
@@ -846,7 +778,7 @@ plot_expc_heatmap_samples <- function() {
     rename_patients()
   
   hvgs <-
-    dge$cds_tumor %>%
+    cds_tumor %>%
     scran::modelGeneVar() %>% 
     scran::getTopHVGs()
   
@@ -1063,7 +995,7 @@ plot_gsea <- function(data,
     horizontal_grid +    
     geom_point(aes(color = NES)) +
     circle_significant +
-    xlab("vs C (contrast)") +
+    # xlab("vs C (contrast)") +
     ylab(NULL) +
     scale_color_gsea(
       "normalized enrichment score",
@@ -1083,6 +1015,7 @@ plot_gsea <- function(data,
     facet_wrap(vars(cell_type), nrow = 1) +
     theme_nb(grid = FALSE) +
     theme(
+      axis.text.x = element_text(angle = 90, vjust = .5, hjust = 1),
       legend.box.just = "bottom",
       legend.box.margin = margin(0, 0, 0, -25, "mm"),
       legend.key.height = unit(1, "mm"),
@@ -1097,7 +1030,7 @@ plot_gsea <- function(data,
 }
 
 plot_gsea(dge$gsea, "MSigDB_Hallmark_2020")
-ggsave_publication("3d_gsea", width = 8, height = 10)
+ggsave_publication("3d_gsea", width = 13, height = 10)  # was 8 x 10
 
 
 
@@ -1115,7 +1048,7 @@ plot_logfc_correlation_heatmap <- function() {
   
   corr_mat <- 
     dge$results_wide %>% 
-    filter(abs(logFC) < 8, comparison != "II_vs_IV") %>%
+    filter(abs(logFC) < 8, comparison  %>% str_ends("vs_I")) %>%
     select(gene, cell_type, comparison, logFC) %>%
     mutate(comparison = rename_contrast(comparison)) %>%
     unite(cell_type, comparison, col = "cluster_group", sep = "_") %>%
@@ -1131,7 +1064,7 @@ plot_logfc_correlation_heatmap <- function() {
   
   group_names <- 
     metadata[, 3] %>% 
-    factor(levels = names(GROUP_COLORS)) %>% 
+    factor(levels = names(CONTRAST_COLORS)) %>% 
     fct_drop()
   
   colnames(corr_mat) <- metadata[, 2]
@@ -1169,7 +1102,7 @@ plot_logfc_correlation_heatmap <- function() {
     
     right_annotation = rowAnnotation(
       group = group_names,
-      col = list(group = GROUP_COLORS),
+      col = list(group = CONTRAST_COLORS),
       show_annotation_name = FALSE,
       show_legend = TRUE,
       annotation_legend_param = list(
@@ -1184,7 +1117,7 @@ plot_logfc_correlation_heatmap <- function() {
     
     bottom_annotation = HeatmapAnnotation(
       group = group_names,
-      col = list(group = GROUP_COLORS),
+      col = list(group = CONTRAST_COLORS),
       show_annotation_name = FALSE,
       show_legend = FALSE
     )
@@ -1215,8 +1148,8 @@ plot_bulk_sc_comparison <- function() {
   )
   
   data <- 
-    dge$results_tumor_wide %>% 
-    filter(subclusters == "all", logFC < 10) %>%
+    dge$results_wide %>% 
+    filter(cell_type == "NB", comparison == "II_vs_IV", logFC < 10) %>% 
     inner_join(
       read_csv("metadata/rifatbegovic2018_table_s5.csv", comment = "#"),
       by = "gene"
@@ -1305,24 +1238,57 @@ gene_pathways <-
       str_c(collapse = ", ")
   )
 
+# dge$results_wide_filtered %>% 
+#   arrange(comparison, cell_type, desc(logFC)) %>%
+#   mutate(
+#     comparison = rename_contrast_long(comparison),
+#     cell_type = CELL_TYPE_ABBREVIATIONS[cell_type]
+#   ) %>%
+#   select(
+#     "Comparison" = comparison,
+#     "Cell type" = cell_type,
+#     "Gene" = gene,
+#     "Log fold change" = logFC,
+#     "Adjusted p-value" = p_adj
+#   ) %>%
+#   left_join(gene_pathways, by = "Gene") %>% 
+#   save_table("S3_dge", "Microenvironment")
+
 dge$results_wide_filtered %>% 
   arrange(comparison, cell_type, desc(logFC)) %>%
   mutate(
-    comparison = rename_contrast_long(comparison),
+    logFC = logFC / log(2),  # nebula returns natural log fold changes
+    comparison = rename_contrast(comparison),
     cell_type = CELL_TYPE_ABBREVIATIONS[cell_type]
   ) %>%
-  select(
-    "Comparison" = comparison,
-    "Cell type" = cell_type,
-    "Gene" = gene,
-    "Log fold change" = logFC,
-    "Adjusted p-value" = p_adj
-  ) %>%
-  left_join(gene_pathways, by = "Gene") %>% 
-  save_table("S3_dge", "Microenvironment")
+  select(!c(p, frq, frq_ref, direction)) %>% 
+  pivot_wider(names_from = comparison, values_from = c(logFC, p_adj)) %>% 
+  left_join(gene_pathways, by = c(gene = "Gene")) %>%
+  split(.$cell_type) %>% 
+  map(select, !cell_type) %>% 
+  save_table("S3_dge")
+
 
 
 ## Table S4 ----
+
+# dge$gsea %>% 
+#   arrange(db, comparison, cell_type, desc(NES)) %>%
+#   mutate(
+#     comparison = rename_contrast_long(comparison),
+#     cell_type = CELL_TYPE_ABBREVIATIONS[cell_type],
+#     leadingEdge = map_chr(leadingEdge, str_c, collapse = ", ")
+#   ) %>%
+#   select(
+#     "Database" = db,
+#     "Comparison" = comparison,
+#     "Cell type" = cell_type,
+#     "Pathway" = pathway,
+#     "Normalized Enrichment Score" = NES,
+#     "Adjusted p-value" = padj,
+#     "Leading edge genes" = leadingEdge
+#   ) %>%
+#   save_table("S4_gsea", "GSEA")
 
 dge$gsea %>% 
   arrange(db, comparison, cell_type, desc(NES)) %>%
@@ -1340,4 +1306,6 @@ dge$gsea %>%
     "Adjusted p-value" = padj,
     "Leading edge genes" = leadingEdge
   ) %>%
-  save_table("S4_gsea", "Microenvironment")
+  split(.$`Cell type`) %>%
+  map(select, !`Cell type`) %>%
+  save_table("S4_gsea")

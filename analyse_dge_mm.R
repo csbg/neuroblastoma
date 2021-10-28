@@ -54,7 +54,10 @@ used_clusters <-
   filter(n > 0.01) %>%
   pull(cellont_cluster)
 
+# filter cds and update factor levels
 nb <- nb[, colData(nb)$cellont_cluster %in% used_clusters]
+colData(nb)$cellont_cluster <- fct_drop(colData(nb)$cellont_cluster)
+colData(nb)$cellont_abbr <- fct_drop(colData(nb)$cellont_abbr)
 
 
 
@@ -65,32 +68,53 @@ nb <- nb[, colData(nb)$cellont_cluster %in% used_clusters]
 #' @param cell_type Selected cell type.
 #' @param ref_group Reference patient group.
 #' @param other_groups Patient groups that are compared to the reference.
+#' @param collapse_groups Optional list of named character vectors that allows
+#'   to collapse groups prior to analysis (passed to `forcats::fct_collapse()`).
 #'
 #' @return A data frame with DGE results.
-analyse_dge <- function(cell_type, ref_group, other_groups) {
+analyse_dge <- function(cell_type,
+                        ref_group,
+                        other_groups,
+                        collapse_groups = NULL) {
   info("Analysing cell type {cell_type}, ",
        "{str_c(other_groups, collapse = '/')} vs {ref_group}")
   
+  col_metadata <-
+    colData(nb) %>% 
+    as_tibble(rownames = "cell")
+  
+  # optionally, collapse group levels
+  if (!is.null(collapse))
+    col_metadata <-
+      col_metadata %>%
+      mutate(group = fct_collapse(group, !!!collapse_groups))
+  
+  # subset column metadata, set correct factor levels (reference must be first)
+  col_metadata <-
+    col_metadata %>%
+    filter(
+      cellont_abbr == cell_type,
+      group %in% c(ref_group, other_groups)
+    ) %>% 
+    mutate(
+      group =
+        group %>%
+        fct_relevel(ref_group, other_groups) %>% 
+        fct_drop()
+    )
+  
   # subset data
-  selected_cells <-
-    colData(nb)$cellont_abbr == cell_type &
-    colData(nb)$group %in% c(ref_group, other_groups)
-  
-  nb_sub <- nb[, selected_cells]
-  
-  # set correct factor levels (reference must be first)
-  colData(nb_sub)$group <-
-    colData(nb_sub)$group %>%
-    fct_relevel(ref_group, other_groups) %>% 
-    fct_drop()
-  
-  model_mat <- model.matrix(~group + tif, data = colData(nb_sub))
+  nb_sub <- nb[, col_metadata$cell]
+  colData(nb_sub) <-
+    col_metadata %>% 
+    column_to_rownames("cell") %>% 
+    as("DataFrame")
   
   # reorder count matrix as required by nebula
   data_grouped <- group_cell(
     counts(nb_sub),
     id = colData(nb_sub)$sample,
-    pred = model_mat,
+    pred = model.matrix(~group + tif, data = colData(nb_sub)),
     offset = colData(nb_sub)$Size_Factor
   )
   
@@ -116,10 +140,10 @@ analyse_dge <- function(cell_type, ref_group, other_groups) {
 
 set.seed(1)
 
-dge_results_all_vs_C <- map_dfr(
+dge_results_vs_C <- map_dfr(
   colData(nb)$cellont_abbr %>%
-    unique() %>%
-    setdiff("NB") %>%
+    levels() %>%
+    setdiff("NB") %>%  # ignore tumor cells since there are none in the control
     set_names(),
   analyse_dge,
   ref_group = "I",
@@ -127,16 +151,37 @@ dge_results_all_vs_C <- map_dfr(
   .id = "cell_type"
 )
 
-dge_results_M_vs_S <- map_dfr(
+dge_results_vs_S <- map_dfr(
   colData(nb)$cellont_abbr %>%
-    unique() %>%
-    setdiff("NB") %>%
+    levels() %>%
     set_names(),
   analyse_dge,
   ref_group = "IV",
+  other_groups = c("II", "III"),
+  .id = "cell_type"
+)
+
+dge_results_vs_A <- map_dfr(
+  colData(nb)$cellont_abbr %>%
+    levels() %>%
+    set_names(),
+  analyse_dge,
+  ref_group = "III",
   other_groups = "II",
   .id = "cell_type"
 )
+
+dge_results_MNA_vs_other <- map_dfr(
+  colData(nb)$cellont_abbr %>%
+    levels() %>%
+    set_names(),
+  analyse_dge,
+  ref_group = "other",
+  other_groups = "MNA",
+  collapse_groups = list(MNA = "II", other = c("III", "IV")),
+  .id = "cell_type"
+)
+
 
 
 #' Calculate minimum sample expression frequencies.
@@ -146,11 +191,12 @@ dge_results_M_vs_S <- map_dfr(
 #' all samples is reported.
 #'
 #' @param data MM DGE results.
+#' @param collapse_groups see `analyse_dge()`
 #'
 #' @return A dataframe with additional columns
 #' "frq": expression frequency in the group indicated in the respective column
 #' "frq_ref": expression frequency in the reference group
-calc_expression_frequency <- function(data) {
+calc_expression_frequency <- function(data, collapse_groups = NULL) {
   # required for calcExprFreqs()
   cds <- prepSCE(
     nb,
@@ -180,34 +226,73 @@ calc_expression_frequency <- function(data) {
     group_by(cell_type, gene, group) %>% 
     summarise(frq = min(frq))
   
+  # optionally, add frequencies in collapsed groups
+  if (!is.null(collapse_groups))
+    exp_frq_groups <- bind_rows(
+      exp_frq_groups,
+      exp_frq_groups %>% 
+        ungroup() %>% 
+        mutate(
+          group = fct_collapse(group, !!!collapse_groups, other_level = "unused")
+        ) %>% 
+        filter(group != "unused") %>%
+        group_by(cell_type, gene, group) %>%
+        summarise(frq = min(frq))
+    )
+  
   # add columns to input
   data %>% 
-    extract(comparison, into = c("group", "group_ref"), regex = "(.+)_vs_(.+)", remove = FALSE) %>% 
-    left_join(exp_frq_groups, by = c("cell_type", "gene", "group")) %>% 
-    left_join(exp_frq_groups, by = c("cell_type", "gene", group_ref = "group")) %>% 
+    extract(
+      comparison,
+      into = c("group", "group_ref"),
+      regex = "(.+)_vs_(.+)",
+      remove = FALSE
+    ) %>% 
+    left_join(
+      exp_frq_groups,
+      by = c("cell_type", "gene", "group")
+    ) %>% 
+    left_join(
+      exp_frq_groups,
+      by = c("cell_type", "gene", group_ref = "group")
+    ) %>% 
     select(!c(group, group_ref)) %>% 
     rename(frq = frq.x, frq_ref = frq.y)
 }
 
+
+#' Pivots DGE results to longer format.
+#'
+#' @param df Raw DGE results.
+#' @param suffix String that is appended to the comparison column.
+#'
+#' @return A data frame with columns cell_type, gene, comparison, logFC, and p.
+gather_dge_results <- function(df, suffix) {
+  df %>%
+    select(cell_type, gene, starts_with("logFC_g"), starts_with("p_g")) %>%
+    pivot_longer(
+      !c(cell_type, gene),
+      names_to = c(".value", "comparison"),
+      names_pattern = "(.+)_group(.+)"
+    ) %>%
+    mutate(comparison = str_c(comparison, suffix))
+}
+
+
 dge_results_wide <-
   bind_rows(
-    dge_results_all_vs_C %>%
-      select(cell_type, gene, starts_with("logFC_g"), starts_with("p_g")) %>%
-      pivot_longer(
-        !c(cell_type, gene),
-        names_to = c(".value", "comparison"),
-        names_pattern = "(.+)_group(.+)"
-      ) %>%
-      mutate(comparison = str_c(comparison, "_vs_I")),
-    dge_results_M_vs_S %>% 
-      select(cell_type, gene, logFC = logFC_groupII, p = p_groupII) %>%
-      mutate(comparison = "II_vs_IV", .after = gene)
+    gather_dge_results(dge_results_vs_C, "_vs_I"),
+    gather_dge_results(dge_results_vs_S, "_vs_IV"),
+    gather_dge_results(dge_results_vs_A, "_vs_III"),
+    gather_dge_results(dge_results_MNA_vs_other, "_vs_other")
   ) %>% 
   arrange(cell_type, gene) %>% 
   group_by(comparison, cell_type) %>%
   mutate(p_adj = p.adjust(p, method = "fdr")) %>%
   ungroup() %>%
-  calc_expression_frequency()
+  calc_expression_frequency(
+    collapse_groups = list(MNA = "II", other = c("III", "IV"))
+  )
 
 
 
@@ -454,165 +539,33 @@ gsea_results <-
 
 
 
-# DGE in tumor cluster ----------------------------------------------------
-
-nb_tumor <-
-  nb[
-    ,
-    colData(nb)$group %in% c("II", "IV")
-    & colData(nb)$cellont_abbr == "NB"
-  ]
-colData(nb_tumor)$tumor_subcluster <- 
-  read_csv("metadata/nb_subclusters.csv") %>% 
-  deframe() %>% 
-  magrittr::extract(rownames(colData(nb_tumor)))
-colData(nb_tumor)$group <- fct_drop(colData(nb_tumor)$group)
-colData(nb_tumor)$sample <- fct_drop(colData(nb_tumor)$sample)
-
-
-analyse_dge_tumor <- function(subclusters) {
-  info("Analysing tumor subclusters {str_c(subclusters, collapse = '+')}")
-  
-  nb_sub <- nb_tumor[, colData(nb_tumor)$tumor_subcluster %in% subclusters]
-  
-  model_mat <- model.matrix(
-    ~group + tif,
-    data =
-      colData(nb_sub) %>%
-      as_tibble(rownames = "cell") %>% 
-      mutate(group = group %>% fct_drop() %>% fct_rev()) %>%
-      column_to_rownames("cell")
-  )
-  colnames(model_mat) <-
-    colnames(model_mat) %>%
-    str_replace("group(.+)", "\\1_vs_IV")
-  
-  data_grouped <- group_cell(
-    counts(nb_sub),
-    id = colData(nb_sub)$sample,
-    pred = model_mat,
-    offset = colData(nb_sub)$Size_Factor
-  )
-  
-  res <- nebula(
-    data_grouped$count,
-    id = data_grouped$id,
-    pred = data_grouped$pred,
-    offset = data_grouped$offset,
-    verbose = TRUE
-  )
-  
-  res$summary %>%
-    as_tibble() %>% 
-    mutate(
-      algorithm = res$algorithm,
-      convergence = res$convergence,
-      overdispersion_subject = res$overdispersion$Subject,
-      overdispersion_cell = res$overdispersion$cell
-    )
-}
-
-set.seed(1)
-dge_results_tumor <- map_dfr(
-  list("all" = 1:4, "1" = 1, "2" = 2, "3" = 3, "4" = 4),
-  analyse_dge_tumor,  
-  .id = "subclusters"
-)
-
-
-# similar to `calc_expression_frequency()`
-calc_expression_frequency_tumor <- function(data) {
-  cds <- prepSCE(
-    nb_tumor,
-    kid = "tumor_subcluster",
-    gid = "group",
-    sid = "sample",
-    drop = TRUE
-  )
-  
-  # generate table with frequencies on sample level
-  exp_frq_subclusters <-
-    cds %>% 
-    calcExprFreqs() %>% 
-    assays() %>%
-    as.list() %>%
-    map_dfr(as_tibble, rownames = "gene", .id = "subclusters")
-  
-  colData(cds)$cluster_id <- factor("all")
-  
-  exp_frq_all <-
-    cds %>% 
-    calcExprFreqs() %>% 
-    assay("all") %>%
-    as_tibble(rownames = "gene") %>% 
-    mutate(subclusters = "all")
-  
-  exp_frq <- 
-    bind_rows(exp_frq_subclusters, exp_frq_all) %>% 
-    select(!c(II, IV))
-  exp_frq
-  
-  # summarise at group level
-  exp_frq_groups <-
-    exp_frq %>% 
-    pivot_longer(starts_with("20"), names_to = "sample", values_to = "frq") %>% 
-    left_join(
-      nb_metadata %>% distinct(sample, group),
-      by = "sample"
-    ) %>%
-    group_by(subclusters, gene, group) %>%
-    summarise(frq = min(frq)) %>%
-    pivot_wider(
-      names_from = group,
-      names_prefix = "frq_",
-      values_from = frq
-    ) %>% 
-    rename(frq = frq_II, frq_ref = frq_IV)
-  
-  # add columns to input
-  data %>%
-    left_join(exp_frq_groups, by = c("subclusters", "gene"))
-}
-
-dge_results_tumor_wide <- 
-  dge_results_tumor %>% 
-  select(subclusters, gene, logFC = logFC_II_vs_IV, p = p_II_vs_IV) %>% 
-  group_by(subclusters) %>%
-  mutate(p_adj = p.adjust(p, method = "fdr")) %>%
-  ungroup() %>%
-  calc_expression_frequency_tumor()
-
-
-
 # Save results ------------------------------------------------------------
 
 # nb <- dge$cds
 # nb_metadata <- dge$metadata
 # used_clusters <- dge$used_clusters
-# dge_results_all_vs_C <- dge$results_all_vs_C
-# dge_results_M_vs_S <- dge$results_M_vs_S
+# dge_results_vs_C <- dge$results_vs_C
+# dge_results_vs_S <- dge$results_vs_S
+# dge_results_vs_A <- dge$results_vs_A
+# dge_results_MNA_vs_other <- dge$results_MNA_vs_other
 # dge_results_wide <- dge$results_wide
 # dge_results_wide_filtered <- dge$results_wide_filtered
 # enrichr_results <- dge$enrichr
 # gsea_results <- dge$gsea
 # enrichr_genesets <- dge$gene_sets
-# nb_tumor <- dge$cds_tumor
-# dge_results_tumor <- dge$results_tumor
-# dge_results_tumor_wide <- dge$results_tumor_wide
 
 list(
   cds = nb,
   metadata = nb_metadata,
   used_clusters = used_clusters,
-  results_all_vs_C = dge_results_all_vs_C,
-  results_M_vs_S = dge_results_M_vs_S,
+  results_vs_C = dge_results_vs_C,
+  results_vs_S = dge_results_vs_S,
+  results_vs_A = dge_results_vs_A,
+  results_MNA_vs_other = dge_results_MNA_vs_other,
   results_wide = dge_results_wide,
   results_wide_filtered = dge_results_wide_filtered,
   enrichr = enrichr_results,
   gsea = gsea_results,
-  gene_sets = enrichr_genesets,
-  cds_tumor = nb_tumor,
-  results_tumor = dge_results_tumor,
-  results_tumor_wide = dge_results_tumor_wide
+  gene_sets = enrichr_genesets
 ) %>%
   saveRDS("data_generated/dge_mm_results.rds")
