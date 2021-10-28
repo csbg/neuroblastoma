@@ -1,66 +1,61 @@
-#Export of DATA to excel etc.
-source("nb_Packages.R")
+source("analysis_tumor/packages.R")
 source("styling.R")
 
-DEG <- readRDS(
-  paste0(path,"/nb_DEG.rds")
-  )
 
 
-GSEA <- readRDS(
-  paste0(path, "/nb_GSEA.rds")
-  )
+# Load data ---------------------------------------------------------------
 
-DEG_trajectory <- readRDS(
-  paste0(path, "/nb_DEG_trajectory.rds")
-)
+DEG <- readRDS("analysis_tumor/data_generated/deg.rds")
+GSEA <- readRDS("analysis_tumor/data_generated/gsea.rds")
+DEG_trajectory <- readRDS("analysis_tumor/data_generated/deg_trajectory.rds")
+cds <- readRDS("analysis_tumor/data_generated/cds.rds")
 
-cds <- 
-  readRDS(
-  paste0(path, "/nb_CDS.rds")
-  )
 
-Overview <- 
-  cds@colData %>% 
-  as_tibble() %>%
-  select("sample","group","cluster", "phase") %>%
-  transmute("ID" = rownames(cds@colData),
-            "Patient" = rename_patients(sample),
-            "Patient ID" = sample,
-            "Group" = rename_groups(group),
-            "Cluster" = cluster,
-            "Phase" = phase)
 
-WriteXLS(x =
-          list(
-            Overview,
-            DEG %>% 
-              rename("Estimate" = "estimate",
-                     "Q_Value" = "q_value"
-                     ),
-            GSEA %>%
-              select(!c(Old.P.value, Old.Adjusted.P.value)) %>%
-              filter(db != "Human_Gene_Atlas",
-                     db != "Chromosome_Location",
-                     db != "Jensen_TISSUES",
-                     db != "Jensen_DISEASES",
-                     db != "ChEA_2016",
-                     db != "ENCODE_TF_ChIP-seq_2015"
-                     ),
-            DEG_trajectory[[1]],
-            DEG_trajectory[[2]],
-            DEG_trajectory[[3]]
-          ),
-         SheetNames = c("Overview",
-                        "1-Cluster DE",
-                        "2-GSEA",
-                        "3-Trajectory DE",
-                        "4-Overlap trajectory",
-                        "5-Overlap cluster DE"
-                        ),
-         ExcelFileName = paste0(path,"/nb_SupplementTables.xls"), 
-         AdjWidth = TRUE, 
-         BoldHeaderRow = TRUE, 
-         FreezeRow = 1,
-         AutoFilter = T)
+# Create tables -----------------------------------------------------------
 
+cds@colData %>% 
+  as_tibble(rownames = "cell") %>%
+  transmute(
+    Cell = cell,
+    Patient = rename_patients(sample),
+    # Patient ID = sample,
+    Group = rename_groups(group),
+    Cluster = cluster,
+    Phase = phase
+  ) %>%
+  save_table("Sx_overview", "Overview")
+
+DEG %>% 
+  select(
+    Gene = gene_short_name,
+    Cluster = cluster,
+    Estimate = estimate,
+    Q_Value = q_value
+  ) %>% 
+  arrange(desc(Estimate)) %>% 
+  save_table("Sx_cluster_de", "Cluster DE")
+
+
+GSEA %>%
+  select(!c(Old.P.value, Old.Adjusted.P.value)) %>%
+  filter(
+    !db %in% c(
+      "Human_Gene_Atlas",
+      "Chromosome_Location",
+      "Jensen_TISSUES",
+      "Jensen_DISEASES",
+      "ChEA_2016",
+      "ENCODE_TF_ChIP-seq_2015"
+    )
+  ) %>% 
+  save_table("Sx_GSEA", "GSEA")
+
+DEG_trajectory[["DE along trajectory"]] %>% 
+  save_table("Sx_trajectory_de", "Trajectory DE")
+
+DEG_trajectory[["Overlap_Trajectory_DEG"]] %>% 
+  save_table("Sx_overlap_trajectory_deg", "Overlap trajectory")
+
+DEG_trajectory[["Overlap_DEG_Trajectory"]] %>% 
+  save_table("Sx_overlap_cluster_de", "Overlap cluster DE")

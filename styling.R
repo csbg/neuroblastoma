@@ -82,6 +82,13 @@ PATIENT_COLORS <-
               "M4", "C4", "M2", "C5")) %>% 
   magrittr::extract(PATIENT_ORDER)
 
+# tumor subclusters
+SUBCLUSTER_COLORS <- c(
+  "1" = "#6699ff",
+  "2" = "#ff6666",
+  "3" = "#669900",
+  "4" = "#993366"
+)
 
 
 
@@ -241,6 +248,19 @@ scale_color_gsea <- function(...) {
   )
 }
 
+# color scale for CytoTRACE scores:
+# ColorBrewer's PiYG with yellow as midpoint
+scale_color_cytotrace <- function(...) {
+  scale_color_gradient2(
+    low = "#1b7837",
+    mid = "#fee090",
+    high = "#af186f",
+    midpoint = 0.5,
+    oob = scales::oob_squish_any,
+    ...
+  )
+}
+
 
 
 # Renaming functions ------------------------------------------------------
@@ -320,6 +340,23 @@ rename_contrast_long <- partial(
     "III_vs_IV", "ATRX deleted vs sporadic",
     "II_vs_III", "MYCN amplified vs ATRX deleted",
     "MNA_vs_other", "MYCN amplified vs MYCN normal"
+  )
+)
+
+rename_adrenal_cells <- partial(
+  rename_str_or_fct,
+  nm = tribble(
+    ~old,                          ~new,
+    "Bridge",                      "Bridge",
+    "Chromaffin cells",            "Chromaffin cells",
+    "connecting Progenitor cells", "Connecting progenitor cells",
+    "cycling Neuroblasts",         "Cycling neuroblasts",
+    "cycling SCPs",                "Cycling SCPs",
+    "late Chromaffin cells",       "Late chromaffin cells",
+    "late Neuroblasts",            "Late neuroblasts",
+    "late SCPs",                   "Late SCPs",
+    "Neuroblasts",                 "Neuroblasts",
+    "SCPs",                        "SCPs"
   )
 )
 
