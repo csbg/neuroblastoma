@@ -2045,3 +2045,43 @@ ggsave_publication("S1e_celltype_heatmap",
 (p <- plot_celltype_heatmap(body_width = 80, collapse = TRUE))
 ggsave_publication("S1e_celltype_heatmap_coll",
                    plot = p, width = 18, height = 6)
+
+
+
+# Publication tables ------------------------------------------------------
+
+## Table S1 ----
+
+df_rna <- 
+  dir_ls("data_raw/", recurse = TRUE, regex = "metrics_summary.csv$") %>% 
+  map_dfr(read_csv, .id = "file") %>%
+  rename_with(~str_glue("{.x} (%)"), !file & where(is.character)) %>% 
+  mutate(across(!file & where(is.character), parse_number)) %>%
+  extract(file, into = "sample", regex = "([\\w\\d_]*)_trans")
+
+df_rna %>% 
+  left_join(
+    read_csv("metadata/sample_groups.csv", comment = "#") %>% 
+      select(bsf_id, sample, group) %>%
+      mutate(sample = rename_patients(sample), group = rename_groups(group)),
+    by = c(sample = "bsf_id")
+  ) %>% 
+  select(
+    Sample = sample.y,
+    `Estimated Number of Cells`,
+    `Mean Reads per Cell`,
+    `Median Genes per Cell`,
+    `Number of Reads`,
+    `Valid Barcodes (%)`,
+    `Total Genes Detected`,
+    `Median UMI Counts per Cell`,
+    `Sequencing Saturation (%)`
+  ) %>%
+  filter(!is.na(Sample)) %>% 
+  mutate(
+    Sample = factor(Sample, levels = names(PATIENT_COLORS)),
+    Group = GROUP_NAMES_LONG[str_sub(Sample, 1, 1)],
+    .after = Sample
+  ) %>% 
+  arrange(Sample) %>% 
+  save_table("S1_sequencing_statistics", "Sequencing Statistics")
