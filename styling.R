@@ -248,6 +248,17 @@ scale_color_gsea <- function(...) {
   )
 }
 
+# color scale for enrichment analyses (only positive odds ratios):
+# ColorBrewer's Reds
+scale_color_gsea_2 <- function(...) {
+  scale_color_distiller(
+    palette = "Reds",
+    direction = 1,
+    oob = scales::oob_squish_any,  # make sure that value capping
+    ...                            # yields colored dots
+  )
+}
+
 # color scale for CytoTRACE scores:
 # ColorBrewer's PiYG with yellow as midpoint
 scale_color_cytotrace <- function(...) {
@@ -359,6 +370,16 @@ rename_adrenal_cells <- partial(
     "SCPs",                        "SCPs"
   )
 )
+
+rename_enrichment_terms <- function(s) {
+  s %>%
+    str_replace_all("[:punct:]GO[:punct:]", "") %>%
+    str_replace_all("[0-9]{7}", "") %>%
+    str_replace_all("[:space:][:punct:]$", "") %>%
+    str_replace_all("[:space:][:punct:]human[:punct:]", "") %>%
+    str_replace_all("[:space:]Homo sapiens", "") %>%
+    str_replace_all("[:space:][:graph:]{36}$", "")
+}
 
 
 

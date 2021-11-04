@@ -402,63 +402,276 @@ ggsave_publication(
 
 
 
-# REVISE: Figure 2g ---------------------------------------------------------------
+# Figure 2g ---------------------------------------------------------------
 
-plot_gsea(
-  data = EnrData[["Selected"]],
-  min_OR = 1,
-  circle_significant = FALSE
+plot_gsea <- function(data,
+                      circle_significant = FALSE,
+                      max_p_adj = 0.05,
+                      min_OR = 5,
+                      min_overlap_size = 2) {
+  data <- 
+    data %>%
+    separate(
+      Overlap,
+      into = c("overlap_size", "geneset_size"),
+      convert = TRUE
+    )
+  
+  top_terms <-
+    data %>% 
+    filter(
+      Adjusted.P.value <= max_p_adj,
+      Odds.Ratio >= min_OR,
+      overlap_size >= min_overlap_size
+    ) %>% 
+    pull(Term) %>%
+    unique()
+  
+  data_vis <- 
+    data %>% 
+    filter(Term %in% top_terms) %>% 
+    mutate(
+      is_significant =
+        Adjusted.P.value <= max_p_adj &
+        Odds.Ratio >= min_OR &
+        overlap_size >= min_overlap_size,
+      Term = as_factor(Term) 
+    ) %>%
+    mutate(
+      Term =
+        Term %>% 
+        fct_reorder(log2(Odds.Ratio), max) %>%
+        fct_reorder(cluster, max)
+    )
+  
+  if (nlevels(data_vis$Term) > 5) {
+    horizontal_grid <-
+      geom_hline(
+        yintercept = seq(5, nlevels(data_vis$Term), 5),
+        size = BASE_LINE_SIZE,
+        color = "grey92"
+      )
+  } else {
+    horizontal_grid <- NULL  
+  }
+  
+  color_limit <- log2(64)
+  
+  if (circle_significant) {
+    circle_significant <- geom_point(
+      data = data_vis %>% filter(is_significant),
+      shape = 1,
+      stroke = BASE_LINE_SIZE * 2,
+      alpha = 0.5
+    )
+  } else {
+    circle_significant <- NULL
+  }
+  
+  p <- 
+    ggplot(data_vis, aes(cluster, Term, size = -log10(Adjusted.P.value))) +
+    scale_y_discrete() +
+    horizontal_grid +    
+    geom_point(aes(color = log2(Odds.Ratio))) +
+    circle_significant +
+    xlab("NB subcluster") +
+    ylab(NULL) +
+    scale_color_gsea_2(
+      name = TeX("log_2 odds ratio"),
+      breaks = c(0, 2, 4, 6),
+      limit = 
+        c(0, color_limit),
+      guide = guide_colorbar(
+        barheight = unit(1.2, "cm"),
+        barwidth = unit(2, "mm"),
+        title.vjust = 0.1,
+        label.position = "left",
+        order = 2
+      )
+    ) +
+    scale_size(
+      name = TeX("-log_{10} p_{adj}"),
+      range = c(0, 2),
+      breaks = c(0.1, 1.3, 3, 10),
+      guide = guide_legend(
+        order = 1,
+        label.position = "left"
+      )
+    )  +
+    coord_fixed() +
+    theme_nb(grid = FALSE) +
+    theme(
+      legend.box = "vertical",
+      legend.box.just = "left",
+      legend.direction = "vertical",
+      legend.justification = "left",
+      legend.title = element_text(size = BASE_TEXT_SIZE_PT, angle = 0),
+      legend.key.height = unit(2, "mm"),
+      legend.key.width = unit(0.5, "mm"),
+      legend.position = "left",
+      legend.spacing = unit(2, "mm"),
+      legend.margin = margin(0, 0, 0, -3, "mm"),
+      panel.spacing = unit(-.1, "pt"),
+      plot.margin = margin(t = .5, r = 0.1, unit = "mm")
+    )
+  
+  p
+}
+
+selected_terms <- c(
+  # "TNF-alpha signalling via NF-kB",
+  # "dopaminergic neuron differentiation",
+  # "IL2 effects mediated by PI3K",
+  "IL3-mediated signaling events",
+  "IL6-mediated signaling events",
+  "Trk receptor signaling mediated by PI3K and PLC-gamma",
+  "PDGFR-beta signaling pathway",
+  "ERG-JUN-FOS DNA-protein complex",
+  "JUND-FOSB-SMAD3-SMAD4 complex",
+  # "CALM1-FKBP38-BCL2 complex",
+  
+  "Cell cycle",
+  # "DNA replication",
+  "DNA repair",
+  "PCNA-DNA polymerase delta complex",
+  "nucleoside metabolic process",
+  "DNA synthesome complex (17 subunits)",
+  "6S methyltransferase and RG-containing Sm proteins complex",
+  "BRD4-RFC complex",
+  "histone mRNA metabolic process",
+  # "DNA synthesome complex (17 subunits)",
+  
+  "intermediate filament bundle assembly",
+  "negative regulation of glial cell proliferation",
+  "peripheral nervous system neuron development",
+  "noradrenergic neuron differentiation",
+  "myelin maintenance",
+  "BRAF-RAF1-14-3-3 complex",
+  "Kinase maturation complex 1",
+  "IKBKB-CDC37-KIAA1967-HSP90AB1-HSP90AA1 complex",
+  # "ITGA3-ITB1-BSG complex",
+  
+  "Regulation of Telomerase",
+  "p53-SP1 complex",
+  "CAND1-CUL4A-RBX1 complex",
+  "Er-alpha-p53-hdm2 complex",
+  "NUMB-TP53-MDM2 complex",
+  
+  # new
+  "Epithelial Mesenchymal Transition",
+  "glial cell differentiation"
 )
 
+EnrData %>% 
+  mutate(Term = rename_enrichment_terms(Term)) %>%
+  filter(
+    db %in% c(
+      "NCI-Nature_2016",
+      "CORUM",
+      "GO_Biological_Process_2018",
+      "KEGG_2019_Human",
+      "MSigDB_Hallmark_2020"
+    ),
+    Term %in% selected_terms
+  ) %>% 
+  plot_gsea(
+    min_OR = 1,
+    circle_significant = FALSE
+  )
+
 ggsave_publication(
-  "NB_GSEA", 
-  width = Side_long_panel_x, 
+  "2g_enrichr", 
+  width = Side_long_panel_x * 1.5, 
   height = Side_long_panel_y,
-  legends = FALSE
 )
+
+
+
+# Figure 2h ---------------------------------------------------------------
+
+plot_violin2 <- function(data_cds, genes) {
+  data_cds <- scuttle::logNormCounts(
+    data_cds,
+    size.factors = colData(data_cds)$Size_Factor,
+  )
+  
+  data <- 
+    logcounts(data_cds)[genes, , drop = FALSE] %>%
+    t() %>%
+    as.matrix() %>%
+    as_tibble(rownames = "cell") %>%
+    pivot_longer(
+      !cell, 
+      names_to = "gene", 
+      values_to = "logexp"
+    ) %>%
+    left_join(
+      data_cds@colData %>%
+        as_tibble(rownames = "cell") %>% 
+        select(cell, group, sample, cluster, Size_Factor),
+      by = "cell"
+    ) %>% 
+    group_by(gene) %>% 
+    mutate(logexp = logexp / max(logexp)) %>% 
+    ungroup()
+  
+  ggplot(data, aes(cluster, logexp)) +
+    geom_violin(
+      aes(fill = cluster, color = NULL),
+      scale = "width",
+      size = BASE_LINE_SIZE,
+      alpha = 0.65,
+      trim = TRUE
+    ) +
+    geom_boxplot(
+      aes(fill = NA, size = 1),
+      notch = TRUE,
+      size = BASE_LINE_SIZE,
+      outlier.shape = NA,
+      width = 1
+    ) +
+    xlab("NB subcluster") +
+    ylab(NULL) +
+    scale_y_continuous(
+      name = TeX("log_2 expression_{norm.}"),
+      limits = c(0, 1),
+      breaks = c(0, 1),
+      expand = expansion(add = .025)
+    ) +
+    scale_fill_manual(values = SUBCLUSTER_COLORS) +
+    coord_flip() +
+    facet_grid(~gene,scales = "free") +
+    theme_nb(grid = FALSE) +
+    theme(
+      legend.position = "none",
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank()
+    )
+}
+
+
+plot_violin2(cds, c("STAT3", "JUN"))
 
 ggsave_publication(
-  "GSEA_guides", 
-  width = Side_long_panel_x * 1.25, 
-  height = Side_long_panel_y,
-  legends = TRUE
-)
-
-
-
-# REVISE: Figure 2h ---------------------------------------------------------------
-
-top_markers <- list(
-  Cl1 = tibble(gene = c("STAT3", "JUN")),
-  Cl2 = tibble(gene = c("E2F1", "PCNA")),
-  Cl3 = tibble(gene = c("SOX11", "KIF5B"))
-)
-
-plot_violin2(cds, top_markers, 1)
-
-ggsave_publication(
-  "nb_violin_CL1",
+  "2h_1_violins",
   width = Side_Violin_x,
   height = Side_long_panel_y / 3, 
-  legend = FALSE
 )
 
-plot_violin2(cds, top_markers, 2)
+plot_violin2(cds, c("E2F1", "PCNA"))
 
 ggsave_publication(
-  "nb_violin_CL2",
+  "2h_2_violins",
   width = Side_Violin_x,
-  height = Side_long_panel_y / 3, 
-  legend = FALSE
+  height = Side_long_panel_y / 3
 )
 
-plot_violin2(cds, top_markers, 3)
+plot_violin2(cds, c("SOX11", "KIF5B"))
 
 ggsave_publication(
-  "nb_violin_CL3",
+  "2h_3_violins",
   width = Side_Violin_x,
-  height = Side_long_panel_y / 3, 
-  legend = FALSE
+  height = Side_long_panel_y / 3,
 )
 
 
@@ -636,83 +849,179 @@ ggsave_publication(
 
 
 
+# Figure S2b --------------------------------------------------------------
 
-# Supplementary figure 2 --------------------------------------------------
+plot_CC_patient <- function(cds) {
+  meta <-
+    colData(cds) %>% 
+    as_tibble() %>%
+    select(group, phase, sample) %>%
+    mutate(
+      patient = as_factor(sample) %>% rename_patients(),
+      group = rename_groups(group)
+    )
+  
+  ggplot(meta, aes(patient, fill = patient)) +
+    geom_bar() +
+    facet_grid(vars(phase), scales = "free", space = "free_x") +
+    xlab(NULL) +
+    ylab(NULL) +
+    scale_fill_manual(
+      "Patients",
+      values = PATIENT_COLORS,
+      guide = guide_legend(
+        title.position = "top",
+        override.aes = list(shape = 16, size = BASE_LINE_SIZE),
+        keywidth = 0.1,
+        keyheight = 0.2,
+        label.position = "top"
+      )
+    ) +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.text.y = element_blank(),
+      legend.position = "none",
+      panel.spacing = unit(-.5, "pt"),
+      plot.margin = margin(t = .5, r = 0.5, l = -0.5, unit = "mm")
+    )
+}
 
-# unaligned UMAP colored by aligned cluster
-plot_UMAP_alignedcluster(unaligned_cds)
+plot_CC_patient(cds)
 
 ggsave_publication(
-  "S2_UMAP_aligned_CL", 
+  "S2b_cell_cycle_patients", 
   width = 4, 
-  height = 4,
-  legends = FALSE
-)
-
-ggsave_publication(
-  "S2_UMAP_aligned_CL_guides", 
-  width = 4, 
-  height = 4,
-  legends = TRUE
-)
-
-# cell cycle bargraph 
-
-plot_CC_patient(cds, labs = FALSE)
-
-ggsave_publication(
-  "S2_CellCycle_Patients", 
-  width = 4, 
-  height = 4,
-  legends = FALSE
-)
-
-ggsave_publication(
-  "S2_CellCycle_Patients_guides", 
-  width = 4,
-  height = 8,
-  legends = TRUE
-)
-
-
-# violin plot CytoTRACE ccore 
-plot_Violin_cyto(cds, labs = TRUE)
-
-ggsave_publication(
-  "S2_Violin_CytoTRACE", 
-  width = 4, 
-  height = 4,
-  legends = FALSE
+  height = 4
 )
 
 
-# violin plot library size
-plot_Violin_cluster(cds)
+
+# Figure S2c --------------------------------------------------------------
+
+colData(cds) %>% 
+  as_tibble() %>% 
+  ggplot(aes(cluster, fill = cluster)) +
+  geom_bar(show.legend = FALSE) +
+  xlab(NULL) +
+  ylab("Number of Cells") +
+  scale_color_manual(values = SUBCLUSTER_COLORS) +
+  theme_nb(grid = FALSE)
 
 ggsave_publication(
-  "S2_Violin_library", 
+  "S2c_cells_per_cluster", 
   width = 4, 
   height = 4,
-  legends = FALSE
 )
 
 
-# violin plot number of features
-plot_Violin_cluster(cds)
+
+# Figure S2d --------------------------------------------------------------
+
+plot_UMAP_cluster_aligned <- function(cds) {
+  UMAP <-
+    reducedDim(cds, "UMAP") %>%
+    magrittr::set_colnames(c("umap_1", "umap_2")) %>% 
+    as_tibble(rownames = "cell") %>%
+    inner_join(
+      colData(cds) %>%
+        as_tibble(rownames = "cell"),
+      by = "cell"
+    ) %>%
+    select(1:9 | "aligned_cluster") %>%
+    mutate(
+      group = rename_groups(group),
+      patient = rename_patients(sample)
+    )
+  
+  ggplot(UMAP, aes(umap_1, umap_2)) +
+    geom_point(aes(color = aligned_cluster), size = .01, shape = 16) +
+    xlab("UMAP1") +
+    ylab("UMAP2") +
+    scale_color_manual(
+      values = SUBCLUSTER_COLORS,
+      guide = guide_legend(
+        override.aes = list(shape = 16, size = 1)
+      )
+    ) +
+    theme_nb(grid = FALSE) +
+    theme(
+      legend.position = "none",
+      plot.margin = margin(r = 0.5, t = 0.5, unit = "mm"),
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank()
+    )
+}
+
+plot_UMAP_cluster_aligned(unaligned_cds)
 
 ggsave_publication(
-  "S2_Violin_features", 
+  "S2d_UMAP_unaligned", 
   width = 4, 
   height = 4,
-  legends = FALSE
 )
 
-# violin plot percent mitochondrial genes
-plot_Violin_cluster(cds)
+
+
+# Figure S2e–h ------------------------------------------------------------
+
+plot_violin_cluster <- function(cds, var, y_lab) {
+  meta <-
+    colData(cds) %>% 
+    as_tibble() %>%
+    select(cluster, var = {{var}}) 
+  
+  ggplot(meta, aes(cluster, var)) +
+    geom_violin(
+      aes(fill = cluster),
+      scale = "width"
+    ) +
+    geom_boxplot(
+      aes(fill = cluster),
+      notch = TRUE,
+      alpha = 0.1,
+      size = 0.5,
+      varwidth = TRUE,
+    ) +
+    xlab("NB subcluster") +
+    ylab(y_lab) +
+    scale_fill_manual(values = SUBCLUSTER_COLORS) +
+    theme_nb(grid = FALSE) +
+    theme(
+      legend.position = "none",
+      plot.margin = margin(t = .5, r = 0.5, l = 0.1, unit = "mm")
+    )
+}
+
+plot_violin_cluster(cds, library_size, "Library Size")
 
 ggsave_publication(
-  "S2_Violin_mitopercent", 
+  "S2e_violin_library", 
   width = 4, 
-  height = 4,
-  legends = FALSE
+  height = 4
+)
+
+
+plot_violin_cluster(cds, n_features, "Number of Features")
+
+ggsave_publication(
+  "S2f_violin_nfeat", 
+  width = 4, 
+  height = 4
+)
+
+
+plot_violin_cluster(cds, percent_mito, "% Mitochondrial Reads")
+
+ggsave_publication(
+  "S2g_violin_percentmt", 
+  width = 4, 
+  height = 4
+)
+
+plot_violin_cluster(trajectory_cds, cytoTRACE, "CytoTRACE score")
+
+ggsave_publication(
+  "S2h_violin_cytotrace", 
+  width = 4, 
+  height = 4
 )
