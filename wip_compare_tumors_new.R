@@ -252,9 +252,9 @@ ggsave_default("comparison/profile_group2_projectils", height = 100)
 
 
 
-## Heatmaps ----
+## Score heatmaps ----
 
-plot_heatmap <- function(sample, prop = 1) {
+plot_score_heatmap <- function(sample, prop = 1) {
   info("Plotting heatmap for {sample}")
   
   set.seed(0)
@@ -300,7 +300,143 @@ plot_heatmap <- function(sample, prop = 1) {
   p
 }
 
-plot_heatmap("NB06", prop = 0.25)
+plot_score_heatmap("NB06", prop = 0.25)
 
 unique(singler_results$sample) %>% 
-  walk(plot_heatmap)
+  walk(plot_score_heatmap)
+
+
+## Patient heatmaps: Pat vs pat ----
+
+plot_pp_heatmap <- function() {
+  corr_mat <- 
+    singler_results %>% 
+    filter(!group %in% c("low_risk", "mesenchymal")) %>%
+    group_by(sample) %>%
+    count(cell_type = pruned_labels) %>% 
+    mutate(n = n / sum(n) * 100) %>% 
+    ungroup() %>% 
+    pivot_wider(names_from = sample, values_from = n) %>% 
+    column_to_rownames("cell_type") %>%
+    as.matrix() %>% 
+    replace_na(0) %>% 
+    cor(use = "pairwise.complete.obs")
+  
+  distance <- as.dist(1 - corr_mat)
+  
+  metadata_cols <- 
+    tibble(sample = colnames(corr_mat)) %>% 
+    left_join(
+      singler_results %>% 
+        distinct(sample, group, group2) %>% 
+        mutate(
+          group3 = str_sub(group, -1),
+          group4 = if_else(group3 == "M", "M", "A+S"),
+          tumor = if_else(group %in% c("A", "M", "S"), "DTC", "primary")
+        ),
+      by = "sample"
+    )
+  
+  Heatmap(
+    corr_mat,
+    col = circlize::colorRamp2(
+      seq(min(corr_mat), max(corr_mat), length.out = 9),
+      scico(9, palette = "davos", direction = -1),
+    ),
+    name = "correlation of\ncell subtype\ncomposition",
+    heatmap_legend_param = list(
+      at = round(c(min(corr_mat), max(corr_mat)), 2)
+    ),
+    
+    clustering_distance_rows = distance,
+    clustering_distance_columns = distance,
+    
+    width = unit(150, "mm"),
+    height = unit(150, "mm"),
+    
+    show_column_dend = FALSE,
+    
+    left_annotation = rowAnnotation(
+      group = metadata_cols$group4,
+      tumor = metadata_cols$tumor,
+      col = list(
+        group = c(
+          GROUP_COLORS,
+          "A+S" = "#dd9a59",
+          "T-A" = "#8a504e",
+          "T-M" = "#768688",
+          "T-S" = "#967F52",
+          "T-A+S" = "#906850",
+          low_risk = "grey80",
+          mesenchymal = "#c61f3c"
+        ),
+        tumor = c(DTC = "black", primary = "grey80")
+      )
+    )
+  )
+}
+
+(p <- plot_pp_heatmap())
+ggsave_default("comparison/heatmap_adrmed_correlation", plot = p)
+
+
+
+## Patient heatmaps: Pat vs cell types ----
+
+plot_pc_heatmap <- function() {
+  mat <- 
+    singler_results %>% 
+    filter(!group %in% c("low_risk", "mesenchymal")) %>%
+    group_by(sample) %>%
+    count(cell_type = pruned_labels) %>% 
+    mutate(n = n / sum(n) * 100) %>% 
+    ungroup() %>% 
+    pivot_wider(names_from = sample, values_from = n) %>% 
+    column_to_rownames("cell_type") %>%
+    as.matrix() %>% 
+    replace_na(0)
+  
+  metadata_cols <- 
+    tibble(sample = colnames(mat)) %>% 
+    left_join(
+      singler_results %>% 
+        distinct(sample, group, group2) %>% 
+        mutate(
+          group3 = str_sub(group, -1),
+          group4 = if_else(group3 == "M", "M", "A+S"),
+          tumor = if_else(group %in% c("A", "M", "S"), "DTC", "primary")
+        ),
+      by = "sample"
+    )
+  
+  Heatmap(
+    mat,
+    col = RColorBrewer::brewer.pal(9, "YlOrBr"),
+    name = "relative\nabundance",
+    heatmap_legend_param = list(
+      at = round(c(min(mat), max(mat)), 2)
+    ),
+    
+    top_annotation = HeatmapAnnotation(
+      group = metadata_cols$group4,
+      tumor = metadata_cols$tumor,
+      col = list(
+        group = c(
+          GROUP_COLORS,
+          "A+S" = "#dd9a59",
+          "T-A" = "#8a504e",
+          "T-M" = "#768688",
+          "T-S" = "#967F52",
+          "T-A+S" = "#906850",
+          low_risk = "grey80",
+          mesenchymal = "#c61f3c"
+        ),
+        tumor = c(DTC = "black", primary = "grey80")
+      )
+    ),
+  )
+}
+(p <- plot_pc_heatmap())
+
+ggsave_default("comparison/heatmap_adrmed_celltypes", plot = p, height = 100)
+
