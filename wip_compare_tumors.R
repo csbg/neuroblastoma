@@ -11,16 +11,6 @@ library(scico)
 source("common_functions.R")
 source("styling.R")
 
-rename_dong <- partial(
-  rename_str_or_fct,
-  nm = tribble(
-    ~old,       ~new,
-    "T162",  "T162 (M)",
-    "T200",  "T200 (M)",
-    "T230",  "T230 (M)",
-  )
-)
-
 ADRENAL_MEDULLA_COLORS <- c(
   "late SCPs" = "#921813",
   "SCPs" = "#be202e",
@@ -38,44 +28,14 @@ ADRENAL_MEDULLA_COLORS <-
   colorspace::lighten(0.3) %>% 
   set_names(names(ADRENAL_MEDULLA_COLORS))
 
-files_dong <- tribble(
-  ~tumor_id, ~file, ~bad_header, ~high_risk, ~mycn_amplified,
-  "T10",  "GSM4088774_T10_gene_cell_exprs_table.xls",  FALSE, TRUE, FALSE,
-  "T19",  "GSM4088775_T19_gene_cell_exprs_table.xls",  FALSE, FALSE, NA,
-  "T27",  "GSM4088776_T27_gene_cell_exprs_table.xls",  FALSE, TRUE, FALSE,
-  "T34",  "GSM4088777_T34_gene_cell_exprs_table.xls",  FALSE, TRUE, FALSE,
-  "T40",  "GSM4088778_T40_gene_cell_exprs_table.xls",  FALSE, FALSE, NA,
-  "T44",  "GSM4088779_T44_gene_cell_exprs_table.xls",  FALSE, FALSE, NA,
-  "T69",  "GSM4088780_T69_gene_cell_exprs_table.xls",  FALSE, TRUE, FALSE,
-  "T71",  "GSM4088781_T71_gene_cell_exprs_table.xls",  FALSE, TRUE, FALSE,
-  "T75",  "GSM4088782_T75_gene_cell_exprs_table.xls",  FALSE, TRUE, FALSE,
-  "T92",  "GSM4088783_T92_gene_cell_exprs_table.xls",  FALSE, TRUE, FALSE,
-  "T162", "GSM4654669_T162_gene_cell_exprs_table.xls", TRUE, TRUE, TRUE,
-  "T175", "GSM4654670_T175_gene_cell_exprs_table.xls", FALSE, FALSE, NA,
-  "T188", "GSM4654671_T188_gene_cell_exprs_table.xls", FALSE, FALSE, NA,
-  "T200", "GSM4654672_T200_gene_cell_exprs_table.xls", TRUE, TRUE, TRUE,
-  "T214", "GSM4654673_T214_gene_cell_exprs_table.xls", TRUE, TRUE, FALSE,
-  "T230", "GSM4654674_T230_gene_cell_exprs_table.xls", TRUE, TRUE, TRUE,
-)
+files_dong <- read_csv("data_wip/files_dong.csv", comment = "#")
 
+  
 
+# Prepare Dong data -------------------------------------------------------
 
-# Prepare tumor data ------------------------------------------------------
-
-# nb_metadata <- readRDS("data_generated/metadata.rds")
-# 
-# nb_tumor <-
-#   readRDS("data_generated/rna_decontaminated.rds") %>%
-#   counts() %>% 
-#   CreateSeuratObject(
-#     project = "NB",
-#     meta.data = nb_metadata %>% column_to_rownames("cell")
-#   ) %>% 
-#   subset(subset = cellont_abbr == "NB") %>% 
-#   SplitObject("sample")
-# 
 # metadata_dong <-
-#   read_csv("data_raw/GSE137804/GSE137804_tumor_dataset_annotation.csv") %>% 
+#   read_csv("data_raw/GSE137804/GSE137804_tumor_dataset_annotation.csv") %>%
 #   separate(cellname, into = c("sample", "cell"), sep = "_")
 # 
 # data_dong <- pmap(
@@ -85,9 +45,9 @@ files_dong <- tribble(
 #       sce <- read_tsv(
 #         path_join(c("data_raw", "GSE137804", file)),
 #         skip = 1,
-#         col_names = 
+#         col_names =
 #           read_tsv(path_join(c("data_raw", "GSE137804", file)), n_max = 0) %>%
-#           colnames() %>% 
+#           colnames() %>%
 #           prepend("Symbol")
 #       )
 #     } else {
@@ -100,33 +60,32 @@ files_dong <- tribble(
 #             .default = col_integer()
 #           )
 #         ) %>%
-#         select(!Gene_ID)  
+#         select(!Gene_ID)
 #     }
-#     
-#     sce <- 
-#       sce %>% 
+# 
+#     sce <-
+#       sce %>%
 #       mutate(Symbol = make.unique(Symbol)) %>%
 #       column_to_rownames("Symbol") %>%
 #       as.matrix() %>%
 #       CreateSeuratObject(project = tumor_id)
-#     
-#     sce@meta.data <- 
-#       sce@meta.data %>% 
-#       as_tibble(rownames = "cell") %>% 
+# 
+#     sce@meta.data <-
+#       sce@meta.data %>%
+#       as_tibble(rownames = "cell") %>%
 #       rename(sample = orig.ident) %>%
 #       left_join(metadata_dong, by = c("cell", "sample")) %>%
 #       column_to_rownames("cell")
-#     
+# 
 #     sce %>%
 #       subset(subset = celltype == "tumor")
 #   }
 # )
 # 
 # data_dong_names <- map_chr(data_dong, Project)
-# data_dong %>% 
-#   set_names(data_dong_names) %>% 
-#   append(nb_tumor) %>% 
-#   saveRDS("data_wip/tumor_data.rds")
+# data_dong %>%
+#   set_names(data_dong_names) %>%
+#   saveRDS("data_wip/tumor_data_dong.rds")
 
 
 
@@ -172,22 +131,18 @@ files_dong <- tribble(
 # 
 # adr %>% 
 #   RenameAssays(RNA = "integrated") %>% 
-#   saveRDS("data_wip/reference_atlas_adr.rds")
+#   saveRDS("data_wip/projectils/reference_atlas_adr.rds")
 
 
 
-
-# Projectils --------------------------------------------------------------
-
-## Analysis ----
+# ProjecTILs analysis -----------------------------------------------------
 
 # evil hack to prevent conversion of human to mouse gene names
 convert.orthologs.id <- function(x, ...) x
 environment(convert.orthologs.id) <- asNamespace("ProjecTILs")
 assignInNamespace("convert.orthologs", convert.orthologs.id, ns = "ProjecTILs")
 
-tumor_data <- readRDS("data_wip/tumor_data.rds")
-ref <- load.reference.map("data_wip/reference_atlas_adr.rds")
+ref <- load.reference.map("data_wip/projectils/reference_atlas_adr.rds")
 ref$functional.cluster <- Idents(ref)
 
 # this is the preferred approach, but alas, memory is scarce
@@ -197,15 +152,36 @@ ref$functional.cluster <- Idents(ref)
 #   filter.cells = FALSE
 # )
 
-# process datasets 8–10 individually due to memory issues
-# tumor_data <- list(
-#   T162 = tumor_data$T162 %>%
-#     magrittr::extract(, sample(colnames(.), size = ncol(.) / 2))
-# )
+# (a) Dong
+tumor_data <- readRDS("data_wip/tumor_data_dong.rds")
+
+# process Dong datasets 8–10 individually due to memory issues
+tumor_data <- tumor_data[8]   # T162
 # tumor_data <- tumor_data[9]   # T200
 # tumor_data <- tumor_data[10]  # T230
 # gc()
 
+# (b) Jansky
+# tumor_data <-
+#   readRDS("data_wip/tumor_data_jansky.rds") %>%
+#   subset(subset = anno_new == "Tumor cells") %>% 
+#   SplitObject("patientID")
+
+# (c) own data
+# tumor_data <-
+#   readRDS("data_generated/rna_decontaminated.rds") %>%
+#   counts() %>%
+#   CreateSeuratObject(
+#     project = "NB",
+#     meta.data =
+#       readRDS("data_generated/metadata.rds") %>%
+#       column_to_rownames("cell")
+#   ) %>%
+#   subset(subset = cellont_abbr == "NB") %>%
+#   SplitObject("sample")
+
+
+# (a-c) common analysis function
 iwalk(
   tumor_data,
   function(query_data, sample) {
@@ -231,23 +207,20 @@ iwalk(
         as_tibble(rownames = "cell")
     ) %>% 
       reduce(left_join, by = "cell") %>% 
-      write_csv(str_glue("data_wip/projectils_results_{sample}.csv"))
+      write_csv(str_glue("data_wip/projectils/projectils_results_{sample}.csv"))
   }
 )
+q()
 
 
-## Plots ----
+# Plots -------------------------------------------------------------------
 
 projectils_data <-
-  dir_ls("data_wip", regex = "projectils") %>% 
+  dir_ls("data_wip/projectils", regex = "results") %>% 
   map_dfr(read_csv, .id = "filename") %>% 
   extract(filename, into = "sample", regex = "results_(.+)\\.csv") %>% 
   mutate(
-    sample =
-      rename_patients(sample) %>%
-      rename_dong() %>%
-      as_factor() %>% 
-      fct_relevel(c(PATIENT_ORDER, files_dong$tumor_id)),
+    sample = rename_patients(sample),
     group = if_else(str_ends(sample, ".M."), "Tm", str_sub(sample, 1, 1))
   )
 
