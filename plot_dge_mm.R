@@ -834,6 +834,118 @@ ggsave_default(
 
 
 
+# Pseudobulk correlation of all cells -------------------------------------
+
+plot_pbc_heatmap <- function(level = "group") {
+  pb <- aggregateData(
+    dge$cds,
+    assay = "logcounts",
+    fun = "mean",
+    by = c("cellont_abbr", level)
+  )
+  
+  if (level == "group") {
+    colnames(pb) <-
+      colnames(pb) %>%
+      rename_groups()
+  } else {
+    colnames(pb) <-
+      colnames(pb) %>%
+      rename_patients()
+  }
+  
+  hvgs <-
+    dge$cds %>%
+    scran::modelGeneVar() %>% 
+    scran::getTopHVGs()
+  
+  mat <-
+    assays(pb) %>% 
+    as.list() %>% 
+    imap(~magrittr::set_colnames(., str_c(colnames(.x), .y, sep="_"))) %>% 
+    reduce(cbind) %>% 
+    magrittr::extract(hvgs, )
+  
+  missing_cells <- colSums(mat) %>% near(0)
+  
+  corr_mat <-
+    mat[, !missing_cells] %>% 
+    cor(use = "pairwise.complete.obs")
+  
+  distance <- as.dist(1 - corr_mat)
+  
+  col_metadata <-
+    colnames(corr_mat) %>%
+    str_match("(.+)_(.+)") %>% 
+    magrittr::set_colnames(c("label", "sample", "cell_type")) %>% 
+    as_tibble() %>% 
+    mutate(group = str_sub(sample, 1, 1))
+  
+  if (level == "group") {
+    left_annotation <- rowAnnotation(
+      group = col_metadata$group,
+      cell_type = col_metadata$cell_type,
+      col = list(
+        group = GROUP_COLORS,
+        cell_type = CELL_TYPE_COLORS
+      )
+    )
+  } else {
+    left_annotation <- rowAnnotation(
+      sample = col_metadata$sample,
+      group = col_metadata$group,
+      cell_type = col_metadata$cell_type,
+      col = list(
+        sample = PATIENT_COLORS,
+        group = GROUP_COLORS,
+        cell_type = CELL_TYPE_COLORS
+      )
+    )
+  }
+  
+  Heatmap(
+    corr_mat,
+    col = circlize::colorRamp2(
+      seq(min(corr_mat), 1, length.out = 9),
+      scico(9, palette = "davos", direction = -1),
+    ),
+    name = "correlation of\npseudobulk\nexpression",
+    heatmap_legend_param = list(
+      at = round(c(min(corr_mat), max(corr_mat)), 2)
+    ),
+    
+    clustering_distance_rows = distance,
+    clustering_distance_columns = distance,
+    
+    show_column_dend = FALSE,
+    
+    width = unit(200, "mm"),
+    height = unit(200, "mm"),
+    
+    left_annotation = left_annotation
+  )
+}
+
+(p <- plot_pbc_heatmap())
+
+ggsave_default(
+  "dge_mm/pseudobulk_correlation_group",
+  plot = p,
+  height = 700,
+  width = 700
+)
+
+(p <- plot_pbc_heatmap("sample"))
+
+ggsave_default(
+  "dge_mm/pseudobulk_correlation_sample",
+  plot = p,
+  height = 700,
+  width = 700
+)
+
+
+
 # Publication figures -----------------------------------------------------
 
 ## Figure 3c ----
