@@ -84,7 +84,7 @@ plot_heatmap <- function() {
 }
 
 (p <- plot_heatmap())
-ggsave_default("comparison/bulk_heatmap", plot = p, height = 90, width = 350)
+ggsave_default("compare_bulk/heatmap", plot = p, height = 90, width = 350)
 
 
 
@@ -156,7 +156,7 @@ all_neuroblast_markers <-
 
 (p1 <- plot_heatmap(all_neuroblast_markers))
 ggsave_default(
-  "comparison/bulk_heatmap_all_markers",
+  "compare_bulk/heatmap_all_markers",
   plot = p1, width = 350
 )
 
@@ -173,7 +173,7 @@ interesting_markers <- tibble(
 
 (p2 <- plot_heatmap(interesting_markers, show_row_names = TRUE))
 ggsave_default(
-  "comparison/bulk_heatmap_interesting_markers",
+  "compare_bulk/heatmap_interesting_markers",
   plot = p2, width = 350, height = 130
 )
   
@@ -189,4 +189,4 @@ plotExpression(
   x = "sample",
   colour_by = "group"
 )
-ggsave_default("comparison/sc_violins", height = 420)
+ggsave_default("compare_bulk/sc_violins", height = 420)
