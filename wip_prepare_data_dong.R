@@ -1,0 +1,68 @@
+library(Seurat)
+# library(monocle3)
+# library(scuttle)
+# library(muscat)
+# library(umap)
+# library(ProjecTILs)
+library(tidyverse)
+library(fs)
+# source("common_functions.R")
+# source("styling.R")
+
+
+
+files_dong <- read_csv("data_wip/metadata_samples_dong.csv", comment = "#")
+
+metadata_dong <-
+  read_csv("data_raw/GSE137804/GSE137804_tumor_dataset_annotation.csv") %>%
+  separate(cellname, into = c("sample", "cell"), sep = "_")
+
+data_dong <- pmap(
+  files_dong %>% filter(high_risk),
+  function(file, tumor_id, bad_header, ...) {
+    if (bad_header) {
+      sce <- read_tsv(
+        path_join(c("data_raw", "GSE137804", file)),
+        skip = 1,
+        col_names =
+          read_tsv(path_join(c("data_raw", "GSE137804", file)), n_max = 0) %>%
+          colnames() %>%
+          prepend("Symbol")
+      )
+    } else {
+      sce <-
+        read_tsv(
+          path_join(c("data_raw", "GSE137804", file)),
+          col_types = cols(
+            Gene_ID = "c",
+            Symbol = "c",
+            .default = col_integer()
+          )
+        ) %>%
+        select(!Gene_ID)
+    }
+
+    sce <-
+      sce %>%
+      mutate(Symbol = make.unique(Symbol)) %>%
+      column_to_rownames("Symbol") %>%
+      as.matrix() %>%
+      CreateSeuratObject(project = tumor_id)
+
+    sce@meta.data <-
+      sce@meta.data %>%
+      as_tibble(rownames = "cell") %>%
+      rename(sample = orig.ident) %>%
+      left_join(metadata_dong, by = c("cell", "sample")) %>%
+      column_to_rownames("cell")
+
+    sce %>%
+      subset(subset = celltype == "tumor")
+  }
+)
+
+data_dong_names <- map_chr(data_dong, Project)
+data_dong %>%
+  set_names(data_dong_names) %>%
+  saveRDS("data_wip/tumor_data_dong.rds")
+

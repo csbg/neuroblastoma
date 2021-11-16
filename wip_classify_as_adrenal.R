@@ -57,18 +57,18 @@ predict_cell_types <- function(count_matrix, outfile) {
 
 predict_cell_types(
   counts(nb),
-  "data_wip/adrmed_class_wilcox_nb.csv"
+  "data_wip/adrmed_class_nb.csv"
 )
 
 predict_cell_types(
   tumor_jansky$RNA@counts,
-  "data_wip/adrmed_class_wilcox_jansky.csv"
+  "data_wip/adrmed_class_jansky.csv"
 )
 
 tumor_dong %>% 
   iwalk(
     ~predict_cell_types(
       .x$RNA@counts,
-      str_glue("data_wip/adrmed_class_wilcox_dong_{.y}.csv")
+      str_glue("data_wip/adrmed_class_dong_{.y}.csv")
     )
   )
