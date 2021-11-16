@@ -61,8 +61,7 @@ data_dong <- pmap(
   }
 )
 
-data_dong_names <- map_chr(data_dong, Project)
 data_dong %>%
-  set_names(data_dong_names) %>%
+  {merge(.[[1]], .[-1])} %>%
   saveRDS("data_wip/tumor_data_dong.rds")
 
