@@ -69,32 +69,53 @@ tumor_jansky <-
 common_genes <-
   rownames(nb) %>% 
   intersect(rownames(tumor_dong)) %>%
-  intersect(rownames(tumor_jansky)) %>%
+  # intersect(rownames(tumor_jansky)) %>%
   {.}
 
 out <- multiBatchNorm(
   nb[common_genes, ],
   tumor_dong[common_genes, ],
-  tumor_jansky[common_genes, ]
+  # tumor_jansky[common_genes, ],
+  assay.type = "counts"
 )
 gc()
 
-tumor_data_merged <- correctExpyeriments(
+tumor_data_merged <- correctExperiments(
   out[[1]],
   out[[2]],
-  out[[3]],
+  # out[[3]],
   # PARAM = NoCorrectParam()
-  # PARAM = RescaleParam()
-  PARAM = FastMnnParam()
+  PARAM = RescaleParam()
+  # PARAM = FastMnnParam()
 )
+gc()
 
 colData(tumor_data_merged)$sample <-
   colData(tumor_data_merged)$sample %>% 
   rename_patients()
 
+colData(tumor_data_merged)$group <-
+  colData(tumor_data_merged)$sample %>% 
+  str_sub(1, 1) %>%
+  str_replace("N", "T")
+
+colData(tumor_data_merged)$mycn_status <- if_else(
+  colData(tumor_data_merged)$sample %in% c("T162", "T200", "T230",
+                "NB01", "NB02", "NB08", "NB11", "NB14") |
+    str_starts(colData(tumor_data_merged)$sample, "M"),
+  "amplified",
+  "normal"
+)
+
+colData(tumor_data_merged)$group2 <- fct_cross(
+  colData(tumor_data_merged)$group,
+  colData(tumor_data_merged)$mycn_status
+)
+
 pb_tumor <-
   tumor_data_merged %>% 
-  aggregateData(by = "sample", fun = "mean")
+  # aggregateData(by = "sample", fun = "mean")
+  aggregateData(by = "group2", fun = "mean")
 
 
 
@@ -115,13 +136,14 @@ distance <- as.dist(1 - corr_mat)
 col_metadata <- tibble(
   sample = colnames(corr_mat),
   group = str_sub(sample, 1, 1) %>% str_replace("N", "T"),
-  mycn_status = if_else(
-    sample %in% c("T162", "T200", "T230",
-                  "NB01", "NB02", "NB08", "NB11", "NB14") |
-    str_starts(sample, "M"),
-    "amplified",
-    "normal"
-  )
+  # mycn_status = if_else(
+  #   sample %in% c("T162", "T200", "T230",
+  #                 "NB01", "NB02", "NB08", "NB11", "NB14") |
+  #   str_starts(sample, "M"),
+  #   "amplified",
+  #   "normal"
+  # )
+  mycn_status = if_else(str_ends(sample, "ied"), "amplified", "normal")
 )
 
 p <- Heatmap(
@@ -138,8 +160,10 @@ p <- Heatmap(
   clustering_distance_rows = distance,
   clustering_distance_columns = distance,
   
-  width = unit(3.7, "mm") * nrow(corr_mat),
-  height = unit(3.7, "mm") * nrow(corr_mat),
+  # width = unit(3.7, "mm") * nrow(corr_mat),
+  # height = unit(3.7, "mm") * nrow(corr_mat),
+  width = unit(80, "mm"),
+  height = unit(80, "mm"),
   
   show_column_dend = FALSE,
   
@@ -163,4 +187,4 @@ p <- Heatmap(
   ),
 )
 p
-ggsave_default("comparison/correlation_all_fastmnn", plot = p)
+ggsave_default("comparison/correlation_dn_rescale_agg", plot = p)

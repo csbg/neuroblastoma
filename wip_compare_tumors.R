@@ -51,17 +51,20 @@ samples_jansky <-
   read_csv("data_wip/metadata_samples_jansky.csv", comment = "#") %>% 
   transmute(
     sample,
+    time_point,
     group = recode(clinical_subtype,
                    MYCN = "T-M", LR = "low_risk", ALT = "T-A", TERT = "T-S"),
     group = if_else(mesenchymal_features, "mesenchymal", group)
   )
 
-singler_results_jansky <- 
+singler_results_jansky <-
   read_csv("data_wip/adrmed_class_jansky.csv") %>% 
   inner_join(metadata_jansky, by = "cell") %>% 
   left_join(samples_jansky, by = "sample") %>% 
   relocate(sample, group) %>% 
-  mutate(dataset = "jansky", .before = 1)
+  mutate(dataset = "jansky", .before = 1) %>% 
+  filter(time_point == "primary") %>% 
+  select(!time_point)
 
 
 ## Own data ----
@@ -87,14 +90,16 @@ singler_results <-
   ) %>% 
   mutate(
     group = fct_relevel(group, "low_risk", "mesenchymal"),
-    group2 = fct_collapse(group, "A+S" = c("A", "S"), "T-A+S" = c("T-A", "T-S")),
+    mycn_status = if_else(group %in% c("M", "T-M"), "amplified", "normal"),
+    tumor = if_else(group %in% c("A", "M", "S"), "DTC", "primary"),
     pruned_labels =
       pruned_labels %>% 
       factor(levels = names(ADRMED_CELLS_COLORS)) %>% 
       fct_rev() %>% 
       fct_explicit_na()
   )
-
+singler_results %>% distinct(sample, group, mycn_status, tumor) %>% 
+  View()
 
 
 # Analyze -----------------------------------------------------------------
@@ -195,8 +200,9 @@ ggsave_default("comparison/cell_types_group2", height = 420)
 
 
 
-plot_agg_profile <- function(group_col = group) {
-  singler_results %>%
+plot_agg_profile <- function(data, group_col = group) {
+  data %>%
+    filter(dataset != "jansky") %>% 
     group_by(group = {{group_col}}) %>% 
     count(cell_type = pruned_labels) %>% 
     mutate(n_rel = n / sum(n) * 100) %>% 
@@ -215,11 +221,15 @@ plot_agg_profile <- function(group_col = group) {
     )
 }
 
-plot_agg_profile()
+singler_results %>% 
+  mutate(
+    group =
+      fct_cross(tumor, mycn_status) %>%
+      fct_relevel("DTC:amplified", "DTC:normal")
+  ) %>% 
+  plot_agg_profile()
 ggsave_default("comparison/profile_group", height = 100)
 
-plot_agg_profile(group_col = group2)
-ggsave_default("comparison/profile_group2", height = 100)
 
 
 
@@ -275,87 +285,12 @@ plot_score_heatmap("NB06", prop = 0.25)
 
 
 
-## Patient heatmaps: Pat vs pat ----
+## Patient heatmap ----
 
-plot_pp_heatmap <- function() {
-  corr_mat <- 
-    singler_results %>% 
-    filter(!group %in% c("low_risk", "mesenchymal")) %>%
-    group_by(sample) %>%
-    count(cell_type = pruned_labels) %>% 
-    mutate(n = n / sum(n) * 100) %>% 
-    ungroup() %>% 
-    pivot_wider(names_from = sample, values_from = n) %>% 
-    column_to_rownames("cell_type") %>%
-    as.matrix() %>% 
-    replace_na(0) %>% 
-    cor(use = "pairwise.complete.obs")
-  
-  distance <- as.dist(1 - corr_mat)
-  
-  metadata_cols <- 
-    tibble(sample = colnames(corr_mat)) %>% 
-    left_join(
-      singler_results %>% 
-        distinct(sample, group, group2) %>% 
-        mutate(
-          group3 = str_sub(group, -1),
-          group4 = if_else(group3 == "M", "M", "A+S"),
-          tumor = if_else(group %in% c("A", "M", "S"), "DTC", "primary")
-        ),
-      by = "sample"
-    )
-  
-  Heatmap(
-    corr_mat,
-    col = circlize::colorRamp2(
-      seq(min(corr_mat), max(corr_mat), length.out = 9),
-      scico(9, palette = "davos", direction = -1),
-    ),
-    name = "correlation of\ncell subtype\ncomposition",
-    heatmap_legend_param = list(
-      at = round(c(min(corr_mat), max(corr_mat)), 2)
-    ),
-    
-    clustering_distance_rows = distance,
-    clustering_distance_columns = distance,
-    
-    width = unit(150, "mm"),
-    height = unit(150, "mm"),
-    
-    show_column_dend = FALSE,
-    
-    left_annotation = rowAnnotation(
-      group = metadata_cols$group4,
-      tumor = metadata_cols$tumor,
-      col = list(
-        group = c(
-          GROUP_COLORS,
-          "A+S" = "#dd9a59",
-          "T-A" = "#8a504e",
-          "T-M" = "#768688",
-          "T-S" = "#967F52",
-          "T-A+S" = "#906850",
-          low_risk = "grey80",
-          mesenchymal = "#c61f3c"
-        ),
-        tumor = c(DTC = "black", primary = "grey80")
-      )
-    )
-  )
-}
-
-(p <- plot_pp_heatmap())
-ggsave_default("comparison/heatmap_adrmed_correlation", plot = p)
-
-
-
-## Patient heatmaps: Pat vs cell types ----
-
-plot_pc_heatmap <- function() {
+plot_patient_heatmap <- function() {
   mat <- 
     singler_results %>% 
-    filter(!group %in% c("low_risk", "mesenchymal")) %>%
+    filter(dataset != "jansky") %>%
     group_by(sample) %>%
     count(cell_type = pruned_labels) %>% 
     mutate(n = n / sum(n) * 100) %>% 
@@ -365,16 +300,10 @@ plot_pc_heatmap <- function() {
     as.matrix() %>% 
     replace_na(0)
   
-  metadata_cols <- 
+  col_metadata <- 
     tibble(sample = colnames(mat)) %>% 
     left_join(
-      singler_results %>% 
-        distinct(sample, group, group2) %>% 
-        mutate(
-          group3 = str_sub(group, -1),
-          group4 = if_else(group3 == "M", "M", "A+S"),
-          tumor = if_else(group %in% c("A", "M", "S"), "DTC", "primary")
-        ),
+      singler_results %>% distinct(sample, mycn_status, tumor),
       by = "sample"
     )
   
@@ -386,28 +315,27 @@ plot_pc_heatmap <- function() {
       at = round(c(min(mat), max(mat)), 2)
     ),
     
-    column_split = fct_cross(metadata_cols$tumor, metadata_cols$group4),
+    column_split =
+      fct_cross(col_metadata$tumor, col_metadata$mycn_status) %>% 
+      fct_relevel("DTC:amplified", "DTC:normal"),
+    cluster_column_slices = FALSE,
     column_title = NULL,
     
     top_annotation = HeatmapAnnotation(
-      group = metadata_cols$group4,
-      tumor = metadata_cols$tumor,
+      tumor = col_metadata$tumor,
+      mycn = col_metadata$mycn_status,
       col = list(
-        group = c(
-          GROUP_COLORS,
-          "A+S" = "#dd9a59",
-          "T-A" = "#8a504e",
-          "T-M" = "#768688",
-          "T-S" = "#967F52",
-          "T-A+S" = "#906850",
-          low_risk = "grey80",
-          mesenchymal = "#c61f3c"
-        ),
+        mycn = c("normal" = "gray90", "amplified" = "#d35f5f"),
         tumor = c(DTC = "black", primary = "grey80")
+      ),
+      annotation_legend_param = list(
+        mycn = list(title = "MYCN status"),
+        tumor = list(title = "tumor")
       )
     ),
   )
 }
-(p <- plot_pc_heatmap())
+(p <- plot_patient_heatmap())
 
-ggsave_default("comparison/heatmap_adrmed_celltypes", plot = p, height = 100)
+ggsave_default("comparison/heatmap_adrmed_celltypes",
+               plot = p, height = 100, width = 230)
