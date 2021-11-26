@@ -71,7 +71,23 @@ bind_rows(
 ggsave_default("dge_mm/number_of_de_genes", height = 80, width = 150)
 
 
+dge$results_wide_filtered %>%
+  mutate(comparison = rename_contrast(comparison)) %>% 
+  filter(abs(logFC) > log(2), comparison %>% str_ends("c")) %>%
+  group_by(cell_type, direction, comparison) %>% 
+  summarise(genes = list(unique(gene))) %>% 
+  summarise(shared = list(genes)) %>%
+  ungroup() %>% 
+  rowwise() %>% 
+  mutate(shared = shared %>% reduce(intersect) %>% length()) %>%
+  mutate(shared = if_else(direction == "up", shared, -shared)) %>% 
+  ggplot(aes(cell_type, shared, fill = direction)) +
+  geom_col() +
+  theme_bw()
+ggsave_default("dge_mm/nu ber_of_consistent_genes")
 
+
+  
 # Volcano plots -----------------------------------------------------------
 
 ggplot(dge$results_wide, aes(logFC, -log10(p))) +
