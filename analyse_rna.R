@@ -920,6 +920,29 @@ walk(
 
 # Cell type abundance -----------------------------------------------------
 
+## Counting ----
+
+nb_data %>% 
+  group_by(group, sample) %>% 
+  count(cell_type = cellont_abbr) %>% 
+  mutate(
+    n = n / sum(n) * 100,
+    sample = rename_patients(sample),
+    group = rename_groups(group)
+  ) %>%
+  complete(nesting(group, sample), cell_type, fill = list(n = 0)) %>% 
+  ggplot(aes(cell_type, n, color = group)) +
+  geom_boxplot(outlier.shape = NA, size = .25, show.legend = FALSE) +
+  geom_point(position = position_jitterdodge(seed = 1), size = .5, alpha = .5) +
+  xlab("Cell type") +
+  ylab("Relative abundance (%)") +
+  scale_color_manual(values = GROUP_COLORS) +
+  theme_nb(grid = FALSE)
+ggsave_default("cell_types/abundances_count", width = 180, height = 50)
+
+
+## Enrichment ----
+
 nb_data %>%
   group_by(group, sample, cellont_name) %>% 
   summarise(n = n()) %>% 
@@ -1640,7 +1663,7 @@ plot_celltype_dots <- function(data, p_lim = 20, or_lim = 3) {
     xlab("cell type") +
     ylab("patient") +
     scale_color_gsea(
-      name = TeX("log_2 odds ratio"),
+      name = "enrichment relative\nto control\n(log2 odds ratio)",
       limits = c(-or_lim, or_lim),
       breaks = c(-or_lim, 0, or_lim),
       labels = c(
