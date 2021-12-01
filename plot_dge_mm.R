@@ -34,6 +34,8 @@ any(dge$results_MNA_vs_other$convergence <= -20)
 
 # Number of DE genes ------------------------------------------------------
 
+## Counts ----
+
 bind_rows(
   "p_adj <= 0.05, log2 FC > 1" = 
     dge$results_wide_filtered %>% 
@@ -71,20 +73,59 @@ bind_rows(
 ggsave_default("dge_mm/number_of_de_genes", height = 80, width = 150)
 
 
-dge$results_wide_filtered %>%
+## Consistent genes ----
+
+consistent_genes <- 
+  dge$results_wide_filtered %>%
   mutate(comparison = rename_contrast(comparison)) %>% 
-  filter(abs(logFC) > log(2), comparison %>% str_ends("c")) %>%
-  group_by(cell_type, direction, comparison) %>% 
-  summarise(genes = list(unique(gene))) %>% 
-  summarise(shared = list(genes)) %>%
+  filter(
+    abs(logFC) > log(2),
+    comparison %>% str_ends("c")
+  ) %>%
+  group_by(cell_type, direction, comparison) %>%
+  summarise(genes = list(unique(gene))) %>%
   ungroup() %>% 
-  rowwise() %>% 
-  mutate(shared = shared %>% reduce(intersect) %>% length()) %>%
-  mutate(shared = if_else(direction == "up", shared, -shared)) %>% 
-  ggplot(aes(cell_type, shared, fill = direction)) +
+  pivot_wider(names_from = comparison, values_from = genes) %>% 
+  rowwise() %>%
+  mutate(
+    shared_AM = Ac %>% intersect(Mc) %>% length(),
+    shared_AS = Ac %>% intersect(Sc) %>% length(),
+    shared_MS = Mc %>% intersect(Sc) %>% length(),
+    shared_AMS = Ac %>% intersect(Mc) %>% intersect(Sc) %>% length()
+  ) %>%
+  ungroup() %>%
+  mutate(
+    across(
+      starts_with("shared"),
+      ~if_else(direction == "up", ., -.)
+    )
+  )
+
+
+ggplot(consistent_genes, aes(cell_type, shared_AMS)) +
+  geom_col(fill = hcl(285, 100, 65)) +
+  geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
+  xlab("cell type") +
+  ylab("number of consistently down- and upregulated genes") +
+  theme_nb()
+ggsave_default("dge_mm/number_of_consistent_genes", width = 40, height = 60)
+
+consistent_genes %>% 
+  select(!c(Ac, Mc, Sc)) %>% 
+  pivot_longer(
+    starts_with("shared"),
+    names_to = "shared",
+    names_prefix = "shared_",
+    values_to = "n"
+  ) %>% 
+  mutate(shared = fct_relevel(shared, "AM", "AS", "MS")) %>% 
+  ggplot(aes(cell_type, n, fill = shared)) +
   geom_col() +
-  theme_bw()
-ggsave_default("dge_mm/nu ber_of_consistent_genes")
+  geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +  
+  xlab("cell type") +
+  ylab("number of consistently down- and upregulated genes") +
+  theme_nb()
+ggsave_default("dge_mm/number_of_consistent_genes_groups", width = 60, height = 60)
 
 
   
