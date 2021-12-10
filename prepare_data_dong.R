@@ -1,17 +1,16 @@
+# Generate a Seurat object with all Dong datasets.
+#
+# @DEPI published datasets
+# @DEPO tumor_data_dong.rds
+
+
 library(Seurat)
-# library(monocle3)
-# library(scuttle)
-# library(muscat)
-# library(umap)
-# library(ProjecTILs)
 library(tidyverse)
 library(fs)
-# source("common_functions.R")
-# source("styling.R")
 
 
 
-files_dong <- read_csv("data_wip/metadata_samples_dong.csv", comment = "#")
+files_dong <- read_csv("metadata/samples_dong.csv", comment = "#")
 
 metadata_dong <-
   read_csv("data_raw/GSE137804/GSE137804_tumor_dataset_annotation.csv") %>%
@@ -63,5 +62,5 @@ data_dong <- pmap(
 
 data_dong %>%
   {merge(.[[1]], .[-1])} %>%
-  saveRDS("data_wip/tumor_data_dong.rds")
+  saveRDS("data_generated/tumor_data_dong.rds")
 

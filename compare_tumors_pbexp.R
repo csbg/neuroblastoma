@@ -1,3 +1,8 @@
+# Create pseudobulk correlation heatmap of own and Dong datasets
+#
+# @DEPI rna_decontaminated.rds
+# @DEPI tumor_data_dong.rds
+
 library(Seurat)
 library(scuttle)
 library(scran)
@@ -23,10 +28,10 @@ nb@colData <-
 nb <- nb[, colData(nb)$cellont_abbr == "NB"]
 
 
-metadata_dong <- read_csv("data_wip/metadata_samples_dong.csv", comment = "#")
+metadata_dong <- read_csv("metadata/samples_dong.csv", comment = "#")
 
 tumor_dong <-
-  readRDS("data_wip/tumor_data_dong.rds") %>% 
+  readRDS("data_generated/tumor_data_dong.rds") %>% 
   AddMetaData("dong", "dataset")
 
 tumor_dong <- SingleCellExperiment(
@@ -34,33 +39,31 @@ tumor_dong <- SingleCellExperiment(
   colData = tumor_dong@meta.data %>% as("DataFrame")
 )
 
-# tumor_dong <- tumor_dong[, colData(tumor_dong)$sample %in% c("T214", "T27")]
-
-metadata_jansky <-
-  read_csv("data_wip/metadata_samples_jansky.csv", comment = "#")
-
-used_samples_jansky <- 
-  metadata_jansky %>% 
-  filter(
-    clinical_subtype %in% c("MYCN", "TERT", "ALT"),
-    !mesenchymal_features
-  ) %>% 
-  pull(sample)
-
-tumor_jansky <-
-  readRDS("data_wip/tumor_data_jansky.rds") %>% 
-  subset(subset = anno_new == "Tumor cells") %>% 
-  AddMetaData("jansky", "dataset")
-
-tumor_jansky <-
-  SingleCellExperiment(
-    list(counts = tumor_jansky$RNA@counts),
-    colData =
-      tumor_jansky@meta.data %>% 
-      select(sample = patientID, dataset) %>% 
-      as("DataFrame")
-  ) %>% 
-  magrittr::extract(, colData(.)$sample %in% used_samples_jansky)
+# metadata_jansky <-
+#   read_csv("data_wip/metadata_samples_jansky.csv", comment = "#")
+# 
+# used_samples_jansky <- 
+#   metadata_jansky %>% 
+#   filter(
+#     clinical_subtype %in% c("MYCN", "TERT", "ALT"),
+#     !mesenchymal_features
+#   ) %>% 
+#   pull(sample)
+# 
+# tumor_jansky <-
+#   readRDS("data_wip/tumor_data_jansky.rds") %>% 
+#   subset(subset = anno_new == "Tumor cells") %>% 
+#   AddMetaData("jansky", "dataset")
+# 
+# tumor_jansky <-
+#   SingleCellExperiment(
+#     list(counts = tumor_jansky$RNA@counts),
+#     colData =
+#       tumor_jansky@meta.data %>% 
+#       select(sample = patientID, dataset) %>% 
+#       as("DataFrame")
+#   ) %>% 
+#   magrittr::extract(, colData(.)$sample %in% used_samples_jansky)
 
 
 
@@ -68,9 +71,8 @@ tumor_jansky <-
 
 common_genes <-
   rownames(nb) %>% 
-  intersect(rownames(tumor_dong)) %>%
-  # intersect(rownames(tumor_jansky)) %>%
-  {.}
+  intersect(rownames(tumor_dong))
+  # intersect(rownames(tumor_jansky))
 
 out <- multiBatchNorm(
   nb[common_genes, ],
@@ -84,9 +86,7 @@ tumor_data_merged <- correctExperiments(
   out[[1]],
   out[[2]],
   # out[[3]],
-  # PARAM = NoCorrectParam()
   PARAM = RescaleParam()
-  # PARAM = FastMnnParam()
 )
 gc()
 
@@ -99,23 +99,25 @@ colData(tumor_data_merged)$group <-
   str_sub(1, 1) %>%
   str_replace("N", "T")
 
+# use if Jansky data is used
+# colData(tumor_data_merged)$mycn_status <- if_else(
+#   colData(tumor_data_merged)$sample %in% c("T162", "T200", "T230",
+#                 "NB01", "NB02", "NB08", "NB11", "NB14") |
+#     str_starts(colData(tumor_data_merged)$sample, "M"),
+#   "amplified",
+#   "normal"
+# )
+
 colData(tumor_data_merged)$mycn_status <- if_else(
-  colData(tumor_data_merged)$sample %in% c("T162", "T200", "T230",
-                "NB01", "NB02", "NB08", "NB11", "NB14") |
+  colData(tumor_data_merged)$sample %in% c("T162", "T200", "T230") |
     str_starts(colData(tumor_data_merged)$sample, "M"),
   "amplified",
   "normal"
 )
 
-colData(tumor_data_merged)$group2 <- fct_cross(
-  colData(tumor_data_merged)$group,
-  colData(tumor_data_merged)$mycn_status
-)
-
 pb_tumor <-
   tumor_data_merged %>% 
-  # aggregateData(by = "sample", fun = "mean")
-  aggregateData(by = "group2", fun = "mean")
+  aggregateData(by = "sample", fun = "mean")
 
 
 
@@ -136,14 +138,13 @@ distance <- as.dist(1 - corr_mat)
 col_metadata <- tibble(
   sample = colnames(corr_mat),
   group = str_sub(sample, 1, 1) %>% str_replace("N", "T"),
-  # mycn_status = if_else(
-  #   sample %in% c("T162", "T200", "T230",
-  #                 "NB01", "NB02", "NB08", "NB11", "NB14") |
-  #   str_starts(sample, "M"),
-  #   "amplified",
-  #   "normal"
-  # )
-  mycn_status = if_else(str_ends(sample, "ied"), "amplified", "normal")
+  mycn_status = if_else(
+    sample %in% c("T162", "T200", "T230",
+                  "NB01", "NB02", "NB08", "NB11", "NB14") |
+    str_starts(sample, "M"),
+    "amplified",
+    "normal"
+  )
 )
 
 p <- Heatmap(
@@ -187,4 +188,4 @@ p <- Heatmap(
   ),
 )
 p
-ggsave_default("comparison/correlation_dn_rescale_agg", plot = p)
+ggsave_default("comparison/correlation_pseudobulk", plot = p)

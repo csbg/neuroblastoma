@@ -1,3 +1,9 @@
+# Determine similarity of tumur cells to adrenal medullar cells.
+#
+# @DEPI rna_decontaminated.rds
+# @DEPI tumor_data_dong.rds
+# @DEPO adrmed_class_*.csv
+
 library(Seurat)
 library(monocle3)
 library(SingleR)
@@ -17,13 +23,13 @@ nb@colData <-
 
 nb <- nb[, colData(nb)$cellont_abbr == "NB"]
 
-tumor_dong <- readRDS("data_wip/tumor_data_dong.rds")
+tumor_dong <- readRDS("data_generated/tumor_data_dong.rds")
 
-tumor_jansky <-
-  readRDS("data_wip/tumor_data_jansky.rds") %>% 
-  subset(subset = anno_new == "Tumor cells")
+# tumor_jansky <-
+#   readRDS("data_wip/tumor_data_jansky.rds") %>% 
+#   subset(subset = anno_new == "Tumor cells")
 
-ref <- readRDS("data_wip/reference_adrenal_medulla.rds")
+ref <- readRDS("data_raw/jansky/reference_adrenal_medulla.rds")
 
 
 
@@ -57,18 +63,18 @@ predict_cell_types <- function(count_matrix, outfile) {
 
 predict_cell_types(
   counts(nb),
-  "data_wip/adrmed_class_nb.csv"
+  "data_generated/adrmed/adrmed_class_nb.csv"
 )
 
-predict_cell_types(
-  tumor_jansky$RNA@counts,
-  "data_wip/adrmed_class_jansky.csv"
-)
+# predict_cell_types(
+#   tumor_jansky$RNA@counts,
+#   "data_wip/adrmed_class_jansky.csv"
+# )
 
 tumor_dong %>% 
   iwalk(
     ~predict_cell_types(
       .x$RNA@counts,
-      str_glue("data_wip/adrmed_class_dong_{.y}.csv")
+      str_glue("data_generated/adrmed/adrmed_class_dong_{.y}.csv")
     )
   )

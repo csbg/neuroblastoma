@@ -1,0 +1,24 @@
+# description: Raw data files in GEO series GSE137804
+# columns:
+#   tumor_id: sample id in associated publication
+#   file: names of selected files extracted from GSE137804_RAW.tar (those are TSV files despite their extension!)
+#   bad_header: boolean, indicates whether the first row is lacking the first column name
+#   high_risk: boolean, indicates whether sample is from high-risk tumor
+#   mycn_amplified: boolean, indicates whether sample is from MYCN-amplified tumor
+tumor_id,file,bad_header,high_risk,mycn_amplified
+T10,GSM4088774_T10_gene_cell_exprs_table.xls,FALSE,TRUE,FALSE
+T19,GSM4088775_T19_gene_cell_exprs_table.xls,FALSE,FALSE,NA
+T27,GSM4088776_T27_gene_cell_exprs_table.xls,FALSE,TRUE,FALSE
+T34,GSM4088777_T34_gene_cell_exprs_table.xls,FALSE,TRUE,FALSE
+T40,GSM4088778_T40_gene_cell_exprs_table.xls,FALSE,FALSE,NA
+T44,GSM4088779_T44_gene_cell_exprs_table.xls,FALSE,FALSE,NA
+T69,GSM4088780_T69_gene_cell_exprs_table.xls,FALSE,TRUE,FALSE
+T71,GSM4088781_T71_gene_cell_exprs_table.xls,FALSE,TRUE,FALSE
+T75,GSM4088782_T75_gene_cell_exprs_table.xls,FALSE,TRUE,FALSE
+T92,GSM4088783_T92_gene_cell_exprs_table.xls,FALSE,TRUE,FALSE
+T162,GSM4654669_T162_gene_cell_exprs_table.xls,TRUE,TRUE,TRUE
+T175,GSM4654670_T175_gene_cell_exprs_table.xls,FALSE,FALSE,NA
+T188,GSM4654671_T188_gene_cell_exprs_table.xls,FALSE,FALSE,NA
+T200,GSM4654672_T200_gene_cell_exprs_table.xls,TRUE,TRUE,TRUE
+T214,GSM4654673_T214_gene_cell_exprs_table.xls,TRUE,TRUE,FALSE
+T230,GSM4654674_T230_gene_cell_exprs_table.xls,TRUE,TRUE,TRUE
