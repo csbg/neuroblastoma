@@ -1536,11 +1536,11 @@ plot_umap <- function() {
     "14", -1, -1,
     "15", 0, 1,
     "16", 0, 0.5,
-    "17", 1, 0,
-    "18", -1, 0,
+    "17", 0, 1,
+    "18", -1.2, 0,
     "19", 1, 0,
     "20", 1, 0,
-    "21", 0, -1
+    "21", -.5, 1
   )
   
   cluster_labels <- 
@@ -1582,159 +1582,213 @@ plot_umap <- function() {
     theme(
       legend.key.height = unit(1, "mm"),
       legend.key.width = unit(1, "mm"),
-      legend.position = c(.9, .2)
+      legend.position = c(.9, .22)
     )
   
   p
 }
 
 plot_umap()
-ggsave_publication("1b_umap_dataset", type = "png", width = 6, height = 6)
-
-
-## Figure 1c ----
-
-nb_data %>% 
-  mutate(
-    cells = case_when(
-      cellont_cluster == "NB (8)" ~ "tumor",
-      TRUE ~ "other"
-    )
-  ) %>%
-  pivot_longer(
-    starts_with("signature"),
-    names_to = "signature",
-    names_prefix = "signature_"
-  ) %>% 
-  mutate(signature = recode(signature, ncc_like = "NCC-like")) %>% 
-  ggplot(aes(cells, value)) +
-  geom_violin(
-    aes(fill = cells),
-    scale = "width",
-    size = BASE_LINE_SIZE
-  ) +
-  stat_summary(geom = "point", fun = mean, size = .1) +
-  xlab(NULL) +
-  scale_y_continuous(
-    name = "gene signature score",
-    limits = c(0, 1),
-    breaks = c(0, 0.5, 1),
-    expand = expansion(add = .025)
-  ) +
-  scale_fill_manual(values = c("gray80", CELL_TYPE_COLORS["NB"])) +
-  coord_flip() +
-  facet_grid(vars(signature)) +
-  theme_nb(grid = FALSE) +
-  theme(legend.position = "none")
-
-ggsave_publication("1c_gene_programs", width = 5, height = 6)
+ggsave_publication("1b_umap_dataset", type = "png", width = 5, height = 5)
 
 
 
-## Figure 3a ----
+## Figure 1d ----
 
-plot_celltype_dots <- function(data, p_lim = 20, or_lim = 3) {
-  data %>% 
-    filter(cell_type != "other") %>% 
+plot_celltype_heatmap <- function(clusters = 1:21, body_width = 150,
+                                  collapse = TRUE) {
+  # generate matrix of cell type abundances
+  make_matrix <- function(ref) {
+    cell_type_column <- rlang::sym(str_glue("cell_type_{ref}_broad"))
+    
+    nb_data %>% 
+      filter(cluster_50 %in% {{clusters}}) %>% 
+      mutate(
+        cell_type =
+          as_factor(!!cell_type_column) %>%
+          fct_infreq() %>% 
+          fct_explicit_na("Unknown") %>% 
+          fct_relabel(~str_c(ref, .x, sep = "_"))
+      ) %>% 
+      count(cluster = cluster_50, cell_type) %>%
+      group_by(cluster) %>%
+      mutate(n_rel = n / sum(n)) %>%
+      select(!n) %>%
+      ungroup() %>%
+      arrange(cell_type) %>% 
+      pivot_wider(names_from = "cell_type", values_from = "n_rel") %>%
+      arrange(cluster) %>% 
+      column_to_rownames("cluster") %>%
+      as.matrix() %>%
+      replace_na(0)
+  }
+  
+  mat <- 
+    map(
+      c("blueprint", "hpca", "dice", "dmap", "monaco"),
+      make_matrix
+    ) %>% 
+    reduce(cbind)
+  
+  # set up column metadata
+  col_metadata <-
+    tibble(colname = colnames(mat)) %>% 
+    left_join(
+      read_csv("metadata/celldex_celltypes.csv", comment = "#"),
+      by = "colname"
+    ) %>% 
+    separate(
+      colname,
+      into = c("ref", "cell_type"),
+      extra = "merge",
+      remove = FALSE
+    ) %>% 
+    mutate(
+      ref =
+        as_factor(ref) %>% 
+        fct_recode(
+          "Human Primary Cell Atlas" = "hpca",
+          "Blueprint/ENCODE" = "blueprint",
+          "DICE" = "dice",
+          "Novershtern" = "dmap",
+          "Monaco" = "monaco"
+        ),
+      abbr = factor(abbr, levels = names(CELL_TYPE_COLORS))
+    ) %>% 
+    group_by(ref) %>% 
+    arrange(abbr, .by_group = TRUE) %>% 
+    ungroup()
+  
+  mat <- mat[, col_metadata$colname]
+  
+  if (collapse) {
+    mat <-
+      mat %>% 
+      t() %>% 
+      as_tibble(rownames = "colname") %>% 
+      left_join(col_metadata, by = "colname") %>% 
+      group_by(ref, abbr) %>% 
+      summarise(across(where(is.numeric), sum)) %>%
+      ungroup() %>%
+      unite(ref, abbr, col = "ref_abbr") %>% 
+      column_to_rownames("ref_abbr") %>%
+      as.matrix() %>%
+      t()
+    
+    col_metadata <- 
+      col_metadata %>% 
+      distinct(ref, abbr) %>% 
+      mutate(cell_type = abbr)
+  }
+  
+  colnames(mat) <- col_metadata$cell_type
+  
+  # set up row metadata
+  row_metadata <- 
+    tibble(cluster = levels(nb_data$cellont_cluster)) %>% 
+    extract(
+      cluster,
+      into = c("cell_type", "cluster"),
+      regex = "(\\w+) \\((\\d+)",
+      convert = TRUE
+    ) %>%
+    filter(cluster %in% {{clusters}}) %>% 
     mutate(
       cell_type =
-        as_factor(cell_type) %>%
-        fct_relevel(
-          levels(nb_data$cellont_cluster) %>%
-            str_extract("\\w+") %>% 
-            unique()
-        ),
-      log_p_adj = pmin(-log10(p_adj), p_lim),
-      log_odds_ratio = log2(odds_ratio),
-      log_odds_ratio = case_when(
-        log_odds_ratio > or_lim  ~ or_lim,
-        log_odds_ratio < -or_lim ~ -or_lim,
-        TRUE                     ~ log_odds_ratio
-      ),
-      sample =
-        sample %>% 
-        factor(levels = levels(nb_data$sample)) %>% 
-        rename_patients() %>% 
-        fct_rev(),
-      group = rename_groups(group)
-    ) %>% 
-    ggplot(aes(cell_type, sample)) + 
-    geom_point(aes(color = log_odds_ratio, size = log_p_adj), shape = 16) + 
-    xlab("cell type") +
-    ylab("patient") +
-    scale_color_gsea(
-      name = "enrichment relative\nto control\n(log2 odds ratio)",
-      limits = c(-or_lim, or_lim),
-      breaks = c(-or_lim, 0, or_lim),
-      labels = c(
-        str_glue("-{or_lim} or lower"),
-        "0",
-        str_glue("{or_lim} or higher")
-      ),
-      guide = guide_colorbar(ticks = FALSE)
-    ) +
-    scale_radius(
-      name = TeX("-log_{10} p_{adj}"),
-      range = c(0.25, 3),
-      breaks = c(0, 10, 20),
-      labels = function(x) c(x[-length(x)], paste(x[length(x)], "or higher"))
-    ) +
-    facet_grid(vars(group), scales = "free_y", space = "free_y") +
-    theme_nb(grid = FALSE) +
-    theme(
-      legend.key.height = unit(2, "mm"),
-      legend.key.width = unit(2, "mm"),
-      legend.spacing = unit(5, "mm"),
-      legend.margin = margin(0, 0, 0, 0, "mm"),
-      panel.spacing = unit(-.5, "pt"),
-      strip.text.y.right = element_text(angle = 0)
+        cell_type %>% 
+        factor(levels = names(CELL_TYPE_COLORS)) %>% 
+        fct_drop()
+    ) %>%
+    arrange(cluster) %>%
+    pull(cell_type)
+  
+  # draw heatmap  
+  ht_opt(
+    simple_anno_size = unit(1.5, "mm"),
+    COLUMN_ANNO_PADDING = unit(1, "pt"),
+    DENDROGRAM_PADDING = unit(1, "pt"),
+    HEATMAP_LEGEND_PADDING = unit(1, "mm"),
+    ROW_ANNO_PADDING = unit(1, "pt"),
+    TITLE_PADDING = unit(1, "mm")
+  )
+  
+  set.seed(2)
+  Heatmap(
+    mat,
+    col = colorRampPalette(brewer.pal(9, "YlOrBr"))(100),
+    
+    heatmap_legend_param = list(
+      at = c(0, 1),
+      border = FALSE,
+      grid_width = unit(2, "mm"),
+      labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      legend_height = unit(15, "mm"),
+      title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+    ),
+    name = "relative\nabundance",
+    
+    row_title = "cluster and assigned cell type",
+    row_title_side = "right",
+    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    row_dend_gp = gpar(lwd = 0.5),
+    row_dend_width = unit(3, "mm"),
+    row_km = 5,
+    
+    column_split = col_metadata$ref,
+    column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    
+    cluster_columns = FALSE,
+    show_parent_dend_line = FALSE,
+    
+    width = unit(body_width, "mm"),
+    height = unit((body_width - 4) / ncol(mat) * nrow(mat) + 4, "mm"),
+    
+    right_annotation = rowAnnotation(
+      cell_type = row_metadata,
+      col = list(cell_type = CELL_TYPE_COLORS),
+      show_annotation_name = FALSE,
+      show_legend = FALSE,
+      annotation_legend_param = list(
+        cell_type = list(
+          title = "cell type",
+          grid_height = unit(2, "mm"),
+          grid_width = unit(2, "mm"),
+          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+        )
+      )
+    ),
+    
+    bottom_annotation = HeatmapAnnotation(
+      cell_type = col_metadata$abbr,
+      col = list(cell_type = CELL_TYPE_COLORS),
+      show_annotation_name = FALSE,
+      show_legend = FALSE,
+      annotation_legend_param = list(
+        cell_type = list(
+          title = "cell type",
+          grid_height = unit(2, "mm"),
+          grid_width = unit(2, "mm"),
+          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+        )
+      )
+    )
+  ) %>%
+    draw(
+      gap = unit(50, "mm"),
+      column_title = "cell type in reference dataset",
+      column_title_side = "bottom",
+      column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
     )
 }
 
-plot_celltype_dots(cell_type_enrichment)
-ggsave_publication("3a_cell_type_abundances", width = 5, height = 4)
+(p <- plot_celltype_heatmap(body_width = 80))
+ggsave_publication("1d_celltype_heatmap",
+                   plot = p, width = 11, height = 6)
 
-
-## Figure 3b ----
-
-nb_data %>%
-  group_by(group, sample, cellont_name) %>% 
-  summarise(n = n()) %>% 
-  mutate(n_rel = n / sum(n)) %>% 
-  ungroup() %>% 
-  filter(cellont_name == "natural killer cell") %>% 
-  mutate(
-    sample = rename_patients(sample) %>% fct_rev(),
-    group = rename_groups(group)
-  ) %>% 
-  ggplot(aes(sample, n_rel)) +
-  geom_col(aes(fill = group), show.legend = FALSE) +
-  annotate(
-    "text",
-    x = 15,
-    y = .21,
-    label = "abundance of\nNK cells",
-    size = BASE_TEXT_SIZE_MM,
-    hjust = 0
-  ) +
-  xlab("patient") +
-  scale_y_continuous(
-    "fraction of total cells",
-    expand = expansion()
-  ) +
-  scale_fill_manual(values = GROUP_COLORS) +
-  coord_flip() +
-  theme_nb(grid = FALSE) +
-  theme(
-    axis.line = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.ticks.length.y = unit(0, "mm"),
-    panel.background = element_blank(),
-    panel.border = element_blank(),
-    panel.ontop = TRUE,
-    panel.grid.major.x = element_line(color = "white", size = BASE_LINE_SIZE),
-  )
-ggsave_publication("3b_abundances_NK", width = 5, height = 4)
 
 
 ## Figure S1a ----
@@ -1852,222 +1906,220 @@ plot_infiltration_rate <- function(show_mean = FALSE) {
       values_to = "tif"
     ) %>%
     mutate(method = recode(method, facs = "FACS", sc = "scRNA-seq")) %>% 
-    ggplot(aes(method, tif, color = group)) +
-    geom_point(show.legend = FALSE) +
-    geom_line(aes(group = sample), show.legend = FALSE) +
+    ggplot(aes(tif, method, color = group)) +
+    geom_point(show.legend = FALSE, size = .5) +
+    geom_line(
+      aes(group = sample),
+      size = BASE_LINE_SIZE,
+      show.legend = FALSE
+    ) +
     geom_text_mean_tif +
-    xlab(NULL) +
-    scale_y_continuous(
+    ylab(NULL) +
+    scale_x_continuous(
       name = "tumor infiltration rate",
       limits = c(0, 0.6),
       expand = expansion(mult = c(0.03, 0.01))
     ) +
     scale_color_manual(values = GROUP_COLORS) +
-    facet_wrap(vars(group), nrow = 1) +
+    # coord_flip() +
+    facet_grid(vars(group)) +
     theme_nb(grid = FALSE) +
     theme(
-      panel.grid.major.y = element_line(color = "grey92", size = BASE_LINE_SIZE),
-      panel.border = element_blank()
+      panel.grid.major.x = element_line(
+        color = "grey92",
+        size = BASE_LINE_SIZE
+      ),
+      panel.border = element_blank(),
+      panel.spacing = unit(1, "mm"),
+      strip.text.y = element_text(angle = 0)
     )
   
   p
 }
 
 plot_infiltration_rate()
-ggsave_publication("S1b_tif", width = 9, height = 4)
+ggsave_publication("S1b_tif", width = 5, height = 4)
 
 
 
-## Figure S1e ----
+## Figure S1c ----
 
-plot_celltype_heatmap <- function(clusters = 1:21, body_width = 150,
-                                  collapse = FALSE) {
-  # generate matrix of cell type abundances
-  make_matrix <- function(ref) {
-    cell_type_column <- rlang::sym(str_glue("cell_type_{ref}_broad"))
-    
+plot_gene_signature <- function() {
+  vis_data <- 
     nb_data %>% 
-      filter(cluster_50 %in% {{clusters}}) %>% 
-      mutate(
-        cell_type =
-          as_factor(!!cell_type_column) %>%
-          fct_infreq() %>% 
-          fct_explicit_na("Unknown") %>% 
-          fct_relabel(~str_c(ref, .x, sep = "_"))
-      ) %>% 
-      count(cluster = cluster_50, cell_type) %>%
-      group_by(cluster) %>%
-      mutate(n_rel = n / sum(n)) %>%
-      select(!n) %>%
-      ungroup() %>%
-      arrange(cell_type) %>% 
-      pivot_wider(names_from = "cell_type", values_from = "n_rel") %>%
-      arrange(cluster) %>% 
-      column_to_rownames("cluster") %>%
-      as.matrix() %>%
-      replace_na(0)
-  }
-  
-  mat <- 
-    map(
-      c("blueprint", "hpca", "dice", "dmap", "monaco"),
-      make_matrix
-    ) %>% 
-    reduce(cbind)
-  
-  # set up column metadata
-  col_metadata <-
-    tibble(colname = colnames(mat)) %>% 
-    left_join(
-      read_csv("metadata/celldex_celltypes.csv", comment = "#"),
-      by = "colname"
-    ) %>% 
-    separate(
-      colname,
-      into = c("ref", "cell_type"),
-      extra = "merge",
-      remove = FALSE
+    mutate(
+      cells =
+        case_when(
+          cellont_cluster == "NB (8)" ~ "tumor",
+          TRUE ~ "other"
+        ) %>% 
+        fct_rev()
+    ) %>%
+    pivot_longer(
+      starts_with("signature"),
+      names_to = "signature",
+      names_prefix = "signature_"
     ) %>% 
     mutate(
-      ref =
-        as_factor(ref) %>% 
-        fct_recode(
-          "Human Primary Cell Atlas" = "hpca",
-          "Blueprint/ENCODE" = "blueprint",
-          "DICE" = "dice",
-          "Novershtern hematopoietic data" = "dmap",
-          "Monaco immune data" = "monaco"
-        ),
-      abbr = factor(abbr, levels = names(CELL_TYPE_COLORS))
-    ) %>% 
-    group_by(ref) %>% 
-    arrange(abbr, .by_group = TRUE) %>% 
-    ungroup()
+      signature =
+        factor(signature) %>% 
+        fct_recode("NCC-like" = "ncc_like") %>% 
+        fct_relevel("adrenergic", "noradrenergic")
+    )
   
-  mat <- mat[, col_metadata$colname]
+  label_data <-
+    vis_data %>% 
+    distinct(signature) %>% 
+    mutate(label = signature, cells = "other", value = 0.95)
   
-  if (collapse) {
-    mat <-
-      mat %>% 
-      t() %>% 
-      as_tibble(rownames = "colname") %>% 
-      left_join(col_metadata, by = "colname") %>% 
-      group_by(ref, abbr) %>% 
-      summarise(across(where(is.numeric), sum)) %>%
-      ungroup() %>%
-      unite(ref, abbr, col = "ref_abbr") %>% 
-      column_to_rownames("ref_abbr") %>%
-      as.matrix() %>%
-      t()
-    
-    col_metadata <- 
-      col_metadata %>% 
-      distinct(ref, abbr) %>% 
-      mutate(cell_type = abbr)
-  }
-  
-  colnames(mat) <- col_metadata$cell_type
-  
-  # set up row metadata
-  row_metadata <- 
-    tibble(cluster = levels(nb_data$cellont_cluster)) %>% 
-    extract(
-      cluster,
-      into = c("cell_type", "cluster"),
-      regex = "(\\w+) \\((\\d+)",
-      convert = TRUE
-    ) %>%
-    filter(cluster %in% {{clusters}}) %>% 
-    mutate(
-      cell_type =
-        cell_type %>% 
-        factor(levels = names(CELL_TYPE_COLORS)) %>% 
-        fct_drop()
-    ) %>%
-    arrange(cluster) %>%
-    pull(cell_type)
-
-  # draw heatmap  
-  ht_opt(
-    simple_anno_size = unit(1.5, "mm"),
-    COLUMN_ANNO_PADDING = unit(1, "pt"),
-    DENDROGRAM_PADDING = unit(1, "pt"),
-    HEATMAP_LEGEND_PADDING = unit(1, "mm"),
-    ROW_ANNO_PADDING = unit(1, "pt"),
-    TITLE_PADDING = unit(1, "mm")
-  )
-  
-  set.seed(2)
-  Heatmap(
-    mat,
-    col = colorRampPalette(brewer.pal(9, "YlOrBr"))(100),
-    
-    heatmap_legend_param = list(
-      border = FALSE,
-      grid_width = unit(2, "mm"),
-      labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-      legend_height = unit(15, "mm"),
-      title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
-    ),
-    name = "relative\nabundance",
-    
-    row_title = "cluster",
-    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-    row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-    row_dend_gp = gpar(lwd = 0.5),
-    row_dend_width = unit(3, "mm"),
-    row_km = 5,
-    
-    column_split = col_metadata$ref,
-    column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-    column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-    
-    cluster_columns = FALSE,
-    
-    width = unit(body_width, "mm"),
-    height = unit((body_width - 4) / ncol(mat) * nrow(mat) + 4, "mm"),
-    
-    right_annotation = rowAnnotation(
-      cell_type = row_metadata,
-      col = list(cell_type = CELL_TYPE_COLORS),
-      show_annotation_name = FALSE,
-      show_legend = TRUE,
-      annotation_legend_param = list(
-        cell_type = list(
-          title = "cell type",
-          grid_height = unit(2, "mm"),
-          grid_width = unit(2, "mm"),
-          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
-        )
-      )
-    ),
-    
-    bottom_annotation = HeatmapAnnotation(
-      cell_type = col_metadata$abbr,
-      col = list(cell_type = CELL_TYPE_COLORS),
-      show_annotation_name = FALSE,
-      show_legend = FALSE,
-      annotation_legend_param = list(
-        cell_type = list(
-          title = "cell type",
-          grid_height = unit(2, "mm"),
-          grid_width = unit(2, "mm"),
-          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
-        )
-      )
-    ),
-  )
+  ggplot(vis_data, aes(cells, value)) +
+    geom_violin(
+      aes(fill = cells),
+      scale = "width",
+      size = BASE_LINE_SIZE
+    ) +
+    stat_summary(geom = "point", fun = mean, size = .1) +
+    geom_text(
+      data = label_data,
+      aes(label = label),
+      size = BASE_TEXT_SIZE_MM,
+      hjust = 1
+    ) +
+    xlab(NULL) +
+    scale_y_continuous(
+      name = "gene signature score",
+      limits = c(0, 1),
+      breaks = c(0, 0.5, 1),
+      expand = expansion(add = .025)
+    ) +
+    scale_fill_manual(
+      values = c(CELL_TYPE_COLORS["NB"], "gray80")
+    ) +
+    coord_flip() +
+    facet_grid(vars(signature)) +
+    theme_nb(grid = FALSE) +
+    theme(
+      legend.position = "none",
+      strip.background = element_blank(),
+      strip.text.y = element_blank(),
+      panel.border = element_blank(),
+      panel.grid.major.x = element_line(
+        color = "grey92",
+        size = BASE_LINE_SIZE
+      ),
+    )
 }
 
-(p <- plot_celltype_heatmap(body_width = 130))
-ggsave_publication("S1e_celltype_heatmap",
-                   plot = p, width = 18, height = 6)
+plot_gene_signature()
+ggsave_publication("S1c_gene_programs", width = 4, height = 4)
 
-(p <- plot_celltype_heatmap(body_width = 80, collapse = TRUE))
-ggsave_publication("S1e_celltype_heatmap_coll",
-                   plot = p, width = 18, height = 6)
+
+
+## Figure 3a ----
+
+plot_celltype_dots <- function(data, p_lim = 20, or_lim = 3) {
+  data %>% 
+    filter(cell_type != "other") %>% 
+    mutate(
+      cell_type =
+        as_factor(cell_type) %>%
+        fct_relevel(
+          levels(nb_data$cellont_cluster) %>%
+            str_extract("\\w+") %>% 
+            unique()
+        ),
+      log_p_adj = pmin(-log10(p_adj), p_lim),
+      log_odds_ratio = log2(odds_ratio),
+      log_odds_ratio = case_when(
+        log_odds_ratio > or_lim  ~ or_lim,
+        log_odds_ratio < -or_lim ~ -or_lim,
+        TRUE                     ~ log_odds_ratio
+      ),
+      sample =
+        sample %>% 
+        factor(levels = levels(nb_data$sample)) %>% 
+        rename_patients() %>% 
+        fct_rev(),
+      group = rename_groups(group)
+    ) %>% 
+    ggplot(aes(cell_type, sample)) + 
+    geom_point(aes(color = log_odds_ratio, size = log_p_adj), shape = 16) + 
+    xlab("cell type") +
+    ylab("patient") +
+    scale_color_gsea(
+      name = "enrichment relative\nto control\n(log2 odds ratio)",
+      limits = c(-or_lim, or_lim),
+      breaks = c(-or_lim, 0, or_lim),
+      labels = c(
+        str_glue("-{or_lim} or lower"),
+        "0",
+        str_glue("{or_lim} or higher")
+      ),
+      guide = guide_colorbar(ticks = FALSE)
+    ) +
+    scale_radius(
+      name = TeX("-log_{10} p_{adj}"),
+      range = c(0.25, 3),
+      breaks = c(0, 10, 20),
+      labels = function(x) c(x[-length(x)], paste(x[length(x)], "or higher"))
+    ) +
+    facet_grid(vars(group), scales = "free_y", space = "free_y") +
+    theme_nb(grid = FALSE) +
+    theme(
+      legend.key.height = unit(2, "mm"),
+      legend.key.width = unit(2, "mm"),
+      legend.spacing = unit(5, "mm"),
+      legend.margin = margin(0, 0, 0, 0, "mm"),
+      panel.spacing = unit(-.5, "pt"),
+      strip.text.y.right = element_text(angle = 0)
+    )
+}
+
+plot_celltype_dots(cell_type_enrichment)
+ggsave_publication("3a_cell_type_abundances", width = 5, height = 4)
+
+
+## Figure 3b ----
+
+nb_data %>%
+  group_by(group, sample, cellont_name) %>% 
+  summarise(n = n()) %>% 
+  mutate(n_rel = n / sum(n)) %>% 
+  ungroup() %>% 
+  filter(cellont_name == "natural killer cell") %>% 
+  mutate(
+    sample = rename_patients(sample) %>% fct_rev(),
+    group = rename_groups(group)
+  ) %>% 
+  ggplot(aes(sample, n_rel)) +
+  geom_col(aes(fill = group), show.legend = FALSE) +
+  annotate(
+    "text",
+    x = 15,
+    y = .21,
+    label = "abundance of\nNK cells",
+    size = BASE_TEXT_SIZE_MM,
+    hjust = 0
+  ) +
+  xlab("patient") +
+  scale_y_continuous(
+    "fraction of total cells",
+    expand = expansion()
+  ) +
+  scale_fill_manual(values = GROUP_COLORS) +
+  coord_flip() +
+  theme_nb(grid = FALSE) +
+  theme(
+    axis.line = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.ticks.length.y = unit(0, "mm"),
+    panel.background = element_blank(),
+    panel.border = element_blank(),
+    panel.ontop = TRUE,
+    panel.grid.major.x = element_line(color = "white", size = BASE_LINE_SIZE),
+  )
+ggsave_publication("3b_abundances_NK", width = 5, height = 4)
+
 
 
 

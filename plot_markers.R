@@ -17,60 +17,6 @@ source("styling.R")
 
 
 
-# Functions ---------------------------------------------------------------
-
-#' Add subclusters to the NB cluster.
-#'
-#' @param metadata Cell metadata.
-#' @param cluster_col Column with supercluster IDs.
-#' @param nb_cluster_name Name of the NB cluster in this column.
-#' @param subcluster_file File with subcluster information.
-#'
-#' @return The dataframe passed as `metadata`, with the NB cluster in the column
-#'   given by `cluster_col` subdivided into subclusters.
-subdivide_tumor_cluster <- function(metadata,
-                                    cluster_col,
-                                    nb_cluster_name,
-                                    subcluster_file) {
-  subclusters <- 
-    read_csv(subcluster_file, col_types = "ci") %>% 
-    mutate(
-      tumor_subcluster =
-        letters[tumor_subcluster] %>% 
-        as_factor() %>%
-        fct_infreq() %>% 
-        fct_relabel(~str_glue("{str_sub(nb_cluster_name, end = -2L)}{.})"))
-    )
-  
-  old_levels <-
-    metadata %>% 
-    pull({{cluster_col}}) %>% 
-    levels()
-  
-  tumor_cluster_pos <- str_which(old_levels, fixed(nb_cluster_name))
-  
-  new_levels <- c(
-    old_levels[1:(tumor_cluster_pos - 1)],
-    levels(subclusters$tumor_subcluster),
-    old_levels[(tumor_cluster_pos + 1):length(old_levels)]
-  )
-  
-  metadata %>% 
-    left_join(subclusters, by = "cell") %>%
-    mutate(
-      {{cluster_col}} :=
-        case_when(
-          {{cluster_col}} == nb_cluster_name ~ as.character(tumor_subcluster),
-          TRUE ~ as.character({{cluster_col}})
-        ) %>%
-        as_factor() %>%
-        fct_relevel(new_levels)
-    ) %>%
-    select(!tumor_subcluster)
-}
-
-
-
 # Load data ---------------------------------------------------------------
 
 nb <-
@@ -82,11 +28,6 @@ nb_metadata <- readRDS("data_generated/metadata.rds")
 colData(nb) <-
   nb_metadata %>%
   mutate(Size_Factor = colData(nb)$Size_Factor) %>% 
-  # subdivide_tumor_cluster(
-  #   cluster_col = cellont_cluster,
-  #   nb_cluster_name = "NB (8)",
-  #   subcluster_file = "metadata/nb_subclusters.csv"
-  # ) %>% 
   column_to_rownames("cell") %>% 
   as("DataFrame")
 rowData(nb)[["gene_short_name"]] <- rownames(nb)
@@ -490,7 +431,7 @@ ggsave_default("markers/nb_markers_patients", height = 80)
 
 # Publication figures -----------------------------------------------------
 
-## Figure 1d ----
+## Figure 1c ----
 
 selected_markers <- read_csv("metadata/cell_markers.csv", comment = "#")
 
@@ -655,11 +596,11 @@ plot_canonical_markers <- function() {
 }
 
 plot_canonical_markers()
-ggsave_publication("1d_markers", height = 12, width = 7)
+ggsave_publication("1c_markers", height = 12, width = 7)
 
 
 
-## Figure S1c ----
+## Figure S1d ----
   
 plot_mesenchymal <- function(top_prop = 0.05) {
   data_highlight <-
@@ -682,6 +623,11 @@ plot_mesenchymal <- function(top_prop = 0.05) {
     ) %>% 
     arrange(value)
   
+  color_breaks <- round(
+    c(min(data_highlight$value), max(data_highlight$value)),
+    2
+  )
+  
   nb_metadata %>%
     ggplot(aes(umap_1_monocle, umap_2_monocle)) +
     geom_point(color = "gray90", size = 0.001, shape = 16) +
@@ -696,6 +642,9 @@ plot_mesenchymal <- function(top_prop = 0.05) {
     scale_color_distiller(
       name = "gene\nsignature\nscore",
       palette = "RdPu",
+      direction = 1,
+      breaks = c(min(data_highlight$value), max(data_highlight$value)),
+      labels = function(x) round(x, 2),
       guide = guide_colorbar(
         barwidth = unit(2, "mm"),
         barheight = unit(15, "mm")
@@ -710,87 +659,121 @@ plot_mesenchymal <- function(top_prop = 0.05) {
 }
 
 plot_mesenchymal()
-ggsave_publication("S1c_signature_umap", type = "png", width = 9, height = 5)
+ggsave_publication("S1d_signature_umap", type = "png", width = 9, height = 5)
 
 
-## Figure S1d ----
+## Figure S1e ----
 
-subplot_nb_dots <- function(signature_col, title = NULL, top_prop = 0.05) {
-  selected_cells <- union(
-    colData(nb) %>% 
-      as_tibble(rownames = "cell") %>% 
-      slice_max(prop = top_prop, order_by = {{signature_col}}) %>% 
-      pull(cell),
-    colData(nb) %>% 
-      as_tibble(rownames = "cell") %>% 
-      filter(cellont_abbr == "NB") %>% 
-      pull(cell)
-  )
+plot_nb_dots <- function(signature_col, title = NULL, top_prop = 0.05,
+                         min_exp = -2.5, max_exp = 2.5) {
+  scale_and_limit <- function(x) {
+    scale(x)[,1] %>% 
+      pmax(min_exp) %>% 
+      pmin(max_exp)
+  }
   
-  nb_subset <- nb[, selected_cells]
+  selected_cells <-
+    bind_rows(
+      NB =
+        colData(nb) %>% 
+        as_tibble(rownames = "cell") %>% 
+        filter(cellont_abbr == "NB"),
+      mesenchymal =
+        colData(nb) %>% 
+        as_tibble(rownames = "cell") %>% 
+        slice_max(prop = top_prop, order_by = signature_mesenchymal),
+      ncc_like =
+        colData(nb) %>% 
+        as_tibble(rownames = "cell") %>% 
+        slice_max(prop = top_prop, order_by = signature_ncc_like),
+      .id = "type"
+    ) %>%  
+    mutate(
+      type = case_when(
+        type == "NB" | cluster_50 == "8" ~ "NB",
+        TRUE ~ str_c(type, cluster_50, sep = "__")
+      )
+    )
   
   nb_markers <-
     markers %>% 
     filter(cell_type == "NB") %>% 
     pull(gene)
   
-  plot_dots(
-    logcounts(nb_subset),
-    nb_markers,
-    colData(nb_subset)$cluster_50
-  ) +
-    scale_x_discrete("cluster") +
-    scale_y_discrete(NULL) +
+  vis_data <- 
+    logcounts(nb)[nb_markers, selected_cells$cell] %>% 
+    Matrix::t() %>% 
+    as.matrix() %>%
+    as_tibble(rownames = "cell") %>%
+    group_by(type = selected_cells$type) %>%
+    summarise(
+      across(
+        where(is.numeric),
+        list(
+          avg_exp = ~mean(expm1(.)),
+          pct_exp = ~length(.[. > 0]) / length(.) * 100
+        ),
+        .names = "{.col}__{.fn}"
+      )
+    ) %>% 
+    mutate(across(ends_with("avg_exp"), scale_and_limit)) %>%
+    pivot_longer(
+      !type,
+      names_to = c("feature", ".value"),
+      names_pattern = "(.+)__(.+)"
+    ) %>%
+    separate(type, into = c("type", "cluster"), sep = "__", fill = "right") %>% 
+    replace_na(list(cluster = "8")) %>% 
+    mutate(
+      feature = factor(feature, levels = nb_markers),
+      type = fct_relevel(type, "NB") %>% fct_recode("NCC-like" = "ncc_like"),
+      cluster = fct_inseq(cluster)
+    )
+  
+  ggplot(vis_data, aes(cluster, feature)) +
+    geom_point(aes(size = pct_exp, color = avg_exp)) +
+    scale_x_discrete(
+      "cluster",
+      expand = expansion(add = 0.5)
+    ) +
+    scale_y_discrete(
+      NULL,
+      expand = expansion(add = 0.5)
+    ) +
     scale_color_dotplot(
       "scaled average expression",
       limits = c(-0.5, 2.5),
-      breaks = c(0, 1, 2),
+      breaks = c(-0.5, 2.5),
       guide = guide_colorbar(
         barheight = unit(2, "mm"),
         barwidth = unit(15, "mm"),
         label.position = "top",
+        ticks = FALSE,
         title.vjust = 0.2
       )
     ) +
     scale_radius(
       "% expressed",
-      range = c(0, 2.5),
+      range = c(0, 2), 
       limits = c(0, 100)
     ) +
-    ggtitle(title) +
-    coord_fixed() +
+    facet_grid(
+      cols = vars(type),
+      scales = "free_x",
+      space = "free_x"
+    ) +
     theme_nb(grid = FALSE) +
     theme(
-      plot.title = element_text(
-        size = BASE_TEXT_SIZE_PT,
-        hjust = 0.5,
-        margin = margin(b = 1, unit = "mm")
-      )
+      legend.box.just = "bottom",
+      legend.key.height = unit(1, "mm"),
+      legend.key.width = unit(1, "mm"),
+      legend.position = "bottom",
+      legend.spacing = unit(0, "mm"),
+      legend.margin = margin(-5, 1, 0, 1, "mm"),
+      panel.spacing = unit(1, "mm")
+      # plot.margin = margin(0, 1, 0, 1, "mm"),
     )
 }
 
-wrap_plots(
-  subplot_nb_dots(signature_mesenchymal, "mesenchymal"),
-  subplot_nb_dots(signature_ncc_like, "NCC-like") +
-    theme(
-      axis.text.y = element_blank(),
-      axis.ticks.y = element_blank()
-    ),
-  guide_area(),
-  guides = "collect",
-  design = "AB\nCC",
-  heights = c(0.8, 0.2),
-  widths = c(12, 19)
-) &
-  theme(
-    legend.box.just = "bottom",
-    legend.key.height = unit(1, "mm"),
-    legend.key.width = unit(1, "mm"),
-    legend.position = "bottom",
-    legend.spacing = unit(0, "mm"),
-    legend.margin = margin(-1, 1, 0, 1, "mm"),
-    plot.margin = margin(0, 1, 0, 1, "mm"),
-    
-  )
-
-ggsave_publication("s1d_signature_dots", width = 9, height = 4)
+plot_nb_dots(signature_mesenchymal, "mesenchymal")
+ggsave_publication("s1e_signature_dots", width = 9, height = 4)

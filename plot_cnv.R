@@ -11,7 +11,16 @@ library(fs)
 source("common_functions.R")
 source("styling.R")
 
-ht_opt(message = FALSE, show_parent_dend_line = FALSE)
+ht_opt(
+  simple_anno_size = unit(1.5, "mm"),
+  COLUMN_ANNO_PADDING = unit(1, "pt"),
+  DENDROGRAM_PADDING = unit(1, "pt"),
+  HEATMAP_LEGEND_PADDING = unit(1, "mm"),
+  ROW_ANNO_PADDING = unit(1, "pt"),
+  TITLE_PADDING = unit(1, "mm"),
+  show_parent_dend_line = FALSE,
+  message = FALSE
+)
 
 
 
@@ -646,8 +655,9 @@ plot_resexp_tumor <- function(data,
       colors = rev(brewer.pal(7, "RdBu"))
     ),
     heatmap_legend_param = list(
+      at = c(0.85, 1.15),
       border = FALSE,
-      grid_width = unit(2, "mm"),
+      grid_width = unit(1.5, "mm"),
       labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
       title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
     ),
@@ -693,13 +703,14 @@ plot_resexp_tumor <- function(data,
       row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
       column_title = "chromosome",
       column_title_side = "bottom",
-      column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+      column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      padding = unit(c(0, 0, 0, 0), "mm")
     ) 
 }
 
 (p <- plot_resexp_tumor(infercnv_data, nb_data, 50L))
 ggsave_publication("1e_resexp_tumor", plot = p,
-                   type = "png", width = 18, height = 8)
+                   type = "png", width = 11, height = 6)
 
 
 ## Figure 1f ----
@@ -921,8 +932,9 @@ plot_resexp_marrow <- function(data,
       colors = rev(brewer.pal(7, "RdBu"))
     ),
     heatmap_legend_param = list(
+      at = c(0.85, 1.15),
       border = FALSE,
-      grid_width = unit(2, "mm"),
+      grid_width = unit(1.5, "mm"),
       labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
       title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
     ),
@@ -979,7 +991,7 @@ plot_resexp_marrow <- function(data,
 
 p <- plot_resexp_marrow(infercnv_data, nb_data)
 ggsave_publication("S1f_resexp_marrow", plot = p,
-                   type = "png", width = 18, height = 8)
+                   type = "png", width = 18, height = 7.5)
 
 
 
