@@ -1084,6 +1084,82 @@ ggsave_default("cell_types/abundances_enriched", width = 120, height = 100)
 
 
 
+## Myeloid cells ----
+
+nb_data %>% 
+  group_by(group, is_myeloid = cellont_abbr == "M") %>% 
+  summarise(n = n()) %>% 
+  mutate(n_rel = n / sum(n) * 100, group = rename_groups(group)) %>% 
+  ungroup() %>% 
+  filter(is_myeloid) %>%
+  ggplot(aes(group, n_rel)) +
+  geom_col(aes(fill = group), show.legend = FALSE) +
+  ylab("relative abundance\nof myeloid cells (%)") +
+  scale_fill_manual(values = GROUP_COLORS) +
+  theme_nb(grid = FALSE)
+ggsave_default("cell_types/abundances_myeloid", height = 30, width = 30)
+
+
+plot_myeloid_abundance <- function(cell_type_col, labels, title = NULL) {
+  nb_data %>% 
+    rename(cell_type = {{cell_type_col}}) %>% 
+    filter(
+      cellont_abbr == "M",
+      cell_type %in% {{labels}}
+    ) %>% 
+    count(cell_type, group) %>% 
+    group_by(group) %>%
+    mutate(n_rel = n / sum(n) * 100, group = rename_groups(group)) %>% 
+    ungroup() %>%
+    arrange(desc(n)) %>%
+    mutate(cell_type = fct_drop(cell_type)) %>% 
+    complete(cell_type, group, fill = list(n = 0, n_rel = 0)) %>% 
+    # {.}
+    ggplot(aes(cell_type, n_rel)) +
+    geom_col(aes(fill = group), position = "dodge", show.legend = FALSE) +
+    xlab(NULL) +
+    ylab("relative abundance (%)") +
+    scale_fill_manual(values = GROUP_COLORS, drop = FALSE) +
+    coord_flip() +
+    facet_wrap(vars(group), nrow = 1) +
+    ggtitle(title) +
+    theme_nb(grid = FALSE) +
+    theme(
+      strip.background = element_blank(),
+      plot.title = element_text(size = BASE_TEXT_SIZE_PT, hjust = 0.5)
+    )
+}
+
+myeloid_labels_dice <- c(
+  "Monocytes, CD14+",
+  "Monocytes, CD16+"
+)
+plot_myeloid_abundance(cell_type_dice_fine, myeloid_labels_dice, "DICE")
+ggsave_default("cell_types/myeloid_dice", height = 35, width = 120)
+
+myeloid_labels_hpca <- c(
+  "Monocyte",
+  "Monocyte:anti-FcgRIIB",
+  "Monocyte:CD14+",
+  "Monocyte:CD16-",
+  "Monocyte:CD16+",
+  "Monocyte:S._typhimurium_flagellin"
+)
+plot_myeloid_abundance(cell_type_hpca_fine, myeloid_labels_hpca, "HPCA")
+ggsave_default("cell_types/myeloid_hpca", height = 35, width = 120)
+
+myeloid_labels_monaco <- c(
+  "Classical monocytes",
+  "Myeloid dendritic cells",
+  "Intermediate monocytes",
+  "Progenitor cells",
+  "Non classical monocytes"
+) 
+plot_myeloid_abundance(cell_type_monaco_fine, myeloid_labels_monaco, "Monaco")
+ggsave_default("cell_types/myeloid_monaco", height = 35, width = 120)
+
+
+
 # Unified cell labels -----------------------------------------------------
 
 #' Plot cell types with cluster IDs.
