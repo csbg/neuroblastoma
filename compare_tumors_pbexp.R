@@ -86,7 +86,8 @@ tumor_data_merged <- correctExperiments(
   out[[1]],
   out[[2]],
   # out[[3]],
-  PARAM = RescaleParam()
+  # PARAM = RescaleParam()
+  PARAM = NoCorrectParam()
 )
 gc()
 
@@ -118,74 +119,114 @@ colData(tumor_data_merged)$mycn_status <- if_else(
 pb_tumor <-
   tumor_data_merged %>% 
   aggregateData(by = "sample", fun = "mean")
+gc()
 
 
 
-# Plot heatmap ------------------------------------------------------------
+# Publication figures -----------------------------------------------------
 
-hvgs <-
-  tumor_data_merged %>%
-  modelGeneVar() %>% 
-  getTopHVGs()
+## Figure 2a and S2a ----
 
-corr_mat <-
-  assay(pb_tumor, 1) %>%
-  magrittr::extract(hvgs, ) %>%
-  cor(use = "pairwise.complete.obs")
-
-distance <- as.dist(1 - corr_mat)
-
-col_metadata <- tibble(
-  sample = colnames(corr_mat),
-  group = str_sub(sample, 1, 1) %>% str_replace("N", "T"),
-  mycn_status = if_else(
-    sample %in% c("T162", "T200", "T230",
-                  "NB01", "NB02", "NB08", "NB11", "NB14") |
-    str_starts(sample, "M"),
-    "amplified",
-    "normal"
+plot_corr_mat <- function(size, samples = NULL) {
+  ht_opt(
+    simple_anno_size = unit(1.5, "mm"),
+    COLUMN_ANNO_PADDING = unit(1, "pt"),
+    DENDROGRAM_PADDING = unit(1, "pt"),
+    HEATMAP_LEGEND_PADDING = unit(1, "mm"),
+    ROW_ANNO_PADDING = unit(1, "pt"),
+    TITLE_PADDING = unit(1, "mm")
   )
-)
-
-p <- Heatmap(
-  corr_mat,
-  col = circlize::colorRamp2(
-    seq(min(corr_mat), max(corr_mat), length.out = 9),
-    scico(9, palette = "davos", direction = -1),
-  ),
-  name = "correlation of\npseudobulk\nexpression",
-  heatmap_legend_param = list(
-    at = round(c(min(corr_mat), max(corr_mat)), 2)
-  ),
   
-  clustering_distance_rows = distance,
-  clustering_distance_columns = distance,
+  hvgs <-
+    tumor_data_merged %>%
+    modelGeneVar() %>% 
+    getTopHVGs()
   
-  # width = unit(3.7, "mm") * nrow(corr_mat),
-  # height = unit(3.7, "mm") * nrow(corr_mat),
-  width = unit(80, "mm"),
-  height = unit(80, "mm"),
+  if (is.null(samples)) {
+    corr_mat <-
+      assay(pb_tumor, 1) %>%
+      magrittr::extract(hvgs, ) %>%
+      cor(use = "pairwise.complete.obs")
+  } else {
+    corr_mat <-
+      assay(pb_tumor, 1) %>%
+      magrittr::extract(hvgs, samples) %>%
+      cor(use = "pairwise.complete.obs")
+  }
+    
+  distance <- as.dist(1 - corr_mat)
   
-  show_column_dend = FALSE,
-  
-  left_annotation = rowAnnotation(
-    group = col_metadata$group,
-    mycn = col_metadata$mycn_status,
-    col = list(
-      group = c(GROUP_COLORS, "T" = "#433447"),
-      mycn = c("normal" = "gray90", "amplified" = "#d35f5f")
-    ),
-    show_annotation_name = FALSE,
-    show_legend = TRUE,
-    annotation_legend_param = list(
-      group = list(
-        title = "group"
-      ),
-      mycn = list(
-        title = "MYCN status"
-      )
+  col_metadata <- tibble(
+    sample = colnames(corr_mat),
+    group =
+      str_sub(sample, 1, 1) %>% 
+      fct_relevel("M", "A", "S", "T"),
+    mycn_status = if_else(
+      sample %in% c("T162", "T200", "T230") | str_starts(sample, "M"),
+      "amplified",
+      "normal"
     )
-  ),
-)
-p
-ggsave_default("comparison/correlation_pseudobulk", plot = p)
+  )
+  
+  Heatmap(
+    corr_mat,
+    col = circlize::colorRamp2(
+      seq(min(corr_mat), max(corr_mat), length.out = 9),
+      scico(9, palette = "davos", direction = -1),
+    ),
+    name = "correlation of\npseudobulk\nexpression",
+    heatmap_legend_param = list(
+      at = round(c(min(corr_mat), max(corr_mat)), 2),
+      border = FALSE,
+      grid_width = unit(2, "mm"),
+      labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      legend_height = unit(15, "mm"),
+      title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+    ),
+    
+    clustering_distance_rows = distance,
+    clustering_distance_columns = distance,
+    row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    row_dend_gp = gpar(lwd = 0.5),
+    row_dend_width = unit(3, "mm"),
+    
+    width = unit(size, "mm"),
+    height = unit(size, "mm"),
+    border = FALSE,
+    
+    show_column_dend = FALSE,
+    show_column_names = FALSE,
+    
+    left_annotation = rowAnnotation(
+      group = col_metadata$group,
+      mycn = col_metadata$mycn_status,
+      col = list(
+        group = c(GROUP_COLORS, "T" = "#433447"),
+        mycn = c("normal" = "gray90", "amplified" = "#d35f5f")
+      ),
+      show_annotation_name = FALSE,
+      show_legend = TRUE,
+      annotation_legend_param = list(
+        group = list(
+          title = "group",
+          grid_width = unit(2, "mm"),
+          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+        ),
+        mycn = list(
+          title = "MYCN status",
+          grid_width = unit(2, "mm"),
+          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+        )
+      )
+    ),
+  )
+}
+
+(p <- plot_corr_mat(25, PATIENT_ORDER[-1:-5]))
+ggsave_publication("2a_pb_corr", plot = p, height = 3, width = 8)
+
+(p <- plot_corr_mat(40))
+ggsave_publication("S2a_pb_corr", plot = p, height = 4.5, width = 8)
+

@@ -777,3 +777,104 @@ plot_nb_dots <- function(signature_col, title = NULL, top_prop = 0.05,
 
 plot_nb_dots(signature_mesenchymal, "mesenchymal")
 ggsave_publication("s1e_signature_dots", width = 9, height = 4)
+
+
+## Figure 2b ----
+
+plot_patient_dots <- function(min_exp = -2.5, max_exp = 2.5) {
+  scale_and_limit <- function(x) {
+    scale(x)[,1] %>% 
+      pmax(min_exp) %>% 
+      pmin(max_exp)
+  }
+  
+  features <- 
+    markers %>%
+    filter(cell_type == "NB") %>%
+    pull(gene)
+  
+  groups <-
+    if_else(
+      colData(nb)$cellont_abbr == "NB",
+      as.character(colData(nb)$sample),
+      as.character(colData(nb)$cellont_abbr)
+    ) %>% 
+    rename_patients() %>% 
+    as_factor() %>% 
+    fct_relevel(PATIENT_ORDER, names(CELL_TYPE_ABBREVIATIONS))
+  
+  vis_data <- 
+    logcounts(nb)[features, ] %>% 
+    Matrix::t() %>% 
+    as.matrix() %>% 
+    as_tibble(rownames = "cell") %>% 
+    group_by(id = groups) %>% 
+    summarise(
+      across(
+        where(is.numeric),
+        list(
+          avg_exp = ~mean(expm1(.)),
+          pct_exp = ~length(.[. > 0]) / length(.) * 100
+        ),
+        .names = "{.col}__{.fn}"
+      )
+    ) %>% 
+    mutate(across(ends_with("avg_exp"), scale_and_limit)) %>%
+    pivot_longer(
+      !id,
+      names_to = c("feature", ".value"),
+      names_pattern = "(.+)__(.+)"
+    ) %>% 
+    mutate(
+      feature = factor(feature, levels = features),
+      type = if_else(
+        id %in% PATIENT_ORDER,
+        "cancer cells",
+        "microenvironment cells"
+      )
+    )
+  
+  ggplot(vis_data, aes(id, feature)) +
+    geom_point(aes(size = pct_exp, color = avg_exp)) +
+    scale_x_discrete("patient or cell type") +
+    scale_y_discrete(NULL) +
+    scale_color_dotplot(
+      "scaled average expression",
+      limits = c(-0.5, 2.5),
+      breaks = c(-0.5, 2.5),
+      guide = guide_colorbar(
+        barheight = unit(2, "mm"),
+        barwidth = unit(15, "mm"),
+        label.position = "top",
+        ticks = FALSE,
+        title.vjust = 0.2
+      )
+    ) +
+    scale_radius(
+      "% expressed",
+      range = c(0, 2), 
+      limits = c(0, 100),
+      breaks = c(0, 50, 100)
+    ) +
+    # coord_fixed() +
+    facet_grid(
+      cols = vars(type),
+      scales = "free_x",
+      space = "free_x"
+    ) +
+    theme_nb(grid = FALSE) +
+    theme(
+      legend.box.just = "bottom",
+      legend.key.height = unit(1, "mm"),
+      legend.key.width = unit(1, "mm"),
+      legend.position = "bottom",
+      legend.spacing = unit(0, "mm"),
+      legend.margin = margin(-5, 1, 0, 1, "mm"),
+      panel.spacing = unit(1, "mm")
+      # plot.margin = margin(0, 1, 0, 1, "mm"),
+    )
+}
+
+plot_patient_dots()
+ggsave_publication("2b_nb_markers_patients", width = 8, height = 5)
+
