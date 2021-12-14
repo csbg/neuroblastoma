@@ -2091,7 +2091,37 @@ ggsave_publication("S1c_gene_programs", width = 4, height = 4)
 
 
 
-## Figure 3a ----
+## Figure 4a ----
+
+nb_data %>%
+  group_by(group, sample) %>% 
+  count(cell_type = cellont_abbr) %>% 
+  mutate(
+    n = n / sum(n) * 100,
+    sample = rename_patients(sample),
+    group = rename_groups(group)
+  ) %>%
+  complete(nesting(group, sample), cell_type, fill = list(n = 0)) %>% 
+  ggplot(aes(cell_type, n, color = group)) +
+  geom_boxplot(outlier.shape = NA, size = .25, show.legend = FALSE) +
+  geom_point(position = position_jitterdodge(seed = 1), size = .5, alpha = .5) +
+  xlab("cell type") +
+  ylab("relative abundance (%)") +
+  scale_color_manual(
+    values = GROUP_COLORS,
+    guide = guide_legend(override.aes = list(alpha = 1))
+  ) +
+  theme_nb(grid = FALSE) +
+  theme(
+    legend.key.height = unit(1, "mm"),
+    legend.key.width = unit(1, "mm"),
+    legend.position = c(.95, .8)
+  )
+ggsave_publication("4a_cell_type_abundances", width = 13, height = 4)
+
+
+
+## Figure S4a ----
 
 plot_celltype_dots <- function(data, p_lim = 20, or_lim = 3) {
   data %>% 
@@ -2152,50 +2182,7 @@ plot_celltype_dots <- function(data, p_lim = 20, or_lim = 3) {
 }
 
 plot_celltype_dots(cell_type_enrichment)
-ggsave_publication("3a_cell_type_abundances", width = 5, height = 4)
-
-
-## Figure 3b ----
-
-nb_data %>%
-  group_by(group, sample, cellont_name) %>% 
-  summarise(n = n()) %>% 
-  mutate(n_rel = n / sum(n)) %>% 
-  ungroup() %>% 
-  filter(cellont_name == "natural killer cell") %>% 
-  mutate(
-    sample = rename_patients(sample) %>% fct_rev(),
-    group = rename_groups(group)
-  ) %>% 
-  ggplot(aes(sample, n_rel)) +
-  geom_col(aes(fill = group), show.legend = FALSE) +
-  annotate(
-    "text",
-    x = 15,
-    y = .21,
-    label = "abundance of\nNK cells",
-    size = BASE_TEXT_SIZE_MM,
-    hjust = 0
-  ) +
-  xlab("patient") +
-  scale_y_continuous(
-    "fraction of total cells",
-    expand = expansion()
-  ) +
-  scale_fill_manual(values = GROUP_COLORS) +
-  coord_flip() +
-  theme_nb(grid = FALSE) +
-  theme(
-    axis.line = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.ticks.length.y = unit(0, "mm"),
-    panel.background = element_blank(),
-    panel.border = element_blank(),
-    panel.ontop = TRUE,
-    panel.grid.major.x = element_line(color = "white", size = BASE_LINE_SIZE),
-  )
-ggsave_publication("3b_abundances_NK", width = 5, height = 4)
-
+ggsave_publication("s4a_cell_type_abundances", width = 5, height = 4)
 
 
 

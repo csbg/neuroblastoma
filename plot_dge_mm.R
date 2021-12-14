@@ -1005,205 +1005,75 @@ ggsave_default(
 
 # Publication figures -----------------------------------------------------
 
-## Figure 3c ----
+## Figure 4b ----
 
-make_matrix <- function(gene,
-                        cell_type,
-                        groups,
-                        direction = c("up", "down"),
-                        row = 1,
-                        col = 1) {
-  direction <- match.arg(direction)
-  
-  barcodes <- 
-    dge$metadata %>% 
+plot_consistent_genes <- function() {
+  consistent_genes <- 
+    dge$results_wide_filtered %>%
+    mutate(comparison = rename_contrast(comparison)) %>% 
     filter(
-      cellont_cluster %in% dge$used_clusters,
-      cellont_abbr == {{cell_type}}
+      abs(logFC) > log(2),
+      comparison %>% str_ends("c")
+    ) %>%
+    group_by(cell_type, direction, comparison) %>%
+    summarise(genes = list(unique(gene))) %>%
+    ungroup() %>% 
+    pivot_wider(names_from = comparison, values_from = genes) %>% 
+    rowwise() %>%
+    mutate(
+      shared_AM = Ac %>% intersect(Mc) %>% length(),
+      shared_AS = Ac %>% intersect(Sc) %>% length(),
+      shared_MS = Mc %>% intersect(Sc) %>% length(),
+      shared_AMS = Ac %>% intersect(Mc) %>% intersect(Sc) %>% length()
+    ) %>%
+    ungroup() %>%
+    mutate(
+      across(
+        starts_with("shared"),
+        ~if_else(direction == "up", ., -.)
+      )
     ) %>% 
-    pull(cell)
-  
-  logcounts(dge$cds)[gene, barcodes, drop = FALSE] %>%
-    t() %>%
-    as.matrix() %>%
-    magrittr::set_colnames("logexp") %>%
-    as_tibble(rownames = "cell") %>%
-    left_join(dge$metadata, by = "cell") %>%
-    filter(group %in% {{groups}}) %>%
-    transmute(
-      row = row,
-      col = col,
-      label = str_glue("{cell_type}, {gene} ({direction})"),
-      logexp = logexp / max(logexp),
-      sample = rename_patients(sample),
-      group = rename_groups(group)
-    )
-}
-
-
-plot_violin <- function(genes) {
-  plot_data <- pmap_dfr(genes, make_matrix)
-  
-  ggplot(plot_data, aes(sample, logexp)) +
-    geom_violin(
-      aes(fill = group),
-      size = BASE_LINE_SIZE,
-      # color = "gray60",
-      scale = "width",
-      width = 0.8,
-      show.legend = FALSE
-    ) +
-    stat_summary(geom = "point", fun = mean, size = .2) +
-    geom_text_npc(
-      data = distinct(plot_data, row, col, label),
-      aes(label = label),
-      npcx = 0.05,
-      npcy = 0.95,
-      size = BASE_TEXT_SIZE_MM,
-      hjust = 0
-    ) +
-    xlab("patient") +
-    scale_y_continuous(
-      "log-normalized expression",
-      limits = c(0, 1.1)
-    ) +
-    scale_fill_manual(values = GROUP_COLORS) +
-    facet_grid(vars(row), vars(col), scales = "free_x", space = "free_x") +
-    theme_nb(grid = FALSE) +
-    theme(
-      axis.text.y = element_blank(),
-      axis.ticks.y = element_blank(),
-      strip.text.x = element_blank(),
-      strip.text.y = element_blank()
-    )
-}
-
-tribble(
-  ~row, ~col, ~gene, ~cell_type, ~groups, ~direction,
-  1,    1,    "IRF9",     "B",  c("I", "II"),  "up",
-  1,    2,    "WDR74",    "B",  c("I", "III"), "up",
-  1,    3,    "IFI44L",   "SC", c("I", "IV"),  "up",
-  2,    1,    "SAP30",    "SC", c("I", "II"),  "down",
-  2,    2,    "IRF9",     "B",  c("I", "III"), "up",
-  2,    3,    "HIST1H1E", "SC", c("I", "IV"),  "down"
-) %>% 
-  plot_violin()
-ggsave_publication("3c_exp_violin", width = 10, height = 6)
-
-
-
-## Figure 3d ----
-
-plot_gsea <- function(data,
-                      db,
-                      circle_significant = FALSE,
-                      top_n_positive = 5L,
-                      top_n_negative = 5L,
-                      max_p_adj = 0.05,
-                      min_abs_NES = 1) {
-  data_top_terms <-
-    data %>% 
-    filter(db == {{db}}, padj <= max_p_adj, abs(NES) >= min_abs_NES) %>% 
-    group_by(comparison, cell_type)
-  
-  top_terms_pos <- 
-    data_top_terms %>% 
-    slice_max(n = top_n_positive, order_by = NES, with_ties = FALSE) %>%
-    pull(pathway) %>%
-    unique()
-  
-  top_terms_neg <- 
-    data_top_terms %>% 
-    slice_min(n = top_n_negative, order_by = NES, with_ties = FALSE) %>%
-    pull(pathway) %>%
-    unique()
-  
-  data_vis <- 
-    data %>% 
-    filter(
-      comparison != "tif",
-      db == {{db}},
-      pathway %in% c(top_terms_pos, top_terms_neg)
+    pivot_longer(
+      starts_with("shared"),
+      names_to = "shared",
+      names_prefix = "shared_",
+      values_to = "n"
     ) %>% 
     mutate(
-      is_significant =
-        padj <= max_p_adj &
-        abs(NES) >= min_abs_NES,
-      pathway =
-        as_factor(pathway) %>%
-        fct_reorder(NES * -log10(padj), sum, na.rm = TRUE),
-      comparison = factor(comparison) %>% rename_contrast(),
-      cell_type = factor(cell_type, levels = names(CELL_TYPE_ABBREVIATIONS))
+      shared =
+        shared %>% 
+        fct_relevel("AM", "AS", "MS") %>% 
+        fct_recode("A and M" = "AM", "A and S" = "AS",
+                   "M and S" = "MS", "A, M, and S" = "AMS")
     )
   
-  if (nlevels(data_vis$pathway) > 5) {
-    horizontal_grid <-
-      geom_hline(
-        yintercept = seq(5, nlevels(data_vis$pathway), 5),
-        size = BASE_LINE_SIZE,
-        color = "grey92"
-      )
-  } else {
-    horizontal_grid <- NULL  
-  }
-  
-  color_limit <- max(abs(data_vis$NES))
-  
-  if (circle_significant) {
-    circle_significant <- geom_point(
-      data = data_vis %>% filter(is_significant),
-      shape = 1
-    )
-  } else {
-    circle_significant <- NULL
-  }
-  
-  p <- 
-    ggplot(data_vis, aes(comparison, pathway, size = -log10(padj))) +
-    scale_y_discrete() +
-    horizontal_grid +    
-    geom_point(aes(color = NES)) +
-    circle_significant +
-    # xlab("vs C (contrast)") +
-    ylab(NULL) +
-    scale_color_gsea(
-      "normalized enrichment score",
-      limits = c(-color_limit, color_limit),
-      guide = guide_colorbar(
-        barheight = unit(2, "mm"),
-        barwidth = unit(15, "mm"),
-        label.position = "top",
-        title.vjust = 0.1
+  consistent_genes %>% 
+    # filter(shared == "AMS") %>% 
+    ggplot(aes(cell_type, n, fill = shared)) +
+    geom_col() +
+    geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
+    scale_fill_hue(
+      "shared\nbetween",
+      guide = guide_legend(
+        
       )
     ) +
-    scale_size_area(
-      name = TeX("-log_{10} p_{adj}"),
-      max_size = 2.5
-    )  +
-    coord_fixed() +
-    facet_wrap(vars(cell_type), nrow = 1) +
+    xlab("cell type") +
+    ylab("number of consistently\ndown- and upregulated genes") +
     theme_nb(grid = FALSE) +
     theme(
-      axis.text.x = element_text(angle = 90, vjust = .5, hjust = 1),
-      legend.box.just = "bottom",
-      legend.box.margin = margin(0, 0, 0, -25, "mm"),
-      legend.key.height = unit(1, "mm"),
-      legend.key.width = unit(1, "mm"),
-      legend.position = "bottom",
-      legend.spacing = unit(0, "mm"),
-      legend.margin = margin(-3, 1, 0, 1, "mm"),
-      panel.spacing = unit(-.5, "pt"),
+      legend.key.height = unit(2, "mm"),
+      legend.key.width = unit(2, "mm"),
+      legend.margin = margin(0, 0, 0, -2, "mm")
     )
-  
-  p
 }
 
-plot_gsea(dge$gsea, "MSigDB_Hallmark_2020")
-ggsave_publication("3d_gsea", width = 13, height = 10)  # was 8 x 10
+plot_consistent_genes()
+ggsave_publication("4b_number_of_consistent_genes", width = 5, height = 4)
 
 
 
-## Figure 3e ----
+## Figure 4c ----
 
 plot_logfc_correlation_heatmap <- function() {
   ht_opt(
@@ -1239,14 +1109,16 @@ plot_logfc_correlation_heatmap <- function() {
   colnames(corr_mat) <- metadata[, 2]
   rownames(corr_mat) <- metadata[, 2]
   
+  color_max <- round(max(corr_mat[lower.tri(corr_mat)]), 2)
+  
   Heatmap(
     corr_mat,
     col = circlize::colorRamp2(
-      seq(0, max(corr_mat[lower.tri(corr_mat)]), length.out = 9),
+      seq(0, color_max, length.out = 9),
       scico(9, palette = "davos", direction = -1),
     ),
     heatmap_legend_param = list(
-      at = c(0, .4, .8),
+      at = c(0, color_max),
       border = FALSE,
       grid_width = unit(2, "mm"),
       labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
@@ -1261,13 +1133,12 @@ plot_logfc_correlation_heatmap <- function() {
     row_dend_width = unit(3, "mm"),
     
     clustering_distance_columns = distance,
-    column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-    column_dend_gp = gpar(lwd = 0.5),
-    column_dend_height = unit(3, "mm"),
+    show_column_names = FALSE,
+    show_column_dend = FALSE,
     
-    height = unit(3.5, "cm"),
-    width = unit(3.5, "cm"),
-    border = F,
+    height = unit(4.5, "cm"),
+    width = unit(4.5, "cm"),
+    border = FALSE,
     
     right_annotation = rowAnnotation(
       group = group_names,
@@ -1276,26 +1147,247 @@ plot_logfc_correlation_heatmap <- function() {
       show_legend = TRUE,
       annotation_legend_param = list(
         group = list(
-          title = "vs C\n(contrast)",
+          title = "comparison",
           grid_width = unit(2, "mm"),
           labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
           title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
         )
       )
-    ),
-    
-    bottom_annotation = HeatmapAnnotation(
-      group = group_names,
-      col = list(group = CONTRAST_COLORS),
-      show_annotation_name = FALSE,
-      show_legend = FALSE
     )
   )
 }
 
 (p <- plot_logfc_correlation_heatmap())
-ggsave_publication("3e_logfc_correlation_heatmap",
-                   plot = p, width = 6, height = 5)
+ggsave_publication("4c_logfc_correlation_heatmap",
+                   plot = p, width = 7, height = 5)
+
+
+
+## Figure 4d ----
+
+plot_gsea <- function(db = "MSigDB_Hallmark_2020",
+                      comparisons = NULL,
+                      cell_types = NULL,
+                      top_n_positive = 5L,
+                      top_n_negative = 5L,
+                      max_p_adj = 0.05,
+                      min_abs_NES = 1) {
+  data <- 
+    dge$gsea %>%
+    mutate(comparison = factor(comparison) %>% rename_contrast()) %>% 
+    filter(db == {{db}})
+  
+  if (!is.null(comparisons))
+    data <- 
+      data %>% 
+      filter(comparison %in% {{comparisons}})
+  
+  if (!is.null(cell_types))
+    data <- 
+      data %>% 
+      filter(cell_type %in% {{cell_types}})
+  
+  data_top_terms <-
+    data %>% 
+    filter(
+      padj <= max_p_adj,
+      abs(NES) >= min_abs_NES
+    ) %>% 
+    group_by(comparison, cell_type)
+  
+  top_terms_pos <- 
+    data_top_terms %>% 
+    slice_max(n = top_n_positive, order_by = NES, with_ties = FALSE) %>%
+    pull(pathway) %>%
+    unique()
+  
+  top_terms_neg <- 
+    data_top_terms %>% 
+    slice_min(n = top_n_negative, order_by = NES, with_ties = FALSE) %>%
+    pull(pathway) %>%
+    unique()
+  
+  data_vis <- 
+    data %>% 
+    filter(pathway %in% c(top_terms_pos, top_terms_neg)) %>% 
+    mutate(
+      pathway =
+        as_factor(pathway) %>%
+        fct_reorder(NES * -log10(padj), sum, na.rm = TRUE),
+      cell_type = factor(cell_type, levels = names(CELL_TYPE_ABBREVIATIONS))
+    )
+  
+  if (nlevels(data_vis$pathway) > 5) {
+    horizontal_grid <-
+      geom_hline(
+        yintercept = seq(5, nlevels(data_vis$pathway), 5),
+        size = BASE_LINE_SIZE,
+        color = "grey92"
+      )
+  } else {
+    horizontal_grid <- NULL  
+  }
+  
+  color_limit <- max(abs(dge$gsea$NES), na.rm = TRUE)
+  
+  ggplot(data_vis, aes(comparison, pathway, size = -log10(padj))) +
+    scale_y_discrete() +
+    horizontal_grid +    
+    geom_point(aes(color = NES)) +
+    ylab(NULL) +
+    scale_color_gsea(
+      "normalized\nenrichment\nscore",
+      limits = c(-color_limit, color_limit),
+      breaks = c(-color_limit, 0, color_limit),
+      labels = function(x) round(x, 2),
+      guide = guide_colorbar(
+        barheight = unit(15, "mm"),
+        barwidth = unit(2, "mm"),
+        ticks = FALSE
+      )
+    ) +
+    scale_size_area(
+      name = TeX("-log_{10} p_{adj}"),
+      max_size = 2.5,
+      limits = c(0, 40),
+      breaks = c(0, 20, 40)
+    )  +
+    coord_fixed() +
+    facet_wrap(vars(cell_type), nrow = 1) +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.text.x = element_text(angle = 90, vjust = .5, hjust = 1),
+      legend.key.height = unit(3, "mm"),
+      legend.key.width = unit(3, "mm"),
+      legend.spacing = unit(0, "mm"),
+      panel.spacing = unit(-.5, "pt"),
+    )
+}
+
+wrap_plots(
+  plot_gsea(comparisons = c("Mc", "Ac", "Sc"), cell_types = "B"),
+  plot_gsea(comparisons = c("Mc", "Ac", "Sc"), cell_types = "M"),
+  plot_gsea(comparisons = "Mas", cell_types = "B"),
+  plot_gsea(comparisons = "Mas", cell_types = "M"),
+  nrow = 1,
+  guides = "collect"
+)
+ggsave_publication("4d_gsea", width = 16, height = 5)
+
+
+## Figure 4e ----
+
+make_matrix <- function(gene,
+                        cell_type,
+                        groups,
+                        row = 1,
+                        col = 1) {
+  
+  barcodes <- 
+    dge$metadata %>% 
+    filter(
+      cellont_cluster %in% dge$used_clusters,
+      cellont_abbr == {{cell_type}}
+    ) %>% 
+    pull(cell)
+  
+  logcounts(dge$cds)[gene, barcodes, drop = FALSE] %>%
+    t() %>%
+    as.matrix() %>%
+    magrittr::set_colnames("logexp") %>%
+    as_tibble(rownames = "cell") %>%
+    left_join(dge$metadata, by = "cell") %>%
+    filter(group %in% {{groups}}) %>%
+    transmute(
+      row = row,
+      col = col,
+      label = str_glue("{cell_type}, {gene}"),
+      logexp = logexp / max(logexp),
+      sample = rename_patients(sample),
+      group = rename_groups(group)
+    )
+}
+
+
+plot_violin <- function(genes) {
+  plot_data <- pmap_dfr(genes, make_matrix)
+  
+  ggplot(plot_data, aes(sample, logexp)) +
+    geom_violin(
+      aes(color = group, fill = group),
+      size = BASE_LINE_SIZE,
+      scale = "width",
+      width = 0.8,
+      show.legend = T
+    ) +
+    stat_summary(geom = "point", fun = mean, size = .2) +
+    geom_text_npc(
+      data = distinct(plot_data, row, col, label),
+      aes(label = label),
+      npcx = 0.05,
+      npcy = 0.95,
+      size = BASE_TEXT_SIZE_MM,
+      hjust = 0
+    ) +
+    xlab("patient") +
+    scale_y_continuous(
+      "log-normalized expression",
+      limits = c(0, 1.1)
+    ) +
+    scale_fill_manual(values = GROUP_COLORS, aesthetics = c("color", "fill")) +
+    facet_grid(vars(row), vars(col), scales = "free_x", space = "free_x") +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      strip.text.x = element_blank(),
+      strip.text.y = element_blank()
+    )
+}
+
+plot_violin_pathway <- function(genes) {
+  tibble(gene = genes) %>%
+    mutate(
+      row = row_number(),
+      B = 1,
+      M = 2,
+    ) %>% 
+    pivot_longer(cols = c(B, M), names_to = "cell_type", values_to = "col") %>% 
+    mutate(groups = list(c("I", "II", "III", "IV"))) %>% 
+    plot_violin()
+}
+
+# 3 cm height per gene
+c("IL1B", "FOS", "NFKB1", "MYC", "IFNGR2",
+  "CD44", "RELB", "SOD2", "MAP3K8") %>% 
+  plot_violin_pathway()
+ggsave_publication("4e_exp_violin_TNFalpha", width = 10, height = 27)
+
+c("IFI44", "NFKB1", "MYD88", "HLA-A", "CD86",
+  "HLA-DQA1", "HLA-DQB1", "TNFSF10") %>%
+  plot_violin_pathway()
+ggsave_publication("4e_exp_violin_IFNgamma", width = 10, height = 24)
+
+c("TRIM28", "PCNA", "CDK4", "MCM5", "HDAC2") %>%
+  plot_violin_pathway()
+ggsave_publication("4e_exp_violin_MYCtargets", width = 10, height = 15)
+
+c("DNMT1", "EZH2", "MKI67", "PCNA") %>%
+  plot_violin_pathway()
+ggsave_publication("4e_exp_violin_E2Ftargets", width = 10, height = 12)
+
+
+# c("DNMT1", "EZH2", "MKI67", "PCNA") %in% rownames(logcounts(dge$cds))
+
+
+## Figure S4b ----
+
+plot_gsea("MSigDB_Hallmark_2020", comparisons = c("Mc", "Ac", "Sc"))
+ggsave_publication("S4b_gsea_all_c", width = 10, height = 10)
+
+plot_gsea("MSigDB_Hallmark_2020", comparisons = "Mas",
+          cell_types = c("T", "NK", "B", "M", "pDC", "E", "SC"))
+ggsave_publication("S4c_gsea_all_as", width = 10, height = 7)
 
 
 
