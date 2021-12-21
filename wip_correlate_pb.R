@@ -1,3 +1,4 @@
+library(scran)
 library(tidyverse)
 library(readxl)
 library(ComplexHeatmap)
@@ -117,47 +118,54 @@ col_metadata <-
   ) %>% 
   filter(
     OMICS_ID %in% metadata_df$omics_id,
-    Material_general %in% c("DTC", "TUM"),
+    # Material_general %in% c("DTC", "TUM"),
     !(is.na(MNA) & is.na(ATRX))
   ) %>%
   mutate(
     group =
       case_when(
-        MNA == "YES"       ~ "M",
-        ATRX == "Deletion" ~ "A",
-        TRUE               ~ "S"
+        Material_general == "MNC" ~ "MNC",
+        MNA == "YES"              ~ "M",
+        ATRX == "Deletion"        ~ "A",
+        TRUE                      ~ "S"
       ) %>% 
-      factor(levels = c("M", "A", "S")),
+      factor(levels = c("M", "A", "S", "MNC")),
     mycn_status = case_when(
-      MNA == "YES" ~ "amplified",
-      TRUE         ~ "normal"
+      Material_general == "MNC" ~ "(n/a)",
+      MNA == "YES"              ~ "amplified",
+      TRUE                      ~ "normal"
     ),
-    site = Material_general %>% fct_recode(primary = "TUM")
+    site = Material_general
   ) %>%
   select(sample = OMICS_ID, group, mycn_status, site)
 
-count_mat_nobatch <-
+counts <-
   vst_counts_removedBatchEffect_df %>%
   as_tibble() %>%
-  select(ensembl_id, all_of(metadata_bulk$sample)) %>%
-  left_join(
-    ensemblAnnot %>% select(ensembl_id, hgnc_symbol),
-    by = "ensembl_id"
-  ) %>%
-  mutate(gene = make.unique(hgnc_symbol)) %>%
-  select(!c(ensembl_id, hgnc_symbol)) %>%
-  column_to_rownames("gene") %>% 
+  select(ensembl_id, all_of(col_metadata$sample)) %>%
+  rename(gene = ensembl_id) %>%
+  column_to_rownames("gene") %>%
   as.matrix()
 
-keep <- edgeR::filterByExpr(count_mat_nobatch, group = col_metadata$group)
-count_mat_nobatch <- count_mat_nobatch[keep, ]
+# keep <- edgeR::filterByExpr(counts, group = col_metadata$group)
+# count_mat_nobatch <- count_mat_nobatch[keep, ]
+
 
 
 
 # Analyse data ------------------------------------------------------------
 
+hvgs <-
+  counts %>%
+  modelGeneVar() %>% 
+  getTopHVGs(n = 300)
+
+# hvgs <-
+#   read_excel("~/Desktop/IJC-142-297-s009.xlsx")$Ensembl %>%
+#   intersect(rownames(counts))
+
 corr_mat <-
-  count_mat_nobatch %>%
+  counts[hvgs, ] %>%
   cor(use = "pairwise.complete.obs")
 
 distance <- as.dist(1 - corr_mat)
@@ -189,9 +197,9 @@ p <- Heatmap(
     site = col_metadata$site,
     mycn = col_metadata$mycn_status,
     col = list(
-      group = c(GROUP_COLORS, "T" = "#433447"),
-      site = c(primary = "black", DTC = "gray75"),
-      mycn = c(normal = "gray90", amplified = "#d35f5f")
+      group = c(GROUP_COLORS, "MNC" = "gray60"),
+      site = c(TUM = "black", DTC = "red", MNC = "gray60"),
+      mycn = c(normal = "gray90", amplified = "#d35f5f", "(n/a)" = "gray60")
     ),
     show_annotation_name = FALSE,
     show_legend = TRUE
