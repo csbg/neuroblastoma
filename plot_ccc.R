@@ -15,26 +15,25 @@ sig_data <- readRDS("data_generated/ccc_signaling_data.rds")
 
 # Figure 3a ---------------------------------------------------------------
 
-# number of interactions
-# TODO: numbers next to bars currently not shown
+# a modified version of CellChat::netVisual_heatmap()
 
-netVisual_heatmap_mod <- function(object, 
-                                  comparison = c(1, 2), 
-                                  measure = c("count", "weight"), 
-                                  signaling = NULL, 
-                                  slot.name = c("netP", "net"), 
-                                  color.use = NULL, 
-                                  color.heatmap = c("#2166ac", "#b2182b"), 
-                                  title.name = NULL, 
-                                  width = NULL, 
-                                  height = NULL, 
-                                  cluster.rows = F, 
-                                  cluster.cols = F, 
-                                  sources.use = NULL, 
-                                  targets.use = NULL, 
-                                  remove.isolate = FALSE, 
-                                  row.show = NULL, 
-                                  col.show = NULL) {
+plot_n_interactions <- function(object, 
+                                comparison = c(1, 2), 
+                                measure = "count", 
+                                signaling = NULL, 
+                                slot.name = c("netP", "net"), 
+                                color.use = NULL, 
+                                color.heatmap = "Reds", 
+                                title.name = NULL, 
+                                width = NULL, 
+                                height = NULL, 
+                                cluster.rows = F, 
+                                cluster.cols = F, 
+                                sources.use = NULL, 
+                                targets.use = NULL, 
+                                remove.isolate = FALSE, 
+                                row.show = NULL, 
+                                col.show = NULL) {
   if (!is.null(measure)) {
     measure <- match.arg(measure)
   }
@@ -199,35 +198,32 @@ netVisual_heatmap_mod <- function(object,
   
   ha1 = 
     rowAnnotation(
-      Strength = 
-        anno_barplot(
-          rowSums(abs(mat)),
-          border = FALSE, 
-          gp = gpar(fill = color.use, col = color.use),
-          numbers_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-          numbers_offset = unit(1, "mm"),
-          numbers_rot = 0,
-          add_numbers = T,
-          axis = F
-        ),
+      StrengthText = anno_text(
+        colSums(abs(mat)), 
+        gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      ), 
+      Strength = anno_barplot(
+        rowSums(abs(mat)),
+        border = FALSE, 
+        gp = gpar(fill = color.use, col = color.use),
+        axis = FALSE
+      ),
       simple_anno_size_adjust = T,
       show_annotation_name = FALSE
     )
   
   ha2 = 
     HeatmapAnnotation(
-      Strength = 
-        anno_barplot(
-          colSums(abs(mat)), 
-          border = FALSE, 
-          gp = gpar(fill = color.use, col = color.use),
-          numbers_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-          numbers_offset = unit(1, "mm"),
-          numbers_rot = 0,
-          add_numbers = T,
-          axis = F
-        ), 
-      
+      Strength = anno_barplot(
+        colSums(abs(mat)), 
+        border = FALSE, 
+        gp = gpar(fill = color.use, col = color.use),
+        axis = FALSE
+      ), 
+      StrengthText = anno_text(
+        colSums(abs(mat)), 
+        gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      ),
       show_annotation_name = FALSE
     )
   
@@ -239,7 +235,9 @@ netVisual_heatmap_mod <- function(object,
   }
   
   Heatmap(
-    mat, col = color.heatmap.use, na_col = "white", 
+    mat,
+    col = color.heatmap.use,
+    na_col = "white", 
     name = legend.name, 
     bottom_annotation = col_annotation, 
     left_annotation = row_annotation, 
@@ -254,10 +252,12 @@ netVisual_heatmap_mod <- function(object,
     row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
     column_names_rot = 90, row_title_rot = 90,  row_names_rot = 0, 
     column_title_side = "bottom",
-    row_names_side = "left", 
+    row_names_side = "left",
+    width = unit(20, "mm"),
+    height = unit(20, "mm"),
     heatmap_legend_param = 
       list(
-        title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT, fontface = "plain"), 
+        title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
         title_position = "leftcenter-rot", 
         border = NA, 
         legend_height = unit(20, "mm"), 
@@ -267,17 +267,12 @@ netVisual_heatmap_mod <- function(object,
   )
 }
 
-p1 <- netVisual_heatmap_mod(
+p1 <- plot_n_interactions(
   cellchat, 
-  color.heatmap = "Reds",
-  measure = "count", 
   color.use = CELL_TYPE_COLORS[c("NB", "pDC", "M", "B", "T", "NK", "SC", "E")],
-  height = 1.5,
-  width = 1.5
 )
 p1
-
-ggsave_publication("3a_n_interactions", plot = p1, width = 5.5, height = 5)
+ggsave_publication("3a_n_interactions", plot = p1, width = 6, height = 5)
 
 
 
@@ -449,14 +444,20 @@ ggsave_publication("3c_dots", height = 5, width = 7.5)
 # Figure 3d, e ------------------------------------------------------------
 
 # network centrality plots for MIF & MK
+# a modified version of CellChat::netAnalysis_signalingRole_network()
 
-netAnalysis_signalingRole_network_mod <- function(
-  object, signaling, slot.name = "netP", 
-  measure = c("outdeg", "indeg", "flowbet", "info"), 
-  measure.name = c("Sender", "Receiver", "Mediator", "Influencer"), 
-  color.use = NULL, color.heatmap = "BuGn", width = 6.5, height = 1.4, 
-  font.size = BASE_TEXT_SIZE_PT, font.size.title = BASE_TEXT_SIZE_PT, 
-  cluster.rows = FALSE, cluster.cols = FALSE) {
+plot_centrality <- function(object,
+                            signaling,
+                            slot.name = "netP", 
+                            measure = c("outdeg", "indeg", "flowbet", "info"), 
+                            measure.name = c("Sender", "Receiver",
+                                             "Mediator", "Influencer"), 
+                            color.use = NULL,
+                            color.heatmap = "YlOrRd",
+                            font.size = BASE_TEXT_SIZE_PT,
+                            font.size.title = BASE_TEXT_SIZE_PT, 
+                            cluster.rows = FALSE,
+                            cluster.cols = FALSE) {
     
   if (length(slot(object, slot.name)$centr) == 0) {
     stop("Please run `netAnalysis_computeCentrality`!")
@@ -499,57 +500,52 @@ netAnalysis_signalingRole_network_mod <- function(
     
     ht1 <- Heatmap(
       mat, 
-      col = color.heatmap.use, na_col = "white", 
-      name = "Importance", bottom_annotation = col_annotation, 
-      cluster_rows = cluster.rows, cluster_columns = cluster.rows, 
-      row_names_side = "left", row_names_rot = 0, 
+      col = color.heatmap.use,
+      na_col = "white", 
+      name = "Importance",
+      bottom_annotation = col_annotation, 
+      cluster_rows = cluster.rows,
+      cluster_columns = cluster.rows, 
+      row_names_side = "left",
+      row_names_rot = 0, 
       row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
       column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
-      width = unit(width, "mm"), height = unit(height, "mm"), 
       column_title = paste0(names(centr[i])," signaling pathway network"), 
       column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
-      column_names_rot = 0, 
-      heatmap_legend_param = 
-        list(title = "Importance", 
-             title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT, fontface = "plain"), 
-             title_position = "leftcenter-rot", 
-             border = NA, 
-             at = c(
-               round(min(mat, na.rm = T), digits = 1), 
-               round(max(mat, na.rm = T), digits = 1)
-             ), 
-             legend_height = unit(20, "mm"), 
-             labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
-             grid_width = unit(2, "mm")))
+      width = unit(40, "mm"),
+      height = unit(20, "mm"), 
+      heatmap_legend_param = list(
+        title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT, fontface = "plain"), 
+        title_position = "leftcenter-rot", 
+        border = NA, 
+        at = c(
+          round(min(mat, na.rm = TRUE), digits = 1), 
+          round(max(mat, na.rm = TRUE), digits = 1)
+        ), 
+        legend_height = unit(20, "mm"), 
+        labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+        grid_width = unit(2, "mm")
+      )
+    )
   }
   ht1
 }
 
-p4 <- netAnalysis_signalingRole_network_mod(
+p4 <- plot_centrality(
   cellchat,
   signaling = "MIF", 
-  width = 50,
-  height = 20, 
-  font.size = BASE_TEXT_SIZE_PT,
-  font.size.title = BASE_TEXT_SIZE_PT,
-  color.heatmap = "YlOrRd",
   color.use = CELL_TYPE_COLORS[c("NB", "pDC", "M", "B", "T", "NK", "SC", "E")]
 )
 p4
-ggsave_publication("3d_importance_MIF", plot = p4, width = 7, height = 3.1)
+ggsave_publication("3d_importance_MIF", plot = p4, width = 6, height = 3.5)
 
-p5 <- netAnalysis_signalingRole_network_mod(
+p5 <- plot_centrality(
   cellchat,
   signaling = "MK", 
-  width = 50,
-  height = 20, 
-  font.size = BASE_TEXT_SIZE_PT,
-  font.size.title = BASE_TEXT_SIZE_PT,
-  color.heatmap = "YlOrRd",
   color.use = CELL_TYPE_COLORS[c("NB", "pDC", "M", "B", "T", "NK", "SC", "E")]
 )
 p5
-ggsave_publication("3e_importance_MK", plot = p5, width = 7, height = 3.1)
+ggsave_publication("3e_importance_MK", plot = p5, width = 6, height = 3.5)
 
 
 
