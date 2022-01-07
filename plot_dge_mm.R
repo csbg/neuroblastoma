@@ -1426,18 +1426,37 @@ gene_pathways <-
 #   left_join(gene_pathways, by = "Gene") %>% 
 #   save_table("S3_dge", "Microenvironment")
 
+used_comparisons <- c(
+  "II_vs_I",
+  "III_vs_I",
+  "IV_vs_I",
+  "MNA_vs_other"
+)
+
+rename_columns <- function(s) {
+  comparison <- str_sub(s, 7)
+  case_when(
+    str_starts(s, "log") ~ paste0("Log fold change (", comparison, ")"),
+    str_starts(s, "p_adj") ~ paste0("Adjusted p-value (", comparison, ")"),
+    TRUE ~ s
+  )
+}
+ 
 dge$results_wide_filtered %>% 
   arrange(comparison, cell_type, desc(logFC)) %>%
+  filter(comparison %in% used_comparisons) %>% 
   mutate(
     logFC = logFC / log(2),  # nebula returns natural log fold changes
-    comparison = rename_contrast(comparison),
+    comparison = rename_contrast_long(comparison),
     cell_type = CELL_TYPE_ABBREVIATIONS[cell_type]
   ) %>%
-  select(!c(p, frq, frq_ref, direction)) %>% 
-  pivot_wider(names_from = comparison, values_from = c(logFC, p_adj)) %>% 
+  select(!c(p, frq, frq_ref, direction)) %>%
+  pivot_wider(names_from = comparison, values_from = c(logFC, p_adj)) %>%
+  relocate(1, 2, 3, 7, 4, 8, 5, 9, 6, 10) %>% 
+  rename_with(rename_columns) %>% 
   left_join(gene_pathways, by = c(gene = "Gene")) %>%
-  split(.$cell_type) %>% 
-  map(select, !cell_type) %>% 
+  split(.$cell_type) %>%
+  map(select, !cell_type) %>%
   save_table("S3_dge")
 
 
@@ -1464,6 +1483,7 @@ dge$results_wide_filtered %>%
 
 dge$gsea %>% 
   arrange(db, comparison, cell_type, desc(NES)) %>%
+  filter(comparison %in% used_comparisons) %>% 
   mutate(
     comparison = rename_contrast_long(comparison),
     cell_type = CELL_TYPE_ABBREVIATIONS[cell_type],

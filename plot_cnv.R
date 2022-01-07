@@ -1006,6 +1006,7 @@ infercnv_data$regions_data %>%
     into = c("sample", "group"),
     regex = "malignant_(.*?)_([IV]+)"
   ) %>%
+  filter(!is.na(sample)) %>% 
   transmute(
     sample = sample,
     type = "scRNA-seq",
