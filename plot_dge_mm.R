@@ -25,10 +25,11 @@ dge <- readRDS("data_generated/dge_mm_results.rds")
 dge_pb <- readRDS("data_generated/dge_pb_results.rds")
 
 # are there problematic genes with convergence <= -20 ?
-any(dge$results_vs_C$convergence <= -20)
-any(dge$results_vs_S$convergence <= -20)
-any(dge$results_vs_A$convergence <= -20)
-any(dge$results_MNA_vs_other$convergence <= -20)
+stopifnot(
+  all(dge$results_vs_S$convergence > -20),
+  all(dge$results_vs_A$convergence > -20),
+  all(dge$results_MNA_vs_other$convergence > -20)
+)
 
 
 
@@ -503,24 +504,22 @@ plot_gsea_dots(dge$gsea,
 
 # Pathway genes -----------------------------------------------------------
 
-pathways <- c(
-  "TNF-alpha Signaling via NF-kB",
-  "Interferon Gamma Response",
-  "Interferon Alpha Response",
-  "Inflammatory Response",
-  "IL-2/STAT5 Signaling",
-  "p53 Pathway"
-)
-
-
 ## Single-cell heatmap ----
 
-plot_pathway_heatmap <- function(db,
-                                 pathways,
-                                 scale_by_cell_type = TRUE) {
+plot_pathway_heatmap <- function(db = "MSigDB_Hallmark_2020",
+                                 pathways = c(
+                                   "TNF-alpha Signaling via NF-kB",
+                                   "Interferon Gamma Response",
+                                   "Myc Targets V1",
+                                   "E2F Targets"
+                                 ),
+                                 cell_types = c("B", "M"),
+                                 norm_method = c("quantile", "scale")) {
+  norm_method <- match.arg(norm_method)
+  
   sig_genes <- 
     dge$results_wide_filtered %>% 
-    filter(logFC > 1, p_adj <= 0.05) %>% 
+    filter(cell_type %in% {{cell_types}}, abs(logFC) > 1, p_adj <= 0.05) %>% 
     pull(gene)
   
   row_metadata <-
@@ -532,12 +531,12 @@ plot_pathway_heatmap <- function(db,
       gene %in% rownames(dge$cds),
       gene %in% sig_genes
     )
-  
+    
   set.seed(1)
   col_metadata <-
     dge$metadata %>% 
     filter(
-      cellont_abbr %in% c("T", "NK", "B", "M"),
+      cellont_abbr %in% {{cell_types}},
       cell %in% colnames(dge$cds)
     ) %>% 
     group_by(cellont_abbr, group, sample) %>% 
@@ -557,7 +556,24 @@ plot_pathway_heatmap <- function(db,
     magrittr::extract(row_metadata$gene, col_metadata$cell) %>% 
     as.matrix()
   
-  if (scale_by_cell_type) {
+  if (norm_method == "quantile") {
+    # cutoff at 95th percentile of logcounts
+    mat <-
+      map(
+        unique(col_metadata$cell_type),
+        function(cell_type) {
+          m <- mat[, col_metadata$cell_type == cell_type]
+          q <- apply(m, 1, quantile, .95)
+          m %>%
+            sweep(1, q, function(x, y) pmin(x / y, 1)) %>% 
+            replace_na(min(., na.rm = TRUE))
+        }
+      ) %>%
+      reduce(cbind)
+    min_limit <- min(mat)
+    max_limit <- max(mat)
+  } else {
+    # scaled logcounts
     mat <-
       map(
         unique(col_metadata$cell_type),
@@ -566,40 +582,43 @@ plot_pathway_heatmap <- function(db,
           replace_na(min(., na.rm = TRUE))
       ) %>%
       reduce(cbind)
-  } else {
-    mat <- 
-      mat %>% 
-      t() %>% scale() %>% t() %>%
-      replace_na(min(., na.rm = TRUE))
+    # min_limit <- quantile(mat, 0.1, na.rm = TRUE),
+    # max_limit <- quantile(mat, 0.9, na.rm = TRUE),
+    min_limit <- 0
+    max_limit <- 1.5
   }
-  
   
   Heatmap(
     mat,
-    name = "scaled\nlogcounts",
+    name = "expression",
     col = circlize::colorRamp2(
       seq(
-        # quantile(mat, 0.1, na.rm = TRUE),
-        # quantile(mat, 0.9, na.rm = TRUE),
-        0,
-        1.5,
+        min_limit,
+        max_limit,
         length.out = 9
       ),
-      scico(9, palette = "oslo", direction = -1),
+      # scico(9, palette = "oslo", direction = -1),
+      viridisLite::cividis(9)
     ),
-    border = TRUE,
+    border = FALSE,
+    heatmap_legend_param = list(
+      at = c(min_limit, max_limit),
+      labels = c("low", "high"),
+      border = FALSE
+    ),
     
     show_row_names = FALSE,
     row_split = row_metadata$pathway,
     row_title_rot = 0,
+    cluster_rows = TRUE,
     cluster_row_slices = FALSE,
     show_row_dend = TRUE,
-    row_gap = unit(0, "mm"),
+    row_gap = unit(.5, "mm"),
     
     cluster_columns = FALSE,
     column_split = col_metadata$cell_type,
     show_column_names = FALSE,
-    column_gap = unit(0, "mm"),
+    column_gap = unit(.5, "mm"),
     
     top_annotation = HeatmapAnnotation(
       group = col_metadata$group,
@@ -610,9 +629,11 @@ plot_pathway_heatmap <- function(db,
   )
 }
 
-(p <- plot_pathway_heatmap("MSigDB_Hallmark_2020", pathways, FALSE))
-ggsave_default("dge_mm/pathway_heatmap", plot = p)
+(p <- plot_pathway_heatmap(norm_method = "quantile"))
+ggsave_default("dge_mm/pathway_heatmap_quantile", plot = p)
 
+(p <- plot_pathway_heatmap(norm_method = "scale"))
+ggsave_default("dge_mm/pathway_heatmap_scale", plot = p)
 
 
 ## Dotplot ----
@@ -1279,9 +1300,8 @@ ggsave_publication("4d_gsea", width = 16, height = 5)
 
 make_matrix <- function(gene,
                         cell_type,
-                        groups,
-                        row = 1,
-                        col = 1) {
+                        groups = c("I", "II", "III", "IV"),
+                        percentile = 98) {
   
   barcodes <- 
     dge$metadata %>% 
@@ -1299,18 +1319,20 @@ make_matrix <- function(gene,
     left_join(dge$metadata, by = "cell") %>%
     filter(group %in% {{groups}}) %>%
     transmute(
-      row = row,
-      col = col,
-      label = str_glue("{cell_type}, {gene}"),
-      logexp = logexp / max(logexp),
+      gene = gene,
+      cell_type = cell_type,
       sample = rename_patients(sample),
-      group = rename_groups(group)
+      group = rename_groups(group),
+      logexp = pmin(logexp / quantile(logexp, percentile / 100), 1)
     )
 }
 
-
-plot_violin <- function(genes) {
-  plot_data <- pmap_dfr(genes, make_matrix)
+plot_violin <- function(..., cell_types = c("B", "M"), percentile = 98) {
+  plot_data <-
+    list(gene = c(...), cell_type = cell_types) %>%
+    cross_df() %>% 
+    pmap_dfr(make_matrix, percentile = percentile) %>% 
+    mutate(gene = as_factor(gene), cell_type = as_factor(cell_type))
   
   ggplot(plot_data, aes(sample, logexp)) +
     geom_violin(
@@ -1318,66 +1340,53 @@ plot_violin <- function(genes) {
       size = BASE_LINE_SIZE,
       scale = "width",
       width = 0.8,
-      show.legend = T
+      show.legend = FALSE
     ) +
     stat_summary(geom = "point", fun = mean, size = .2) +
-    geom_text_npc(
-      data = distinct(plot_data, row, col, label),
-      aes(label = label),
-      npcx = 0.05,
-      npcy = 0.95,
-      size = BASE_TEXT_SIZE_MM,
-      hjust = 0
-    ) +
     xlab("patient") +
     scale_y_continuous(
-      "log-normalized expression",
-      limits = c(0, 1.1)
+      "percentile of log-normalized expression",
+      limits = c(0, 1),
+      breaks = c(0, 1),
+      labels = c("0th", str_glue("{percentile}th"))
     ) +
     scale_fill_manual(values = GROUP_COLORS, aesthetics = c("color", "fill")) +
-    facet_grid(vars(row), vars(col), scales = "free_x", space = "free_x") +
+    facet_grid(
+      vars(gene),
+      vars(cell_type),
+      scales = "free_x",
+      space = "free_x",
+      switch = "y"
+    ) +
     theme_nb(grid = FALSE) +
     theme(
-      axis.text.y = element_blank(),
-      axis.ticks.y = element_blank(),
-      strip.text.x = element_blank(),
-      strip.text.y = element_blank()
+      # axis.text.y = element_blank(),
+      # axis.ticks.y = element_blank(),
+      strip.placement = "outside"
     )
 }
 
-plot_violin_pathway <- function(genes) {
-  tibble(gene = genes) %>%
-    mutate(
-      row = row_number(),
-      B = 1,
-      M = 2,
-    ) %>% 
-    pivot_longer(cols = c(B, M), names_to = "cell_type", values_to = "col") %>% 
-    mutate(groups = list(c("I", "II", "III", "IV"))) %>% 
-    plot_violin()
-}
 
 # 3 cm height per gene
-c("IL1B", "FOS", "NFKB1", "MYC", "IFNGR2",
-  "CD44", "RELB", "SOD2", "MAP3K8") %>% 
-  plot_violin_pathway()
+plot_violin("FOS", "IFI44", "TRIM28", "DNMT1")
+ggsave_publication("4e_exp_violin", width = 10, height = 12)
+
+
+plot_violin("IL1B", "FOS", "NFKB1", "MYC",
+            "IFNGR2", "CD44", "RELB", "SOD2", "MAP3K8")
 ggsave_publication("4e_exp_violin_TNFalpha", width = 10, height = 27)
 
-c("IFI44", "NFKB1", "MYD88", "HLA-A", "CD86",
-  "HLA-DQA1", "HLA-DQB1", "TNFSF10") %>%
-  plot_violin_pathway()
+plot_violin("IFI44", "NFKB1", "MYD88", "HLA-A", "CD86",
+            "HLA-DQA1", "HLA-DQB1", "TNFSF10")
 ggsave_publication("4e_exp_violin_IFNgamma", width = 10, height = 24)
 
-c("TRIM28", "PCNA", "CDK4", "MCM5", "HDAC2") %>%
-  plot_violin_pathway()
+plot_violin("TRIM28", "PCNA", "CDK4", "MCM5", "HDAC2")
 ggsave_publication("4e_exp_violin_MYCtargets", width = 10, height = 15)
 
-c("DNMT1", "EZH2", "MKI67", "PCNA") %>%
-  plot_violin_pathway()
+plot_violin("DNMT1", "EZH2", "MKI67", "PCNA")
 ggsave_publication("4e_exp_violin_E2Ftargets", width = 10, height = 12)
 
 
-# c("DNMT1", "EZH2", "MKI67", "PCNA") %in% rownames(logcounts(dge$cds))
 
 
 ## Figure S4b ----
