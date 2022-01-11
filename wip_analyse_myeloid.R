@@ -3,6 +3,8 @@ library(scuttle)
 library(tidyverse)
 library(scico)
 library(patchwork)
+library(ComplexHeatmap)
+library(RColorBrewer)
 source("common_functions.R")
 source("styling.R")
 
@@ -10,10 +12,10 @@ source("styling.R")
 
 # Load data ---------------------------------------------------------------
 
-nb_metadada <- readRDS("data_generated/metadata.rds")
+nb_metadata <- readRDS("data_generated/metadata.rds")
 
 myeloid_barcodes <- 
-  nb_metadada %>% 
+  nb_metadata %>% 
   filter(cellont_abbr == "M") %>% 
   pull(cell)
 
@@ -44,7 +46,7 @@ cds_my <-
 my_metadata <-
   list(
     tibble(cell = rownames(colData(cds_my))),
-    nb_metadada %>%
+    nb_metadata %>%
       select(cell, sample, group, cellont_cluster) %>% 
       mutate(group = rename_groups(group), sample = rename_patients(sample)),
     reducedDim(cds_my, "UMAP") %>%
@@ -65,7 +67,7 @@ my_metadata %>%
 
 
 
-# UMAPs ----
+## UMAPs ----
 
 cluster_labels <-
   my_metadata %>% 
@@ -163,3 +165,135 @@ walk(
     ggsave_default(str_glue("myeloid/markers_{t}"), width = 100)
   }
 )
+
+
+## Cell types ----
+
+plot_celltype_heatmap <- function(clusters = 1:10,
+                                  label = c("broad", "fine"),
+                                  lump_prop = 0) {
+  label <- match.arg(label)
+  
+  # generate matrix of cell type abundances
+  make_matrix <- function(ref) {
+    cell_type_column <- rlang::sym(str_glue("cell_type_{ref}_{label}"))
+    
+    my_metadata %>% 
+      filter(subcluster %in% {{clusters}}) %>% 
+      left_join(
+        nb_metadata %>% select(cell, starts_with("cell_type")),
+        by = "cell"
+      ) %>% 
+      mutate(
+        cell_type =
+          as_factor(!!cell_type_column) %>%
+          fct_infreq() %>% 
+          fct_explicit_na("Unknown") %>% 
+          fct_relabel(~str_c(ref, .x, sep = "_")) %>% 
+          fct_lump_prop(lump_prop, other_level = str_glue("{ref}_other"))
+      ) %>% 
+      count(cluster = subcluster, cell_type) %>%
+      group_by(cluster) %>%
+      mutate(n_rel = n / sum(n)) %>%
+      select(!n) %>%
+      ungroup() %>%
+      arrange(cell_type) %>% 
+      pivot_wider(names_from = "cell_type", values_from = "n_rel") %>%
+      arrange(cluster) %>% 
+      column_to_rownames("cluster") %>%
+      as.matrix() %>%
+      replace_na(0)
+  }
+  
+  mat <- 
+    map(
+      c("blueprint", "hpca", "dice", "dmap", "monaco"),
+      make_matrix
+    ) %>% 
+    reduce(cbind)
+  
+  # set up column metadata
+  col_metadata <-
+    tibble(colname = colnames(mat)) %>% 
+    left_join(
+      read_csv("metadata/celldex_celltypes.csv", comment = "#"),
+      by = "colname"
+    ) %>% 
+    separate(
+      colname,
+      into = c("ref", "cell_type"),
+      extra = "merge",
+      remove = FALSE
+    ) %>% 
+    mutate(
+      ref =
+        as_factor(ref) %>% 
+        fct_recode(
+          "Human Primary Cell Atlas" = "hpca",
+          "Blueprint/ENCODE" = "blueprint",
+          "DICE" = "dice",
+          "Novershtern" = "dmap",
+          "Monaco" = "monaco"
+        ),
+      abbr = factor(abbr, levels = names(CELL_TYPE_COLORS))
+    ) %>% 
+    group_by(ref) %>% 
+    arrange(abbr, .by_group = TRUE) %>% 
+    ungroup()
+  
+  mat <- mat[, col_metadata$colname]
+  colnames(mat) <- col_metadata$cell_type
+  
+  # draw heatmap  
+  ht_opt(
+    simple_anno_size = unit(1.5, "mm"),
+    COLUMN_ANNO_PADDING = unit(1, "pt"),
+    DENDROGRAM_PADDING = unit(1, "pt"),
+    HEATMAP_LEGEND_PADDING = unit(1, "mm"),
+    ROW_ANNO_PADDING = unit(1, "pt"),
+    TITLE_PADDING = unit(1, "mm")
+  )
+  
+  set.seed(2)
+  Heatmap(
+    mat,
+    col = colorRampPalette(brewer.pal(9, "YlOrBr"))(100),
+    
+    heatmap_legend_param = list(
+      at = c(0, 1),
+      border = FALSE,
+      grid_width = unit(2, "mm"),
+      labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      legend_height = unit(15, "mm"),
+      title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+    ),
+    name = "relative\nabundance",
+    
+    row_title = "subcluster",
+    row_title_side = "right",
+    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    row_dend_gp = gpar(lwd = 0.5),
+    row_dend_width = unit(3, "mm"),
+    
+    column_split = col_metadata$ref,
+    column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    
+    cluster_columns = FALSE,
+  ) %>%
+    draw(
+      gap = unit(50, "mm"),
+      column_title = "cell type in reference dataset",
+      column_title_side = "bottom",
+      column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+    )
+}
+
+(p <- plot_celltype_heatmap())
+ggsave_default("myeloid/celltype_heatmap_broad",
+               plot = p, width = 150, height = 50)
+
+(p <- plot_celltype_heatmap(label = "fine", lump_prop = .01))
+ggsave_default("myeloid/celltype_heatmap_fine",
+               plot = p, width = 150, height = 80)
