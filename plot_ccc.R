@@ -627,3 +627,20 @@ plot_violin(
 )
 ggsave_publication("3g_violins_MK", width = 8.5, height = 9)
 
+
+
+# Table S5 ----------------------------------------------------------------
+
+sig_data %>% 
+  select(
+    "Cell type expressing ligand" = source,
+    "Cell type expressing receptor" = source,
+    Ligand = ligand,
+    Receptor = receptor,
+    Score = prob,
+    "Normalized score" = prob.norm,
+    "P value" = pval,
+    Pathway = pathway_name,
+    "Type of interaction" = annotation
+  ) %>%
+  save_table("S5_ccc", sheet_name = "Interactions")
