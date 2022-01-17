@@ -25,7 +25,7 @@ nb <-
   logNormCounts(assay.type = "soupx_counts")
 
 markers <- read_csv("metadata/myeloid_markers.csv")
-# markers$gene %>% setdiff(rownames(cds_my))
+
 
 
 # Analysis ----------------------------------------------------------------
@@ -47,7 +47,7 @@ my_metadata <-
   list(
     tibble(cell = rownames(colData(cds_my))),
     nb_metadata %>%
-      select(cell, sample, group, cellont_cluster) %>% 
+      select(cell, sample, group) %>% 
       mutate(group = rename_groups(group), sample = rename_patients(sample)),
     reducedDim(cds_my, "UMAP") %>%
       magrittr::set_colnames(c("UMAP1", "UMAP2")) %>% 
@@ -55,7 +55,21 @@ my_metadata <-
     clusters(cds_my) %>% 
       enframe(name = "cell", value = "subcluster")
   ) %>% 
-  reduce(left_join, by = "cell")
+  reduce(left_join, by = "cell") %>% 
+  mutate(
+    collcluster =
+      fct_collapse(
+        subcluster,
+        "classical mono" = c("2", "4", "5"),
+        "mDCs" = "7",
+        "nonclassical mono" = "8",
+        other_level = "other"
+      ) %>%
+      fct_relevel("classical mono", "nonclassical mono", "mDCs")
+  )
+
+cds_my %>% saveRDS("data_wip/cds_myeloid.rds")
+my_metadata %>% saveRDS("data_wip/metadata_myeloid.rds")
 
 
 
@@ -69,70 +83,85 @@ my_metadata %>%
 
 ## UMAPs ----
 
-cluster_labels <-
+plot_umap <- function(cluster_col) {
+  cluster_labels <-
+    my_metadata %>% 
+    group_by(cluster = {{cluster_col}}) %>% 
+    summarise(UMAP1 = mean(UMAP1), UMAP2 = mean(UMAP2))
+  
+  ggplot(my_metadata, aes(UMAP1, UMAP2)) +
+    geom_point(aes(color = {{cluster_col}}), size = 0.1, show.legend = FALSE) +
+    geom_text(data = cluster_labels, aes(label = cluster)) +
+    coord_fixed() +
+    theme_bw() +
+    theme(panel.grid = element_blank())
+}
+
+plot_umap(subcluster)
+ggsave_default("myeloid/umap_subcluster")
+
+plot_umap(collcluster)
+ggsave_default("myeloid/umap_collcluster")
+
+
+
+## Groupwise abundances ----
+
+plot_abundance_pies <- function(cluster_col) {
   my_metadata %>% 
-  group_by(subcluster) %>% 
-  summarise(UMAP1 = mean(UMAP1), UMAP2 = mean(UMAP2))
+    group_by(cluster = {{cluster_col}}) %>% 
+    count(group) %>% 
+    mutate(n = n / sum(n) * 100) %>% 
+    filter(as.numeric(cluster) <= 11) %>% 
+    ggplot(aes("", n, fill = group)) +
+    geom_col() +
+    scale_x_discrete(NULL) +
+    scale_fill_manual(values = GROUP_COLORS) +
+    coord_polar("y") +
+    facet_wrap(vars(cluster), nrow = 1) +
+    theme_bw() +
+    theme(
+      axis.text.x = element_blank(),
+      panel.grid = element_blank(),
+      strip.background = element_blank()
+    )
+}
 
-ggplot(my_metadata, aes(UMAP1, UMAP2)) +
-  geom_point(aes(color = subcluster), size = 0.1, show.legend = FALSE) +
-  geom_text(data = cluster_labels, aes(label = subcluster)) +
-  coord_fixed() +
-  theme_bw() +
-  theme(panel.grid = element_blank())
-ggsave_default("myeloid/umap")
+plot_abundance_pies(subcluster)
+ggsave_default("myeloid/abundances_groups_subcluster")
 
-
-ggplot(my_metadata, aes(UMAP1, UMAP2)) +
-  geom_hex(bins = 100) +
-  scale_fill_scico(palette = "nuuk") +
-  coord_fixed() +
-  facet_wrap(vars(group)) +
-  theme_bw() +
-  theme(panel.grid = element_blank())
-ggsave_default("myeloid/clusters_groups")
-
-
-my_metadata %>% 
-  group_by(subcluster) %>% 
-  count(group) %>% 
-  mutate(n = n / sum(n) * 100) %>% 
-  filter(as.numeric(subcluster) <= 11) %>% 
-  ggplot(aes("", n, fill = group)) +
-  geom_col() +
-  scale_x_discrete(NULL) +
-  scale_fill_manual(values = GROUP_COLORS) +
-  coord_polar("y") +
-  facet_wrap(vars(subcluster), nrow = 1) +
-  theme_bw() +
-  theme(
-    axis.text.x = element_blank(),
-    panel.grid = element_blank(),
-    strip.background = element_blank()
-  )
-ggsave_default("myeloid/abundances_groups")
+plot_abundance_pies(collcluster)
+ggsave_default("myeloid/abundances_groups_collcluster", width = 150)
 
 
-my_metadata %>% 
-  group_by(subcluster) %>% 
-  count(sample) %>% 
-  mutate(n = n / sum(n) * 100) %>% 
-  filter(as.numeric(subcluster) <= 11) %>% 
-  ggplot(aes("", n, fill = sample)) +
-  geom_col(position = "dodge") +
-  scale_fill_manual(values = PATIENT_COLORS) +
-  xlab(NULL) +
-  ylab("relative abundance (%)") +
-  facet_wrap(vars(subcluster), nrow = 2) +
-  theme_nb() +
-  theme(
-    legend.key.width = unit(2, "mm"),
-    legend.key.height = unit(2, "mm"),
-    axis.text.x = element_blank(),
-    panel.grid = element_blank(),
-    strip.background = element_blank()
-  )
-ggsave_default("myeloid/abundances_patients", height = 50, width = 150)
+plot_abundance_bars <- function(cluster_col) {
+  my_metadata %>% 
+    group_by(cluster = {{cluster_col}}) %>% 
+    count(sample) %>% 
+    mutate(n = n / sum(n) * 100) %>% 
+    filter(as.numeric(cluster) <= 11) %>% 
+    ggplot(aes("", n, fill = sample)) +
+    geom_col(position = "dodge") +
+    scale_fill_manual(values = PATIENT_COLORS) +
+    xlab(NULL) +
+    ylab("relative abundance (%)") +
+    facet_wrap(vars(cluster), nrow = 2) +
+    theme_nb() +
+    theme(
+      legend.key.width = unit(2, "mm"),
+      legend.key.height = unit(2, "mm"),
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      panel.grid = element_blank(),
+      strip.background = element_blank()
+    )
+}
+
+plot_abundance_bars(subcluster)
+ggsave_default("myeloid/abundances_patients_subcluster", width = 150, height = 50)
+
+plot_abundance_bars(collcluster)
+ggsave_default("myeloid/abundances_patients_collcluster", width = 70, height = 50)
 
 
 
@@ -144,7 +173,7 @@ plot_cell_type <- function(t) {
     markers %>% 
       filter(cell_type == t) %>% 
       pull(gene),
-    clusters(cds_my)
+    my_metadata$collcluster
   ) +
     scale_y_discrete(t) +
     theme(legend.position = "none")
@@ -169,7 +198,8 @@ walk(
 
 ## Cell types ----
 
-plot_celltype_heatmap <- function(clusters = 1:10,
+plot_celltype_heatmap <- function(cluster_col,
+                                  clusters = NULL,
                                   label = c("broad", "fine"),
                                   lump_prop = 0) {
   label <- match.arg(label)
@@ -179,7 +209,8 @@ plot_celltype_heatmap <- function(clusters = 1:10,
     cell_type_column <- rlang::sym(str_glue("cell_type_{ref}_{label}"))
     
     my_metadata %>% 
-      filter(subcluster %in% {{clusters}}) %>% 
+      rename(cluster = {{cluster_col}}) %>% 
+      {if (!is.null(clusters)) filter(., cluster %in% {{clusters}}) else .} %>% 
       left_join(
         nb_metadata %>% select(cell, starts_with("cell_type")),
         by = "cell"
@@ -192,7 +223,7 @@ plot_celltype_heatmap <- function(clusters = 1:10,
           fct_relabel(~str_c(ref, .x, sep = "_")) %>% 
           fct_lump_prop(lump_prop, other_level = str_glue("{ref}_other"))
       ) %>% 
-      count(cluster = subcluster, cell_type) %>%
+      count(cluster, cell_type) %>%
       group_by(cluster) %>%
       mutate(n_rel = n / sum(n)) %>%
       select(!n) %>%
@@ -290,10 +321,19 @@ plot_celltype_heatmap <- function(clusters = 1:10,
     )
 }
 
-(p <- plot_celltype_heatmap())
-ggsave_default("myeloid/celltype_heatmap_broad",
+(p <- plot_celltype_heatmap(subcluster, 1:10))
+ggsave_default("myeloid/celltype_heatmap_broad_subcluster",
                plot = p, width = 150, height = 50)
 
-(p <- plot_celltype_heatmap(label = "fine", lump_prop = .01))
-ggsave_default("myeloid/celltype_heatmap_fine",
+(p <- plot_celltype_heatmap(subcluster, 1:10, label = "fine", lump_prop = .01))
+ggsave_default("myeloid/celltype_heatmap_fine_subcluster",
                plot = p, width = 150, height = 80)
+
+(p <- plot_celltype_heatmap(collcluster))
+ggsave_default("myeloid/celltype_heatmap_broad_collcluster",
+               plot = p, width = 150, height = 35)
+
+(p <- plot_celltype_heatmap(collcluster, label = "fine", lump_prop = .01))
+ggsave_default("myeloid/celltype_heatmap_fine_collcluster",
+               plot = p, width = 150, height = 60)
+
