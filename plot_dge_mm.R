@@ -26,8 +26,7 @@ dge_pb <- readRDS("data_generated/dge_pb_results.rds")
 
 # are there problematic genes with convergence <= -20 ?
 stopifnot(
-  all(dge$results_vs_S$convergence > -20),
-  all(dge$results_vs_A$convergence > -20),
+  all(dge$results_vs_C$convergence > -20),
   all(dge$results_MNA_vs_other$convergence > -20)
 )
 
@@ -1271,7 +1270,8 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
       name = TeX("-log_{10} p_{adj}"),
       max_size = 2.5,
       limits = c(0, 40),
-      breaks = c(0, 20, 40)
+      breaks = c(0, 20, 40),
+      oob = scales::oob_squish
     )  +
     coord_fixed() +
     facet_wrap(vars(cell_type), nrow = 1) +
