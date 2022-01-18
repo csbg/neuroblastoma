@@ -505,20 +505,26 @@ plot_gsea_dots(dge$gsea,
 
 ## Single-cell heatmap ----
 
-plot_pathway_heatmap <- function(db = "MSigDB_Hallmark_2020",
-                                 pathways = c(
-                                   "TNF-alpha Signaling via NF-kB",
-                                   "Interferon Gamma Response",
-                                   "Myc Targets V1",
-                                   "E2F Targets"
-                                 ),
-                                 cell_types = c("B", "M"),
-                                 norm_method = c("quantile", "scale")) {
+plot_pathway_heatmap_sc <- function(db = "MSigDB_Hallmark_2020",
+                                    pathways = c(
+                                      "TNF-alpha Signaling via NF-kB",
+                                      "Interferon Gamma Response",
+                                      "Interferon Alpha Response",
+                                      "Myc Targets V1",
+                                      "E2F Targets"
+                                    ),
+                                    cell_types = c("B", "M"),
+                                    norm_method = c("quantile", "scale")) {
   norm_method <- match.arg(norm_method)
   
   sig_genes <- 
     dge$results_wide_filtered %>% 
-    filter(cell_type %in% {{cell_types}}, abs(logFC) > 1, p_adj <= 0.05) %>% 
+    filter(
+      cell_type %in% {{cell_types}},
+      comparison %in% c("II_vs_I", "III_vs_I", "IV_vs_I"),
+      abs(logFC) > log(4),
+      p_adj <= 0.05
+    ) %>% 
     pull(gene)
   
   row_metadata <-
@@ -581,8 +587,8 @@ plot_pathway_heatmap <- function(db = "MSigDB_Hallmark_2020",
           replace_na(min(., na.rm = TRUE))
       ) %>%
       reduce(cbind)
-    # min_limit <- quantile(mat, 0.1, na.rm = TRUE),
-    # max_limit <- quantile(mat, 0.9, na.rm = TRUE),
+    # min_limit <- quantile(mat, 0, na.rm = TRUE)
+    # max_limit <- quantile(mat, 0.9, na.rm = TRUE)
     min_limit <- 0
     max_limit <- 1.5
   }
@@ -596,7 +602,6 @@ plot_pathway_heatmap <- function(db = "MSigDB_Hallmark_2020",
         max_limit,
         length.out = 9
       ),
-      # scico(9, palette = "oslo", direction = -1),
       viridisLite::cividis(9)
     ),
     border = FALSE,
@@ -605,6 +610,7 @@ plot_pathway_heatmap <- function(db = "MSigDB_Hallmark_2020",
       labels = c("low", "high"),
       border = FALSE
     ),
+    use_raster = FALSE,
     
     show_row_names = FALSE,
     row_split = row_metadata$pathway,
@@ -628,185 +634,147 @@ plot_pathway_heatmap <- function(db = "MSigDB_Hallmark_2020",
   )
 }
 
-(p <- plot_pathway_heatmap(norm_method = "quantile"))
-ggsave_default("dge_mm/pathway_heatmap_quantile", plot = p)
+(p <- plot_pathway_heatmap_sc(norm_method = "quantile"))
+ggsave_default("dge_mm/pathway_heatmap_sc_quantile", plot = p)
 
-(p <- plot_pathway_heatmap(norm_method = "scale"))
-ggsave_default("dge_mm/pathway_heatmap_scale", plot = p)
+(p <- plot_pathway_heatmap_sc(norm_method = "scale"))
+ggsave_default("dge_mm/pathway_heatmap_sc_scale", plot = p)
 
 
-## Dotplot ----
 
-plot_pathway_dots <- function(db, pathway,
-                              min_exp = -2.5, max_exp = 2.5) {
-  scale_and_limit <- function(x) {
-    scale(x)[,1] %>% 
-      pmax(min_exp) %>% 
-      pmin(max_exp)
-  }
+## Bulk heatmap ----
+
+plot_pathway_heatmap_sum <- function(db = "MSigDB_Hallmark_2020",
+                                     pathways = c(
+                                       "TNF-alpha Signaling via NF-kB",
+                                       "Interferon Gamma Response",
+                                       "Interferon Alpha Response",
+                                       "Myc Targets V1",
+                                       "E2F Targets"
+                                     ),
+                                     level = c("sample", "group"),
+                                     cell_types = c("B", "M"),
+                                     norm_method = c("quantile", "scale")) {
+  norm_method <- match.arg(norm_method)
+  level <- match.arg(level)
   
-  # assemble row and col metadata
+  sig_genes <- 
+    dge$results_wide_filtered %>% 
+    filter(
+      cell_type %in% {{cell_types}},
+      comparison %in% c("II_vs_I", "III_vs_I", "IV_vs_I"),
+      abs(logFC) > log(4),
+      p_adj <= 0.05
+    ) %>% 
+    pull(gene)
+  
+  # determine genes shown
+  row_metadata <-
+    dge$gene_sets[[db]][pathways] %>%
+    enframe("pathway", "gene") %>%
+    unnest_longer(gene) %>%
+    mutate(pathway = as_factor(pathway)) %>%
+    filter(
+      gene %in% rownames(dge$cds),
+      gene %in% sig_genes
+    )
+  
+  # collect barcodes per column
   col_metadata <-
     dge$metadata %>% 
     filter(
-      cellont_abbr %in% c("T", "NK", "B", "M"),
+      cellont_abbr %in% {{cell_types}},
       cell %in% colnames(dge$cds)
-    ) %>%
-    mutate(group_type = fct_cross(group, cellont_abbr))
-    # mutate(group_type = fct_cross(cellont_abbr, group))
-  
-  panel_annotation <- tribble(
-    ~xmin, ~xmax, ~fill,
-    4.5, 8.5, "grey90",
-    12.5, 16.5, "grey90"
-  )
-  counts <- logcounts(dge$cds[, col_metadata$cell])
-  features <- intersect(dge$gene_sets[[db]][[pathway]], rownames(counts))
-  groups <- col_metadata$group_type
-  
-  
-  # basically code of plot_dots, with counts, features, groups,
-  # and panel_annotation prefilled and features sorted by percent expressed
-  known_features <- intersect(features, rownames(counts))
-  missing_features <- setdiff(features, rownames(counts))
-  if (length(missing_features) > 0)
-    warn(
-      "The following requested features are missing: ",
-      "{str_c(missing_features, collapse = ', ')}"
-    )
-  
-  vis_data <- 
-    counts[known_features, , drop = FALSE] %>% 
-    Matrix::t() %>% 
-    as.matrix() %>% 
-    as_tibble(rownames = "cell") %>% 
-    group_by(id = groups) %>% 
-    summarise(
-      across(
-        where(is.numeric),
-        list(
-          avg_exp = ~mean(expm1(.)),
-          pct_exp = ~length(.[. > 0]) / length(.) * 100
-        ),
-        .names = "{.col}__{.fn}"
-      )
     ) %>% 
-    mutate(across(ends_with("avg_exp"), scale_and_limit)) %>%
-    pivot_longer(
-      !id,
-      names_to = c("feature", ".value"),
-      names_pattern = "(.+)__(.+)"
-    ) %>% 
-    # new from here
     mutate(
-      feature = factor(feature, levels = features) %>% fct_reorder(pct_exp)
-    )
+      cell_type = factor(cellont_abbr, names(CELL_TYPE_ABBREVIATIONS)),
+      group = rename_groups(group),
+      sample = rename_patients(sample) %>% factor(levels = PATIENT_ORDER)
+    ) %>% 
+    arrange(group) %>% 
+    {
+      if (level == "sample")
+        group_by(., cell_type, group, sample)
+      else
+        group_by(., cell_type, group)
+    } %>% 
+    summarise(cells = list(cell))
   
-  if (!is.null(panel_annotation)) {
-    panel_bg <- list(
-      geom_point(color = "white"),  # initialize discrete coordinate system
-      geom_rect(
-        data = panel_annotation,
-        aes(xmin = xmin, xmax = xmax,
-            ymin = 0.5, ymax = nlevels(vis_data$feature) + 0.5,
-            fill = fill),
-        show.legend = FALSE,
-        inherit.aes = FALSE,
-      ),
-      scale_fill_identity()
+  # make expression matrix
+  mat <-
+    dge$cds %>% 
+    logcounts() %>% 
+    magrittr::extract(row_metadata$gene, ) %>% 
+    as.matrix()
+  
+  mat <- 
+    col_metadata %>% 
+    pull(cells) %>% 
+    map(~mat[, .] %>% rowMeans()) %>%
+    purrr::reduce(cbind)
+  
+  # scale within cell types
+  if (level == "sample") {
+    mat <- cbind(
+      mat[, 1:16] %>% t() %>% scale() %>% t(),
+      mat[, 17:32] %>% t() %>% scale() %>% t()
     )
   } else {
-    panel_bg <- NULL
+    mat <- cbind(
+      mat[, 1:4] %>% t() %>% scale() %>% t(),
+      mat[, 5:8] %>% t() %>% scale() %>% t()
+    )
   }
   
-  ggplot(vis_data, aes(id, feature)) +
-    panel_bg +
-    geom_point(aes(size = pct_exp, color = avg_exp)) +
-    scale_x_discrete("cluster", expand = expansion(add = 0.5)) +
-    scale_y_discrete("feature", expand = expansion(add = 0.5)) +
-    scale_color_scico(
-      "scaled\naverage\nexpression",
-      palette = "oslo",
-      direction = -1,
-      aesthetics = "color"
-    ) +
-    scale_radius("% expressed", range = c(0, 6)) +
-    coord_fixed(
-      # xlim = c(0.5, nlevels(vis_data$id) + 0.5),
-      # ylim = c(0.5, nlevels(vis_data$feature) + 0.5),
-      clip = "off"
-    ) +
-    theme_classic() +
-    theme(
-      axis.text.x = element_text(angle = 90, hjust = 1, vjust = .5),
-      panel.grid = element_blank()
+  # plot heatmap
+  Heatmap(
+    mat,
+    name = "expression",
+    col = circlize::colorRamp2(
+      seq(
+        min(mat),
+        max(mat),
+        length.out = 9
+      ),
+      viridisLite::cividis(9)
+    ),
+    border = FALSE,
+    heatmap_legend_param = list(
+      at = c(min(mat), max(mat)),
+      labels = c("low", "high"),
+      border = FALSE
+    ),
+    
+    show_row_names = TRUE,
+    row_split = row_metadata$pathway,
+    row_title_rot = 0,
+    cluster_rows = TRUE,
+    cluster_row_slices = FALSE,
+    show_row_dend = TRUE,
+    row_gap = unit(.5, "mm"),
+    row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    
+    cluster_columns = FALSE,
+    column_split = col_metadata$cell_type,
+    show_column_names = FALSE,
+    column_gap = unit(.5, "mm"),
+    
+    top_annotation = HeatmapAnnotation(
+      group = col_metadata$group,
+      col = list(
+        group = GROUP_COLORS
+      )
     )
+  )
 }
 
-plot_pathway_dots("MSigDB_Hallmark_2020", pathways[1])
-ggsave_default("dge_mm/pathway_dots_tnf", height = 900)
+(p <- plot_pathway_heatmap_sum(level = "sample"))
+ggsave_default("dge_mm/pathway_heatmap_mean_sample",
+               plot = p, width = 200, height = 200)
 
-plot_pathway_dots("MSigDB_Hallmark_2020", pathways[2])
-ggsave_default("dge_mm/pathway_dots_ifng", height = 900)
-
-plot_pathway_dots("MSigDB_Hallmark_2020", pathways[3])
-ggsave_default("dge_mm/pathway_dots_ifna", height = 600)
-
-plot_pathway_dots("MSigDB_Hallmark_2020", pathways[4])
-ggsave_default("dge_mm/pathway_dots_inflammatory", height = 900)
-
-plot_pathway_dots("MSigDB_Hallmark_2020", pathways[5])
-ggsave_default("dge_mm/pathway_dots_il2stat5", height = 900)
-
-plot_pathway_dots("MSigDB_Hallmark_2020", pathways[6])
-ggsave_default("dge_mm/pathway_dots_p53", height = 900)
-
-
-
-## logFC ----
-
-plot_pathway_genes <- function(db, pathway, filename = "auto", ...) {
-  vis_data <- 
-    dge$results_wide %>% 
-    filter(
-      gene %in% dge$gene_sets[[db]][[pathway]],
-      abs(logFC) < 8,
-      comparison %>% str_ends("_I")
-    ) %>% 
-    mutate(comparison = rename_contrast(comparison))
-  
-  p <-
-    vis_data %>% 
-    mutate(gene = factor(gene) %>% fct_reorder(logFC)) %>% 
-    ggplot(aes(comparison, gene, size = -log10(p_adj), color = logFC)) +
-    geom_point() +
-    scale_color_gsea(limits = c(-3, 3)) +
-    scale_size_area() +
-    facet_wrap(vars(cell_type), nrow = 1) +
-    theme_bw() +
-    theme(
-      axis.text.x = element_text(angle = 90, vjust = .5),
-      panel.grid = element_blank(),
-      panel.spacing = unit(0, "mm"),
-      strip.background = element_blank(),
-      strip.text = element_text(face = "bold")
-    )
-  
-  if (filename == "auto") {
-    pathway_name <- str_replace_all(pathway, "/", "_")
-    filename <- str_glue("dge_mm/pathway_genes_{db}_{pathway_name}")
-  }
-  ggsave_default(filename, width = 120, ...)
-  p
-}
-
-plot_pathway_genes("MSigDB_Hallmark_2020", pathways[1], height = 700)
-plot_pathway_genes("MSigDB_Hallmark_2020", pathways[2], height = 600)
-plot_pathway_genes("MSigDB_Hallmark_2020", pathways[3], height = 300)
-plot_pathway_genes("MSigDB_Hallmark_2020", pathways[4], height = 600)
-plot_pathway_genes("MSigDB_Hallmark_2020", pathways[5], height = 500)
-plot_pathway_genes("MSigDB_Hallmark_2020", pathways[6], height = 600)
-
+(p <- plot_pathway_heatmap_sum(level = "group"))
+ggsave_default("dge_mm/pathway_heatmap_mean_group",
+               plot = p, width = 150, height = 200)
 
 
 
