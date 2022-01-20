@@ -1,8 +1,22 @@
+# Plot cell-cell communication.
+#
+# @DEPI ccc_cellchat_object.rds
+# @DEPI ccc_signaling_data.rds
+
 library(CellChat)
 library(tidyverse)
 library(ComplexHeatmap)
 library(latex2exp)
 source("styling.R")
+
+ht_opt(
+  simple_anno_size = unit(1.5, "mm"),
+  COLUMN_ANNO_PADDING = unit(2, "pt"),
+  DENDROGRAM_PADDING = unit(1, "pt"),
+  HEATMAP_LEGEND_PADDING = unit(1, "mm"),
+  ROW_ANNO_PADDING = unit(2, "pt"),
+  TITLE_PADDING = unit(1, "mm")
+)
 
 
 
@@ -15,263 +29,78 @@ sig_data <- readRDS("data_generated/ccc_signaling_data.rds")
 
 # Figure 3a ---------------------------------------------------------------
 
-# a modified version of CellChat::netVisual_heatmap()
-
-plot_n_interactions <- function(object, 
-                                comparison = c(1, 2), 
-                                measure = "count", 
-                                signaling = NULL, 
-                                slot.name = c("netP", "net"), 
-                                color.use = NULL, 
-                                color.heatmap = "Reds", 
-                                title.name = NULL, 
-                                width = NULL, 
-                                height = NULL, 
-                                cluster.rows = F, 
-                                cluster.cols = F, 
-                                sources.use = NULL, 
-                                targets.use = NULL, 
-                                remove.isolate = FALSE, 
-                                row.show = NULL, 
-                                col.show = NULL) {
-  if (!is.null(measure)) {
-    measure <- match.arg(measure)
-  }
-  slot.name <- match.arg(slot.name)
-  if (is.list(object@net[[1]])) {
-    message("Do heatmap based on a merged object \n")
-    obj1 <- object@net[[comparison[1]]][[measure]]
-    obj2 <- object@net[[comparison[2]]][[measure]]
-    net.diff <- obj2 - obj1
-    if (measure == "count") {
-      if (is.null(title.name)) {
-        title.name = "Differential number of interactions"
-      }
-    }
-    else if (measure == "weight") {
-      if (is.null(title.name)) {
-        title.name = "Differential interaction strength"
-      }
-    }
-    legend.name = "Relative values"
-  }
-  else {
-    message("Do heatmap based on a single object \n")
-    if (!is.null(signaling)) {
-      net.diff <- slot(object, slot.name)$prob[, , signaling]
-      if (is.null(title.name)) {
-        title.name = paste0(signaling, " signaling network")
-      }
-      legend.name <- "Communication Prob."
-    }
-    else if (!is.null(measure)) {
-      net.diff <- object@net[[measure]]
-      if (measure == "count") {
-        if (is.null(title.name)) {
-          title.name = "Number of interactions"
-        }
-      }
-      else if (measure == "weight") {
-        if (is.null(title.name)) {
-          title.name = "Interaction strength"
-        }
-      }
-      legend.name <- title.name
-    }
-  }
-  net <- net.diff
-  if ((!is.null(sources.use)) | (!is.null(targets.use))) {
-    df.net <- reshape2::melt(net, value.name = "value")
-    colnames(df.net)[1:2] <- c("source", "target")
-    if (!is.null(sources.use)) {
-      if (is.numeric(sources.use)) {
-        sources.use <- rownames(net.diff)[sources.use]
-      }
-      df.net <- subset(df.net, source %in% sources.use)
-    }
-    if (!is.null(targets.use)) {
-      if (is.numeric(targets.use)) {
-        targets.use <- rownames(net.diff)[targets.use]
-      }
-      df.net <- subset(df.net, target %in% targets.use)
-    }
-    cells.level <- rownames(net.diff)
-    df.net$source <- factor(df.net$source, levels = cells.level)
-    df.net$target <- factor(df.net$target, levels = cells.level)
-    df.net$value[is.na(df.net$value)] <- 0
-    net <- tapply(df.net[["value"]], list(df.net[["source"]], 
-                                          df.net[["target"]]), sum)
-  }
-  net[is.na(net)] <- 0
-  if (remove.isolate) {
-    idx1 <- which(Matrix::rowSums(net) == 0)
-    idx2 <- which(Matrix::colSums(net) == 0)
-    idx <- intersect(idx1, idx2)
-    net <- net[-idx, ]
-    net <- net[, -idx]
-  }
-  mat <- net
-  if (is.null(color.use)) {
-    color.use <- scPalette(ncol(mat))
-  }
-  names(color.use) <- colnames(mat)
-  if (!is.null(row.show)) {
-    mat <- mat[row.show, ]
-  }
-  if (!is.null(col.show)) {
-    mat <- mat[, col.show]
-    color.use <- color.use[col.show]
-  }
-  if (min(mat) < 0) {
-    color.heatmap.use = colorRamp3(c(min(mat), 0, max(mat)), 
-                                   c(color.heatmap[1], "#f7f7f7", 
-                                     color.heatmap[2]))
-    colorbar.break <- 
-      c(
-        round(
-          min(mat, na.rm = T), 
-          digits = nchar(
-            sub(
-              ".*\\.(0*).*","\\1", min(mat, na.rm = T)
-            )
-          ) + 1
-        ), 
-        0, 
-        round(
-          max(mat, na.rm = T), 
-          digits = nchar(
-            sub(
-              ".*\\.(0*).*", "\\1", max(mat, na.rm = T)
-            )
-          ) + 1
-        )
-      )                                                                                                                                                      
-  }
-  else {
-    if (length(color.heatmap) == 3) {
-      color.heatmap.use = colorRamp3(c(0, min(mat), max(mat)), 
-                                     color.heatmap)
-    }
-    else if (length(color.heatmap) == 2) {
-      color.heatmap.use = colorRamp3(c(min(mat), max(mat)), 
-                                     color.heatmap)
-    }
-    else if (length(color.heatmap) == 1) {
-      color.heatmap.use = 
-        (grDevices::colorRampPalette(
-          (RColorBrewer::brewer.pal(n = 9, name = color.heatmap))
-        )
-        )(100)
-    }
-    colorbar.break <- c(
-      round(
-        min(mat, na.rm = T), 
-        digits = nchar(sub(".*\\.(0*).*","\\1", min(mat, na.rm = T))) + 1
-      ), 
-      round(
-        max(mat, na.rm = T), 
-        digits = nchar(sub(".*\\.(0*).*", "\\1", max(mat, na.rm = T))) + 1
-      )
-    )
-  }
-  df <- data.frame(group = colnames(mat))
-  rownames(df) <- colnames(mat)
-  col_annotation <- 
-    HeatmapAnnotation(
-      df = df, 
-      col = list(group = color.use),
-      which = "column", 
-      show_legend = FALSE, 
-      show_annotation_name = FALSE, 
-      simple_anno_size = grid::unit(2, "mm")
-    )
-  
-  row_annotation <- 
-    HeatmapAnnotation(
-      df = df, 
-      col = list(group = color.use), 
-      which = "row",
-      show_legend = FALSE, 
-      show_annotation_name = FALSE, 
-      simple_anno_size = grid::unit(2, "mm")
-    )
-  
-  ha1 = 
-    rowAnnotation(
-      StrengthText = anno_text(
-        colSums(abs(mat)), 
-        gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-      ), 
-      Strength = anno_barplot(
-        rowSums(abs(mat)),
-        border = FALSE, 
-        gp = gpar(fill = color.use, col = color.use),
-        axis = FALSE
-      ),
-      simple_anno_size_adjust = T,
-      show_annotation_name = FALSE
-    )
-  
-  ha2 = 
-    HeatmapAnnotation(
-      Strength = anno_barplot(
-        colSums(abs(mat)), 
-        border = FALSE, 
-        gp = gpar(fill = color.use, col = color.use),
-        axis = FALSE
-      ), 
-      StrengthText = anno_text(
-        colSums(abs(mat)), 
-        gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-      ),
-      show_annotation_name = FALSE
-    )
-  
-  if (sum(abs(mat) > 0) == 1) {
-    color.heatmap.use = c("white", color.heatmap.use)
-  }
-  else {
-    mat[mat == 0] <- NA
-  }
+plot_n_interactions <- function() {
+  mat <- cellchat@net$count
+  bar_colors <- CELL_TYPE_COLORS[colnames(mat)]
+  total_target <- colSums(mat)
+  total_source <- rowSums(mat)
+  bar_ylim <- c(0, max(total_source, total_target))
   
   Heatmap(
     mat,
-    col = color.heatmap.use,
-    na_col = "white", 
-    name = legend.name, 
-    bottom_annotation = col_annotation, 
-    left_annotation = row_annotation, 
-    top_annotation = ha2, 
-    right_annotation = ha1, 
-    cluster_rows = cluster.rows, 
-    cluster_columns = cluster.rows, 
+    col = RColorBrewer::brewer.pal(9, "Reds"),
+    name = "Number of interactions",
+    
+    cluster_rows = FALSE, 
     row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
-    column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
-    column_title = "Targets (Receptor)", row_title = "Sources (Ligand)", 
-    column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
-    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
-    column_names_rot = 90, row_title_rot = 90,  row_names_rot = 0, 
-    column_title_side = "bottom",
     row_names_side = "left",
+    row_title = "Source (ligand)", 
+    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+    
+    cluster_columns = FALSE, 
+    column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+    column_title = "Target (receptor)",
+    column_title_side = "bottom",
+    column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+    
     width = unit(20, "mm"),
     height = unit(20, "mm"),
-    heatmap_legend_param = 
-      list(
-        title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
-        title_position = "leftcenter-rot", 
-        border = NA, 
-        legend_height = unit(20, "mm"), 
-        labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
-        grid_width = unit(2, "mm")
-      )
+    
+    top_annotation = HeatmapAnnotation(
+      count_bar = anno_barplot(
+        total_target,
+        ylim = bar_ylim,
+        border = FALSE, 
+        axis = FALSE,
+        gp = gpar(fill = bar_colors, col = bar_colors)
+      ),
+      count_text = anno_text(
+        total_target, 
+        gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      ), 
+      simple_anno_size_adjust = TRUE,
+      show_annotation_name = FALSE
+    ), 
+    
+    right_annotation = rowAnnotation(
+      count_text = anno_text(
+        total_source, 
+        gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      ), 
+      count_bar = anno_barplot(
+        total_source,
+        ylim = bar_ylim,
+        border = FALSE, 
+        axis = FALSE,
+        gp = gpar(fill = bar_colors, col = bar_colors)
+      ),
+      simple_anno_size_adjust = TRUE,
+      show_annotation_name = FALSE
+    ), 
+    
+    heatmap_legend_param = list(
+      at = c(min(mat), max(mat)),
+      title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+      title_position = "leftcenter-rot", 
+      border = NA, 
+      legend_height = unit(20, "mm"), 
+      labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+      grid_width = unit(2, "mm")
+    )
   )
 }
 
-p1 <- plot_n_interactions(
-  cellchat, 
-  color.use = CELL_TYPE_COLORS[c("NB", "pDC", "M", "B", "T", "NK", "SC", "E")],
-)
-p1
+(p1 <- plot_n_interactions())
 ggsave_publication("3a_n_interactions", plot = p1, width = 6, height = 5)
 
 
@@ -280,58 +109,43 @@ ggsave_publication("3a_n_interactions", plot = p1, width = 6, height = 5)
 
 # cumulative outgoing score for NB barplot
 
-plot_contribution_celltype <- function(data, pathways, celltype,
-                                       signif = 0.05) {
-  df <- 
-    data %>%
+plot_contribution_celltype <- function(cell_type = "NB", signif = 0.05) {
+   sig_data %>%
     filter(
-      pathway_name %in% pathways, 
-      source == celltype, 
-      target != celltype,
+      pathway_name %in% cellchat@netP$pathways, 
+      source == {{cell_type}}, 
+      target != {{cell_type}},
       pval <= signif
     ) %>%
     group_by(interaction = interaction_name_2) %>%
     summarise(
       prob.norm = sum(prob.norm),
-      count = n()
+      count = n(),
+      pathway_name = first(pathway_name)
     ) %>%
     ungroup() %>%
-    mutate(prob.avg = prob.norm / count) 
-  
-  label <- 
-    tibble(
-      interaction = data$interaction_name_2, 
-      pathway_name = data$pathway_name
-    ) %>%
-    filter(interaction %in% df$interaction) %>%
-    unique()
-  
-  df <-
-    df %>%
-    left_join(label, by = "interaction") %>%
-    arrange(prob.norm) %>%
-    mutate(interaction = factor(interaction, levels = interaction))
-  
-  ggplot(df, aes(prob.norm, interaction)) +
+    mutate(prob.avg = prob.norm / count) %>% 
+    mutate(interaction = fct_reorder(interaction, prob.norm)) %>% 
+    ggplot(aes(interaction, prob.norm)) +
     geom_col(fill = "#23cfc3", width = 0.85) +
     geom_text(
-      aes(x = 2.68, y = interaction, label = pathway_name),
+      aes(y = 2.68, label = pathway_name),
       size = BASE_TEXT_SIZE_MM
     ) +
-    scale_x_continuous(breaks = c(1, 3, 5)) +
-    xlab("sum(outgoing communication score)") +
-    ylab("Ligand-Receptor pairs") +
-    theme_nb(grid = FALSE)
+    xlab("Ligand-receptor pair") +
+    scale_y_continuous(
+      "Total outgoing communication score",
+      expand = expansion(0)
+    ) +
+    coord_flip() +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.ticks.y = element_blank(),
+      panel.border = element_blank()
+    )
 }
 
-p2 <- plot_contribution_celltype(
-  sig_data, 
-  cellchat@netP$pathways,
-  celltype = "NB",
-  signif = 0.05
-)
-p2
-
+plot_contribution_celltype()
 ggsave_publication("3b_outgoing_comm_score", width = 5.5, height = 5)
 
 
@@ -340,41 +154,39 @@ ggsave_publication("3b_outgoing_comm_score", width = 5.5, height = 5)
 
 # LRs dotplot  
 
-plot_selected_dots <- function(data, pathways, source_celltype) {
-  # exclude all interactions not within pathways vector
-  # and order pathways by input vector
-  data <- 
-    data %>% 
+plot_selected_dots <- function(pathways, source_type = "NB") {
+  vis_data <- 
+    sig_data %>% 
     filter(
-      pathway_name %in% pathways, 
-      source == source_celltype
+      pathway_name %in% {{pathways}}, 
+      source == {{source_type}}
     ) %>%
-    mutate(pathway_name = factor(pathway_name, levels = pathways)) 
+    mutate(pathway_name = factor(pathway_name, levels = pathways))
   
-  p <- 
-    ggplot(
-      data,
-      aes(
-        target,
-        interaction_name_2,
-        color = prob.norm,
-        size = pmin(5, -log10(pval))
-      )
-    ) +
-    geom_point() + 
+  ggplot(vis_data, aes(target, interaction_name_2)) +
+    geom_point(
+      aes(color = prob.norm, size = pmin(5, -log10(pval)))
+    ) + 
     scale_radius(
       TeX("-log_{10} p-Value_{cap.}"),
-      range = c(1,5),
+      range = c(1, 5),
       guide = "none"
     ) +
     scale_color_distiller(
-      TeX("relative communication score"),
+      "relative communication score",
       type = "seq",
       palette = "Reds", 
-      direction = 1
+      direction = 1,
+      breaks = round(range(vis_data$prob.norm), 2),
+      guide = guide_colorbar(
+        barheight = unit(15, "mm"),
+        barwidth = unit(2, "mm"),
+        ticks = FALSE,
+        title.vjust = .9
+      )
     ) +
-    xlab("Celltypes: Source -> Target") +
-    ylab("Ligand-Receptor pairs & Pathways") +
+    xlab("Cell types (source -> target)") +
+    ylab("Ligand-receptor pairs and pathways") +
     facet_grid(
       vars(pathway_name), 
       vars(source),
@@ -382,7 +194,7 @@ plot_selected_dots <- function(data, pathways, source_celltype) {
       space = "free",
       switch = "both"
     ) + 
-    theme_nb(grid = TRUE) + 
+    theme_nb(grid = FALSE) + 
     theme(
       axis.text.x = element_text(
         size = BASE_TEXT_SIZE_PT, 
@@ -396,7 +208,7 @@ plot_selected_dots <- function(data, pathways, source_celltype) {
       axis.title = element_text(size = BASE_TEXT_SIZE_PT),
       
       panel.border = element_rect(color = "black", size = BASE_LINE_SIZE),
-      panel.spacing = unit(0, "lines"),
+      panel.spacing = unit(-BASE_LINE_SIZE / 2, "pt"),
       
       strip.background.y = element_rect(
         fill = "#FBDE96",
@@ -408,13 +220,11 @@ plot_selected_dots <- function(data, pathways, source_celltype) {
       ),
       strip.text.x =  element_text(
         size = BASE_TEXT_SIZE_PT, 
-        face = "bold",
         margin = margin(t = 1, b = 1, r = 4, l = 4, unit = "mm"),
         angle = 0
       ),
       strip.text.y.left = element_text(
         size = BASE_TEXT_SIZE_PT, 
-        face = "bold",
         margin = margin(t = 0.5, b = 0.5, r = 1, l = 1, unit = "mm"),
         angle = 0
       ),
@@ -426,17 +236,10 @@ plot_selected_dots <- function(data, pathways, source_celltype) {
       legend.position = "right",
       legend.text = element_text(size = BASE_TEXT_SIZE_PT),
       legend.title = element_text(size = BASE_TEXT_SIZE_PT, angle = 90),
-      legend.title.align = 0.5,
     )
 }
 
-p3 <- plot_selected_dots(
-  sig_data, 
-  pathways = c("MK", "MIF", "COLLAGEN", "PTN", "APP", "ALCAM", "THY1"), 
-  source_celltype = "NB"
-)
-p3
-
+plot_selected_dots(c("MK", "MIF", "COLLAGEN", "PTN", "APP", "ALCAM", "THY1"))
 ggsave_publication("3c_dots", height = 5, width = 7.5)
 
 
@@ -446,105 +249,68 @@ ggsave_publication("3c_dots", height = 5, width = 7.5)
 # network centrality plots for MIF & MK
 # a modified version of CellChat::netAnalysis_signalingRole_network()
 
-plot_centrality <- function(object,
-                            signaling,
-                            slot.name = "netP", 
-                            measure = c("outdeg", "indeg", "flowbet", "info"), 
-                            measure.name = c("Sender", "Receiver",
-                                             "Mediator", "Influencer"), 
-                            color.use = NULL,
-                            color.heatmap = "YlOrRd",
-                            font.size = BASE_TEXT_SIZE_PT,
-                            font.size.title = BASE_TEXT_SIZE_PT, 
-                            cluster.rows = FALSE,
-                            cluster.cols = FALSE) {
+plot_centrality <- function(pathway) {
+  centralities <- cellchat@netP$centr[[pathway]]
+  
+  mat <- 
+    centralities %>% 
+    as_tibble() %>% 
+    select(
+      Sender = outdeg,
+      Receiver = indeg,
+      Mediator = flowbet,
+      Influencer = info
+    ) %>%
+    mutate(
+      across(everything(), ~. / max(.)),
+      cell_type = names(centralities$outdeg)
+    ) %>%
+    column_to_rownames("cell_type") %>% 
+    as.matrix() %>% 
+    t()
+  
+  Heatmap(
+    mat, 
+    col = RColorBrewer::brewer.pal(9, "YlOrRd"),
+    name = "Importance",
     
-  if (length(slot(object, slot.name)$centr) == 0) {
-    stop("Please run `netAnalysis_computeCentrality`!")
-  }
-  centr <- slot(object, slot.name)$centr[signaling]
-  for (i in 1:length(centr)) {
-    centr0 <- centr[[i]]
-    mat <- matrix(unlist(centr0), ncol = length(centr0), 
-                  byrow = FALSE)
-    mat <- t(mat)
-    rownames(mat) <- names(centr0)
-    colnames(mat) <- names(centr0$outdeg)
-    if (!is.null(measure)) {
-      mat <- mat[measure, ]
-      if (!is.null(measure.name)) {
-        rownames(mat) <- measure.name
-      }
-    }
-    mat <- sweep(mat, 1L, apply(mat, 1, max), "/", check.margin = FALSE)
-    if (is.null(color.use)) {
-      color.use <- scPalette(length(colnames(mat)))
-    }
-    color.heatmap.use = 
-      (grDevices::colorRampPalette(
-        (RColorBrewer::brewer.pal(n = 9, name = color.heatmap))
-      )
-      )(100)
-    df <- data.frame(group = colnames(mat))
-    rownames(df) <- colnames(mat)
-    cell.cols.assigned <- setNames(color.use, unique(as.character(df$group)))
-    col_annotation <- 
-      HeatmapAnnotation(
-        df = df, 
-        col = list(group = cell.cols.assigned), 
-        which = "column", 
-        show_legend = FALSE, 
-        show_annotation_name = FALSE, 
-        simple_anno_size = grid::unit(0.2, "cm")
-      )
+    cluster_rows = FALSE,
+    row_names_side = "left",
+    row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
     
-    ht1 <- Heatmap(
-      mat, 
-      col = color.heatmap.use,
-      na_col = "white", 
-      name = "Importance",
-      bottom_annotation = col_annotation, 
-      cluster_rows = cluster.rows,
-      cluster_columns = cluster.rows, 
-      row_names_side = "left",
-      row_names_rot = 0, 
-      row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
-      column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
-      column_title = paste0(names(centr[i])," signaling pathway network"), 
-      column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
-      width = unit(40, "mm"),
-      height = unit(20, "mm"), 
-      heatmap_legend_param = list(
-        title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT, fontface = "plain"), 
-        title_position = "leftcenter-rot", 
-        border = NA, 
-        at = c(
-          round(min(mat, na.rm = TRUE), digits = 1), 
-          round(max(mat, na.rm = TRUE), digits = 1)
-        ), 
-        legend_height = unit(20, "mm"), 
-        labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
-        grid_width = unit(2, "mm")
-      )
+    cluster_columns = FALSE, 
+    column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+    column_title = str_glue("{pathway} signaling pathway network"),
+    column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+    
+    width = unit(40, "mm"),
+    height = unit(20, "mm"), 
+    
+    bottom_annotation = HeatmapAnnotation(
+      group = colnames(mat), 
+      col = list(group = CELL_TYPE_COLORS[colnames(mat)]), 
+      which = "column", 
+      show_legend = FALSE, 
+      show_annotation_name = FALSE, 
+      simple_anno_size = grid::unit(0.2, "cm")
+    ), 
+    
+    heatmap_legend_param = list(
+      title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT, fontface = "plain"), 
+      title_position = "leftcenter-rot", 
+      border = NA, 
+      at = c(0, 1), 
+      legend_height = unit(20, "mm"), 
+      labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
+      grid_width = unit(2, "mm")
     )
-  }
-  ht1
+  )
 }
 
-p4 <- plot_centrality(
-  cellchat,
-  signaling = "MIF", 
-  color.use = CELL_TYPE_COLORS[c("NB", "pDC", "M", "B", "T", "NK", "SC", "E")]
-)
-p4
+(p4 <- plot_centrality("MIF"))
 ggsave_publication("3d_importance_MIF", plot = p4, width = 6, height = 3.5)
 
-p5 <- plot_centrality(
-  cellchat,
-  signaling = "MK", 
-  color.use = CELL_TYPE_COLORS[c("NB", "pDC", "M", "B", "T", "NK", "SC", "E")]
-)
-p5
+(p5 <- plot_centrality("MK"))
 ggsave_publication("3e_importance_MK", plot = p5, width = 6, height = 3.5)
 
 
