@@ -788,6 +788,10 @@ plot_patient_dots <- function(min_exp = -2.5, max_exp = 2.5) {
       pmin(max_exp)
   }
   
+  nb <- nb[, colData(nb)$cellont_abbr != "other"]
+  colData(nb)$cellont_abbr <- fct_drop(colData(nb)$cellont_abbr)
+  colData(nb)$cellont_cluster <- fct_drop(colData(nb)$cellont_cluster)
+  
   features <- 
     markers %>%
     filter(cell_type == "NB") %>%
@@ -844,7 +848,7 @@ plot_patient_dots <- function(min_exp = -2.5, max_exp = 2.5) {
       breaks = c(-0.5, 2.5),
       guide = guide_colorbar(
         barheight = unit(2, "mm"),
-        barwidth = unit(15, "mm"),
+        barwidth = unit(10, "mm"),
         label.position = "top",
         ticks = FALSE,
         title.vjust = 0.2
@@ -876,5 +880,5 @@ plot_patient_dots <- function(min_exp = -2.5, max_exp = 2.5) {
 }
 
 plot_patient_dots()
-ggsave_publication("2b_nb_markers_patients", width = 8, height = 5)
+ggsave_publication("2b_nb_markers_patients", width = 7.5, height = 5)
 
