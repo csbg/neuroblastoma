@@ -90,6 +90,20 @@ SUBCLUSTER_COLORS <- c(
   "4" = "#993366"
 )
 
+# colors for adrenal medullary cell types
+ADRMED_CELLS_COLORS <- c(
+  "late SCPs" = "#921813",
+  "SCPs" = "#be202e",
+  "cycling SCPs" = "#be6867",
+  "Bridge" = "#ef845f",
+  "connecting Chromaffin cells" = "#33ac75",
+  "Chromaffin cells" = "#006e3b",
+  "late Chromaffin cells" = "#686c58",
+  "cycling Neuroblasts" = "#aacedc",
+  "Neuroblasts" = "#244a94",
+  "late Neuroblasts" = "#303d63"
+)
+
 
 
 # ggplot functions --------------------------------------------------------

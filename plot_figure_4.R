@@ -1,5 +1,3 @@
-# Plot cell-cell communication.
-#
 # @DEPI ccc_cellchat_object.rds
 # @DEPI ccc_signaling_data.rds
 
@@ -27,7 +25,9 @@ sig_data <- readRDS("data_generated/ccc_signaling_data.rds")
 
 
 
-# Figure 3a ---------------------------------------------------------------
+# Figures -----------------------------------------------------------------
+
+## 4a ----
 
 plot_n_interactions <- function() {
   mat <- cellchat@net$count
@@ -100,14 +100,12 @@ plot_n_interactions <- function() {
   )
 }
 
-(p1 <- plot_n_interactions())
-ggsave_publication("3a_n_interactions", plot = p1, width = 6, height = 5)
+(p <- plot_n_interactions())
+ggsave_publication("4a_n_interactions", plot = p, width = 6, height = 5)
 
 
 
-# Figure 3b ---------------------------------------------------------------
-
-# cumulative outgoing score for NB barplot
+## 4b ----
 
 plot_contribution_celltype <- function(cell_type = "NB", signif = 0.05) {
    sig_data %>%
@@ -146,13 +144,10 @@ plot_contribution_celltype <- function(cell_type = "NB", signif = 0.05) {
 }
 
 plot_contribution_celltype()
-ggsave_publication("3b_outgoing_comm_score", width = 5.5, height = 5)
+ggsave_publication("4b_outgoing_comm_score", width = 5.5, height = 5)
 
 
-
-# Figure 3c ---------------------------------------------------------------
-
-# LRs dotplot  
+## 4c ----
 
 plot_selected_dots <- function(pathways, source_type = "NB") {
   vis_data <- 
@@ -240,14 +235,11 @@ plot_selected_dots <- function(pathways, source_type = "NB") {
 }
 
 plot_selected_dots(c("MK", "MIF", "COLLAGEN", "PTN", "APP", "ALCAM", "THY1"))
-ggsave_publication("3c_dots", height = 5, width = 7.5)
+ggsave_publication("4c_dots", height = 5, width = 7.5)
 
 
 
-# Figure 3d, e ------------------------------------------------------------
-
-# network centrality plots for MIF & MK
-# a modified version of CellChat::netAnalysis_signalingRole_network()
+## 4d ----
 
 plot_centrality <- function(pathway) {
   centralities <- cellchat@netP$centr[[pathway]]
@@ -307,17 +299,19 @@ plot_centrality <- function(pathway) {
   )
 }
 
-(p4 <- plot_centrality("MIF"))
-ggsave_publication("3d_importance_MIF", plot = p4, width = 6, height = 3.5)
-
-(p5 <- plot_centrality("MK"))
-ggsave_publication("3e_importance_MK", plot = p5, width = 6, height = 3.5)
+(p <- plot_centrality("MIF"))
+ggsave_publication("4d_importance_MIF", plot = p, width = 6, height = 3.5)
 
 
 
-# Figure 3f, g ------------------------------------------------------------
+## 4e ----
 
-# violin plots for MK & MIF
+(p <- plot_centrality("MK"))
+ggsave_publication("4e_importance_MK", plot = p, width = 6, height = 3.5)
+
+
+
+## 4f ----
 
 make_matrix <- function(gene, cell_type) {
   metadata <- 
@@ -385,17 +379,23 @@ plot_violin(
   genes = c("MIF", "CD74", "CXCR4", "CD44"),
   cell_types = c("NB", "M")
 )
-ggsave_publication("3f_violins_MIF", width = 8.5, height = 9)
+ggsave_publication("4f_violins_MIF", width = 8.5, height = 9)
+
+
+
+## 4g ----
 
 plot_violin(
   genes = c("MDK", "LRP1", "NCL", "ALK"),
   cell_types = c("NB", "M")
 )
-ggsave_publication("3g_violins_MK", width = 8.5, height = 9)
+ggsave_publication("4g_violins_MK", width = 8.5, height = 9)
 
 
 
-# Table S5 ----------------------------------------------------------------
+# Tables ------------------------------------------------------------------
+
+## S6 ----
 
 sig_data %>% 
   select(
@@ -409,4 +409,4 @@ sig_data %>%
     Pathway = pathway_name,
     "Type of interaction" = annotation
   ) %>%
-  save_table("S5_ccc", sheet_name = "Interactions")
+  save_table("S6_ccc", sheet_name = "Interactions")
