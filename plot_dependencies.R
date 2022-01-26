@@ -70,7 +70,8 @@ vertex_list <-
     label = name,
     style = "filled",
     fontname = "Helvetica"
-  )
+  ) %>% 
+  filter(!name %>% str_starts("wip_"))
   
 
 

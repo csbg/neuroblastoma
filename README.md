@@ -9,7 +9,7 @@
 - `data_wip`: data from work in progress
 - `doc`: project documentation
 - `literature`: relevant publications
-- `metadata`: additional information; e.g., `sample_groups.csv` contains mappings from samples to neuroblastoma groups.
+- `metadata`: additional required data
 - `plots`: generated plots
 - `renv`: R environment data
 - `tables`: exported tables
@@ -17,6 +17,9 @@
 
 
 ## Main workflow
+
+Run these R scripts in the given order to generate all files
+required by figures and tables.
 
 - [perform_qc.R](perform_qc.R) -
   perform QC filtering, ensure unique cell names
@@ -30,22 +33,42 @@
   invoke via [sge_classify_cell_types.sh](sge_classify_cell_types.sh)
 - [assemble_metadata.R](assemble_metadata.R) -
   generate one CSV and RDS file with all metadata
-- [analyse_rna.R](analyse_rna.R) -
-  analysis of integrated data
-- [plot_markers.R](plot_markers.R) -
-  plot manually selected canonical cell type markers
 - [analyse_dge_pb.R](analyse_dge_pb.R) -
   analyse differential gene expression using pseudobulks
-- [plot_dge_pb.R](plot_dge_pb.R) -
-  plot pseudobulk DGEA results
 - [analyse_dge_mm.R](analyse_dge_mm.R) -
   analyse differential gene expression using mixed models
-- [plot_dge_mm.R](plot_dge_mm.R) -
-  plot mixed model DGEA results
 - [analyse_cnv.R](analyse_cnv.R) -
   analyse copy number variations
+- [analyse_ccc.R](analyse_ccc.R) -
+  analyse cell-cell communication
+- [prepare_data_dong.R](prepare_data_dong.R) –
+  prepare dataset by Dong et al for analysis
+- [classify_as_adrenal.R](classify_as_adrenal.R) –
+  classify tumor cells as adrenal medullary cell types
+
+  
+  
+## Plotting functions
+
+Run these R scripts in arbitrary order to generate exploratory
+and publication-quality figures and tables:
+
+- [plot_ccc.R](analyse_ccc.R) -
+  cell-cell communication
 - [plot_cnv.R](plot_cnv.R) - 
-  plot copy number variations
+  copy number variations
+- [plot_compare_tumors_pbexp.R](plot_compare_tumors_pbexp.R) –
+  comparison of tumor samples via pseudobulk correlation
+- [plot_compare_tumors_adrmed.R](plot_compare_tumors_adrmed.R) –
+  comparison of tumor cells to adrenal medullary cell types
+- [plot_markers.R](plot_markers.R) -
+  canonical cell type markers
+- [plot_misc.R](plot_misc.R) -
+  miscellaneous plots
+- [plot_dge_mm.R](plot_dge_mm.R) -
+  results from mixed model DE analysis
+- [plot_dge_pb.R](plot_dge_pb.R) -
+  results from pseudobulk DE analysis
 
 
 
