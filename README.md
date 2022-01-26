@@ -58,8 +58,6 @@ Run these R scripts in arbitrary order to generate exploratory figures:
   comparison of tumor cells to adrenal medullary cell types
 - [plot_dge_mm.R](plot_dge_mm.R) -
   results from mixed model DE analysis
-- [plot_dge_pb.R](plot_dge_pb.R) -
-  results from pseudobulk DE analysis
 - [plot_markers.R](plot_markers.R) -
   canonical cell type markers
 - [plot_misc.R](plot_misc.R) -
