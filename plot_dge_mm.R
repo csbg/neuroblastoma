@@ -503,39 +503,64 @@ plot_gsea_dots(dge$gsea,
 
 # Pathway genes -----------------------------------------------------------
 
+selected_genes <- list(
+  "TNF-alpha Signaling via NF-kB" = c("IL1B", "FOS", "NFKB1", "MYC", "IFNGR2",
+                                      "CD44", "RELB", "SOD2", "MAP3K8"),
+  "Interferon Gamma Response" = c("IFI44", "NFKB1", "MYD88", "HLA-A", "CD86",
+                                  "HLA-DQA1", "HLA-DQB1", "TNFSF10"),
+  "Myc Targets V1" = c("TRIM28", "PCNA", "CDK4", "MCM5", "HDAC2"),
+  "E2F Targets" = c("DNMT1", "EZH2", "MKI67", "PCNA")
+)
+
+
 ## Single-cell heatmap ----
 
 plot_pathway_heatmap_sc <- function(db = "MSigDB_Hallmark_2020",
                                     pathways = c(
                                       "TNF-alpha Signaling via NF-kB",
                                       "Interferon Gamma Response",
-                                      "Interferon Alpha Response",
                                       "Myc Targets V1",
                                       "E2F Targets"
                                     ),
                                     cell_types = c("B", "M"),
+                                    genes = c("all", "selected"),
                                     norm_method = c("quantile", "scale")) {
   norm_method <- match.arg(norm_method)
+  genes <- match.arg(genes)
   
-  sig_genes <- 
-    dge$results_wide_filtered %>% 
-    filter(
-      cell_type %in% {{cell_types}},
-      comparison %in% c("II_vs_I", "III_vs_I", "IV_vs_I"),
-      abs(logFC) > log(4),
-      p_adj <= 0.05
-    ) %>% 
-    pull(gene)
-  
-  row_metadata <-
-    dge$gene_sets[[db]][pathways] %>%
-    enframe("pathway", "gene") %>%
-    unnest_longer(gene) %>%
-    mutate(pathway = as_factor(pathway)) %>%
-    filter(
-      gene %in% rownames(dge$cds),
-      gene %in% sig_genes
-    )
+  if (genes == "all") {
+    sig_genes <- 
+      dge$results_wide_filtered %>% 
+      filter(
+        cell_type %in% {{cell_types}},
+        comparison %in% c("II_vs_I", "III_vs_I", "IV_vs_I"),
+        abs(logFC) > log(4),
+        p_adj <= 0.05
+      ) %>% 
+      pull(gene)
+    
+    row_metadata <-
+      dge$gene_sets[[db]][pathways] %>%
+      enframe("pathway", "gene") %>%
+      unnest_longer(gene) %>%
+      mutate(pathway = as_factor(pathway)) %>%
+      filter(
+        gene %in% rownames(dge$cds),
+        gene %in% sig_genes
+      )
+  } else {
+    row_metadata <-
+      dge$gene_sets[[db]][names(pathways)] %>%
+      enframe("pathway", "gene") %>%
+      unnest_longer(gene) %>%
+      mutate(pathway = as_factor(pathway)) %>%
+      filter(gene %in% rownames(dge$cds)) %>% 
+      semi_join(
+        selected_genes %>% 
+          enframe("pathway", "gene") %>% 
+          unnest_longer(gene)
+      )
+  }
     
   set.seed(1)
   col_metadata <-
@@ -612,18 +637,21 @@ plot_pathway_heatmap_sc <- function(db = "MSigDB_Hallmark_2020",
     ),
     use_raster = FALSE,
     
-    show_row_names = FALSE,
+    show_row_names = TRUE,
     row_split = row_metadata$pathway,
     row_title_rot = 0,
     cluster_rows = TRUE,
     cluster_row_slices = FALSE,
     show_row_dend = TRUE,
     row_gap = unit(.5, "mm"),
+    row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     
     cluster_columns = FALSE,
     column_split = col_metadata$cell_type,
     show_column_names = FALSE,
     column_gap = unit(.5, "mm"),
+    column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     
     top_annotation = HeatmapAnnotation(
       group = col_metadata$group,
@@ -635,49 +663,102 @@ plot_pathway_heatmap_sc <- function(db = "MSigDB_Hallmark_2020",
 }
 
 (p <- plot_pathway_heatmap_sc(norm_method = "quantile"))
-ggsave_default("dge_mm/pathway_heatmap_sc_quantile", plot = p)
+ggsave_default("dge_mm/pathway_heatmap_sc_quantile_all", plot = p)
 
 (p <- plot_pathway_heatmap_sc(norm_method = "scale"))
-ggsave_default("dge_mm/pathway_heatmap_sc_scale", plot = p)
+ggsave_default("dge_mm/pathway_heatmap_sc_scale_all", plot = p)
+
+(p <- plot_pathway_heatmap_sc(pathways = selected_genes, genes = "selected",
+                              norm_method = "quantile"))
+ggsave_default("dge_mm/pathway_heatmap_sc_quantile_selected",
+               plot = p, width = 150, height = 80)
+
+(p <- plot_pathway_heatmap_sc(pathways = selected_genes, genes = "selected",
+                              norm_method = "scale"))
+ggsave_default("dge_mm/pathway_heatmap_sc_scale_selected",
+               plot = p, width = 150, height = 80)
 
 
 
 ## Bulk heatmap ----
 
-plot_pathway_heatmap_sum <- function(db = "MSigDB_Hallmark_2020",
-                                     pathways = c(
-                                       "TNF-alpha Signaling via NF-kB",
-                                       "Interferon Gamma Response",
-                                       "Interferon Alpha Response",
-                                       "Myc Targets V1",
-                                       "E2F Targets"
-                                     ),
-                                     level = c("sample", "group"),
-                                     cell_types = c("B", "M"),
-                                     norm_method = c("quantile", "scale")) {
-  norm_method <- match.arg(norm_method)
+plot_pathway_heatmap <- function(db = "MSigDB_Hallmark_2020",
+                                 pathways = c(
+                                   "TNF-alpha Signaling via NF-kB" = "up",
+                                   "Interferon Gamma Response" = "up",
+                                   "Myc Targets V1" = "down",
+                                   "E2F Targets" = "down"
+                                 ),
+                                 genes = c("top", "all", "selected"),
+                                 level = c("sample", "group"),
+                                 cell_types = c("B", "M")) {
   level <- match.arg(level)
+  genes <- match.arg(genes)
   
-  sig_genes <- 
-    dge$results_wide_filtered %>% 
-    filter(
-      cell_type %in% {{cell_types}},
-      comparison %in% c("II_vs_I", "III_vs_I", "IV_vs_I"),
-      abs(logFC) > log(4),
-      p_adj <= 0.05
-    ) %>% 
-    pull(gene)
-  
-  # determine genes shown
-  row_metadata <-
-    dge$gene_sets[[db]][pathways] %>%
-    enframe("pathway", "gene") %>%
-    unnest_longer(gene) %>%
-    mutate(pathway = as_factor(pathway)) %>%
-    filter(
-      gene %in% rownames(dge$cds),
-      gene %in% sig_genes
-    )
+  if (genes == "top") {
+    sig_genes <-
+      dge$results_wide_filtered %>% 
+      filter(
+        cell_type %in% {{cell_types}},
+        comparison %in% c("II_vs_I", "III_vs_I", "IV_vs_I"),
+        abs(logFC) > log(4),
+        p_adj <= 0.05
+      ) %>% 
+      group_by(gene) %>% 
+      summarise(mean_logFC = mean(logFC))
+    
+    row_metadata <- 
+      dge$gene_sets[[db]][names(pathways)] %>%
+      enframe("pathway", "gene") %>%
+      unnest_longer(gene) %>%
+      mutate(pathway = as_factor(pathway)) %>%
+      filter(
+        gene %in% rownames(dge$cds),
+      ) %>% 
+      left_join(sig_genes, by = "gene") %>%
+      group_split(pathway) %>% 
+      map2(
+        pathways,
+        ~if (.y == "up") {
+          slice_max(.x, mean_logFC, n = 10)
+        } else {
+          slice_min(.x, mean_logFC, n = 10)
+        }
+      ) %>% 
+      bind_rows()
+  } else if (genes == "all") {
+    sig_genes <-
+      dge$results_wide_filtered %>%
+      filter(
+        cell_type %in% {{cell_types}},
+        comparison %in% c("II_vs_I", "III_vs_I", "IV_vs_I"),
+        abs(logFC) > log(4),
+        p_adj <= 0.05
+      ) %>%
+      pull(gene)
+    
+    row_metadata <-
+      dge$gene_sets[[db]][names(pathways)] %>%
+      enframe("pathway", "gene") %>%
+      unnest_longer(gene) %>%
+      mutate(pathway = as_factor(pathway)) %>%
+      filter(
+        gene %in% rownames(dge$cds),
+        gene %in% sig_genes
+      )
+  } else {
+    row_metadata <-
+      dge$gene_sets[[db]][names(pathways)] %>%
+      enframe("pathway", "gene") %>%
+      unnest_longer(gene) %>%
+      mutate(pathway = as_factor(pathway)) %>%
+      filter(gene %in% rownames(dge$cds)) %>% 
+      semi_join(
+        selected_genes %>% 
+          enframe("pathway", "gene") %>% 
+          unnest_longer(gene)
+      )
+  }
   
   # collect barcodes per column
   col_metadata <-
@@ -727,6 +808,15 @@ plot_pathway_heatmap_sum <- function(db = "MSigDB_Hallmark_2020",
   }
   
   # plot heatmap
+  ht_opt(
+    simple_anno_size = unit(1.5, "mm"),
+    COLUMN_ANNO_PADDING = unit(1, "pt"),
+    DENDROGRAM_PADDING = unit(1, "pt"),
+    HEATMAP_LEGEND_PADDING = unit(1, "mm"),
+    ROW_ANNO_PADDING = unit(1, "pt"),
+    TITLE_PADDING = unit(1, "mm")
+  )
+  
   Heatmap(
     mat,
     name = "expression",
@@ -742,7 +832,11 @@ plot_pathway_heatmap_sum <- function(db = "MSigDB_Hallmark_2020",
     heatmap_legend_param = list(
       at = c(min(mat), max(mat)),
       labels = c("low", "high"),
-      border = FALSE
+      border = FALSE,
+      grid_width = unit(2, "mm"),
+      labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      legend_height = unit(15, "mm"),
+      title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
     ),
     
     show_row_names = TRUE,
@@ -753,28 +847,58 @@ plot_pathway_heatmap_sum <- function(db = "MSigDB_Hallmark_2020",
     show_row_dend = TRUE,
     row_gap = unit(.5, "mm"),
     row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     
     cluster_columns = FALSE,
     column_split = col_metadata$cell_type,
     show_column_names = FALSE,
     column_gap = unit(.5, "mm"),
+    column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     
     top_annotation = HeatmapAnnotation(
       group = col_metadata$group,
       col = list(
         group = GROUP_COLORS
+      ),
+      show_annotation_name = FALSE,
+      annotation_legend_param = list(
+        group = list(
+          grid_width = unit(2, "mm"),
+          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+        )
       )
     )
   )
 }
 
-(p <- plot_pathway_heatmap_sum(level = "sample"))
-ggsave_default("dge_mm/pathway_heatmap_mean_sample",
-               plot = p, width = 200, height = 200)
+(p <- plot_pathway_heatmap(level = "sample", pathways = selected_genes,
+                           genes = "selected"))
+ggsave_default("dge_mm/pathway_heatmap_sample_selected",
+               plot = p, width = 130, height = 60)
 
-(p <- plot_pathway_heatmap_sum(level = "group"))
-ggsave_default("dge_mm/pathway_heatmap_mean_group",
-               plot = p, width = 150, height = 200)
+(p <- plot_pathway_heatmap(level = "group", pathways = selected_genes,
+                           genes = "selected"))
+ggsave_default("dge_mm/pathway_heatmap_group_selected",
+               plot = p, width = 86, height = 60)
+
+# (p <- plot_pathway_heatmap(level = "sample", genes = "all"))
+# ggsave_default("dge_mm/pathway_heatmap_sample_all",
+#                plot = p, width = 200, height = 200)
+# 
+# (p <- plot_pathway_heatmap(level = "group", genes = "all"))
+# ggsave_default("dge_mm/pathway_heatmap_group_all",
+#                plot = p, width = 150, height = 200)
+# 
+# 
+# (p <- plot_pathway_heatmap(level = "sample", genes = "top"))
+# ggsave_default("dge_mm/pathway_heatmap_sample_top",
+#                plot = p, width = 200, height = 100)
+# 
+# (p <- plot_pathway_heatmap(level = "group", genes = "top"))
+# ggsave_default("dge_mm/pathway_heatmap_group_top",
+#                plot = p, width = 150, height = 100)
+
 
 
 
