@@ -1,5 +1,3 @@
-# styles for publication-quality figures
-
 library(tidyverse)
 library(fs)
 library(openxlsx)

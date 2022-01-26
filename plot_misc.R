@@ -1,5 +1,3 @@
-# Misc analyses and plots.
-#
 # @DEPI metadata.rds
 
 library(ComplexHeatmap)

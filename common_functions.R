@@ -1,7 +1,3 @@
-# Functions that are used in several analysis scripts
-
-
-
 # Visualization -----------------------------------------------------------
 
 #' Save a plot with sensible defaults.

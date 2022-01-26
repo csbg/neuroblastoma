@@ -1,5 +1,3 @@
-# Differential gene expression analysis using pseudo-bulk data.
-#
 # @DEPI rna_decontaminated.rds
 # @DEPI metadata.rds
 # @DEPO dge_pb_results.rds

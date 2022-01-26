@@ -1,3 +1,5 @@
+# @DEPI metadata.rds
+# @DEPI rna_decontaminated.rds
 # @DEPI infercnv_output
 
 library(scuttle)

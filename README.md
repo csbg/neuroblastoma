@@ -45,30 +45,33 @@ required by figures and tables.
   prepare dataset by Dong et al for analysis
 - [classify_as_adrenal.R](classify_as_adrenal.R) –
   classify tumor cells as adrenal medullary cell types
+- [compare_tumors_pseudobulk.R](compare_tumors_pseudobulk.R) –
+  comparison of tumor samples via pseudobulk correlation
 
   
   
 ## Plotting functions
 
-Run these R scripts in arbitrary order to generate exploratory
-and publication-quality figures and tables:
+Run these R scripts in arbitrary order to generate exploratory figures:
 
-- [plot_ccc.R](analyse_ccc.R) -
-  cell-cell communication
-- [plot_cnv.R](plot_cnv.R) - 
-  copy number variations
-- [plot_compare_tumors_pbexp.R](plot_compare_tumors_pbexp.R) –
-  comparison of tumor samples via pseudobulk correlation
 - [plot_compare_tumors_adrmed.R](plot_compare_tumors_adrmed.R) –
   comparison of tumor cells to adrenal medullary cell types
-- [plot_markers.R](plot_markers.R) -
-  canonical cell type markers
-- [plot_misc.R](plot_misc.R) -
-  miscellaneous plots
 - [plot_dge_mm.R](plot_dge_mm.R) -
   results from mixed model DE analysis
 - [plot_dge_pb.R](plot_dge_pb.R) -
   results from pseudobulk DE analysis
+- [plot_markers.R](plot_markers.R) -
+  canonical cell type markers
+- [plot_misc.R](plot_misc.R) -
+  miscellaneous plots
+  
+
+Run these R scripts in arbitrary order to generate publication figures and tables:
+
+- [plot_figure_1.R](plot_figure_1.R) - includes Tables S2 and S3
+- [plot_figure_2.R](plot_figure_2.R)
+- [plot_figure_3.R](plot_figure_3.R) - includes Tables S4 and S5
+- [plot_figure_4.R](plot_figure_4.R) - includes Table S6
 
 
 

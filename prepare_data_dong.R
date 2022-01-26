@@ -1,5 +1,3 @@
-# Generate a Seurat object with all Dong datasets.
-#
 # @DEPI published datasets
 # @DEPO tumor_data_dong.rds
 

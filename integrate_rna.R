@@ -1,5 +1,3 @@
-# Integrate scRNA-seq datasets via alignment in monocle3 and export metadata.
-#
 # The intergrated dataset is exported to rna_integrated_monocle.rds.
 #
 # Metadata is exported to metadata_monocle.csv with columns

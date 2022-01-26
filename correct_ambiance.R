@@ -1,5 +1,3 @@
-# Remove cell-free RNA contamination via SoupX to improve DGE.
-# 
 # Creates a cell_data_set with an additional assay `soupx_counts`, containing
 # decontaminated counts as determined by SoupX.
 #

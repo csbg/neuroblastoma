@@ -1,5 +1,3 @@
-# Cell type assignment via SingleR.
-#
 # Creates several CSV files named 'cell_types_[ref]_[labels].csv', where [ref]
 # indicates the celldex reference dataset and [labels] denotes whether the broad
 # or fine labels from the reference dataset were used for classification. Each

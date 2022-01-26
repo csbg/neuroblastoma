@@ -1,5 +1,3 @@
-# Evaluate results of adrenal medullar classification.
-#
 # @DEPI adrmed_class_*.csv
 
 library(ComplexHeatmap)

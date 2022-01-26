@@ -1,5 +1,3 @@
-# Determine similarity of tumur cells to adrenal medullar cells.
-#
 # @DEPI rna_decontaminated.rds
 # @DEPI tumor_data_dong.rds
 # @DEPO adrmed_class_*.csv

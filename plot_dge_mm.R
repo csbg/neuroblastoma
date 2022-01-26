@@ -1,5 +1,3 @@
-# Plot mixed model DGE results.
-#
 # @DEPI dge_mm_results.rds
 # @DEPI dge_pb_results.rds
 

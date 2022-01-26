@@ -1,7 +1,3 @@
-# Analysis of copy number variations.
-#
-# Creates a folder `infercnv_output` with a range of output files. 
-#
 # @DEPI rna_integrated_monocle.rds
 # @DEPI metadata.rds
 # @DEPO infercnv_output

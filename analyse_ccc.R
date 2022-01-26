@@ -1,5 +1,3 @@
-# Analysis of cell-cell communication.
-#
 # @DEPI rna_decontaminated.rds
 # @DEPI metadata.rds
 # @DEPO ccc_cellchat_object.rds

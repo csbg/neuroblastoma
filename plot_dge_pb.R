@@ -1,5 +1,3 @@
-# Plot pseudo-bulk DGE results.
-#
 # @DEPI dge_pb_results.rds
 
 library(monocle3)

@@ -1,5 +1,3 @@
-# Differential gene expression analysis using mixed models.
-#
 # @DEPI rna_decontaminated.rds
 # @DEPI metadata.rds
 # @DEPO dge_mm_results.rds

@@ -1,6 +1,3 @@
-# Plot the dependency graph of analysis scripts (R and Rmd files).
-# The graph is saved in 'plots/dependency_graph.pdf'.
-
 library(igraph)
 library(tidyverse)
 library(fs)
