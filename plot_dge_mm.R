@@ -530,9 +530,9 @@ plot_pathway_heatmap_sc <- function(db = "MSigDB_Hallmark_2020",
     sig_genes <- 
       dge$results_wide_filtered %>% 
       filter(
-        cell_type %in% {{cell_types}},
+        # cell_type %in% {{cell_types}},
         comparison %in% c("II_vs_I", "III_vs_I", "IV_vs_I"),
-        abs(logFC) > log(4),
+        abs(logFC) > 1,
         p_adj <= 0.05
       ) %>% 
       pull(gene)
@@ -568,7 +568,7 @@ plot_pathway_heatmap_sc <- function(db = "MSigDB_Hallmark_2020",
       cell %in% colnames(dge$cds)
     ) %>% 
     group_by(cellont_abbr, group, sample) %>% 
-    slice_sample(n = 150) %>% 
+    slice_sample(n = 100) %>% 
     group_by(cellont_abbr, group) %>%
     slice_sample(prop = 1) %>%
     mutate(
@@ -579,9 +579,9 @@ plot_pathway_heatmap_sc <- function(db = "MSigDB_Hallmark_2020",
     arrange(group)
   
   mat <-
-    dge$cds %>% 
-    logcounts() %>% 
-    magrittr::extract(row_metadata$gene, col_metadata$cell) %>% 
+    dge$cds %>%
+    logcounts() %>%
+    magrittr::extract(row_metadata$gene, col_metadata$cell) %>%
     as.matrix()
   
   if (norm_method == "quantile") {
@@ -603,15 +603,17 @@ plot_pathway_heatmap_sc <- function(db = "MSigDB_Hallmark_2020",
   } else {
     # scaled logcounts
     mat <-
-      map(
-        unique(col_metadata$cell_type),
-        ~mat[, col_metadata$cell_type == .]
-        %>% t() %>% scale() %>% t() %>%
-          replace_na(min(., na.rm = TRUE))
-      ) %>%
-      reduce(cbind)
-    # min_limit <- quantile(mat, 0, na.rm = TRUE)
-    # max_limit <- quantile(mat, 0.9, na.rm = TRUE)
+      mat %>%
+      t() %>% scale() %>% t() %>%
+      replace_na(min(., na.rm = TRUE))
+    # mat <-
+    #   map(
+    #     unique(col_metadata$cell_type),
+    #     ~mat[, col_metadata$cell_type == .]
+    #     %>% t() %>% scale() %>% t() %>%
+    #       replace_na(min(., na.rm = TRUE))
+    #   ) %>%
+    #   reduce(cbind)
     min_limit <- 0
     max_limit <- 1.5
   }
@@ -625,7 +627,8 @@ plot_pathway_heatmap_sc <- function(db = "MSigDB_Hallmark_2020",
         max_limit,
         length.out = 9
       ),
-      viridisLite::cividis(9)
+      viridisLite::cividis(9),
+      # scico(9, palette = "oslo", direction = -1)
     ),
     border = FALSE,
     heatmap_legend_param = list(
@@ -633,14 +636,14 @@ plot_pathway_heatmap_sc <- function(db = "MSigDB_Hallmark_2020",
       labels = c("low", "high"),
       border = FALSE
     ),
-    use_raster = FALSE,
+    # use_raster = FALSE,
     
-    show_row_names = TRUE,
+    show_row_names = FALSE,
     row_split = row_metadata$pathway,
     row_title_rot = 0,
     cluster_rows = TRUE,
     cluster_row_slices = FALSE,
-    show_row_dend = TRUE,
+    show_row_dend = FALSE,
     row_gap = unit(.5, "mm"),
     row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
@@ -660,21 +663,16 @@ plot_pathway_heatmap_sc <- function(db = "MSigDB_Hallmark_2020",
   )
 }
 
-(p <- plot_pathway_heatmap_sc(norm_method = "quantile"))
-ggsave_default("dge_mm/pathway_heatmap_sc_quantile_all", plot = p)
-
 (p <- plot_pathway_heatmap_sc(norm_method = "scale"))
-ggsave_default("dge_mm/pathway_heatmap_sc_scale_all", plot = p)
+ggsave_default("dge_mm/pathway_heatmap_sc_scale_allX",
+               plot = p, width = 180, height = 100)
 
-(p <- plot_pathway_heatmap_sc(pathways = selected_genes, genes = "selected",
-                              norm_method = "quantile"))
-ggsave_default("dge_mm/pathway_heatmap_sc_quantile_selected",
-               plot = p, width = 150, height = 80)
 
-(p <- plot_pathway_heatmap_sc(pathways = selected_genes, genes = "selected",
-                              norm_method = "scale"))
-ggsave_default("dge_mm/pathway_heatmap_sc_scale_selected",
-               plot = p, width = 150, height = 80)
+(p <- plot_pathway_heatmap_sc(norm_method = "quantile"))
+ggsave_default("dge_mm/pathway_heatmap_sc_quantile_allX", plot = p)
+
+
+
 
 
 

@@ -586,9 +586,123 @@ ggsave_publication("S3c_gsea_all_vs_AS", width = 10, height = 7)
 
 ## S3d ----
 
-(p <- plot_pathway_genes(level = "group"))
-ggsave_publication("S3d_pathway_genes_group",
-                   plot = p, width = 9, height = 6)
+plot_pathway_genes_sc <- function(db = "MSigDB_Hallmark_2020",
+                                  pathways = c(
+                                    "TNF-alpha Signaling via NF-kB" = "up",
+                                    "Interferon Gamma Response" = "up",
+                                    "Myc Targets V1" = "down",
+                                    "E2F Targets" = "down"
+                                  )) {
+  log_fold_changes <- 
+    dge$results_wide_filtered %>% 
+    filter(
+      p_adj <= 0.05,
+      comparison %in% c("II_vs_I", "III_vs_I", "IV_vs_I")
+    ) %>%
+    group_by(gene) %>% 
+    summarise(min_logFC = min(logFC), max_logFC = max(logFC))
+  
+  row_metadata <-
+    left_join(
+      pathways %>% 
+        enframe("pathway", "direction"),
+      dge$gene_sets[[db]][names(pathways)] %>%
+        enframe("pathway", "gene"),
+      by = "pathway"
+    ) %>% 
+    unnest_longer(gene) %>%
+    mutate(pathway = as_factor(pathway)) %>%
+    filter(gene %in% rownames(dge$cds)) %>%
+    left_join(log_fold_changes, by = "gene") %>% 
+    filter(
+      direction == "up" & max_logFC > log(2) |
+      direction == "down" & min_logFC < -log(2)
+    )
+  
+  set.seed(1)
+  col_metadata <-
+    dge$metadata %>% 
+    filter(
+      cellont_abbr %in% c("B", "M"),
+      cell %in% colnames(dge$cds)
+    ) %>% 
+    group_by(cellont_abbr, group) %>%
+    slice_sample(n = 300) %>%
+    # group_by(cellont_abbr, group, sample) %>% 
+    # slice_sample(n = 150) %>% 
+    # group_by(cellont_abbr, group) %>%
+    # slice_sample(prop = 1) %>%
+    mutate(
+      cell_type = factor(cellont_abbr, names(CELL_TYPE_ABBREVIATIONS)),
+      group = rename_groups(group),
+      sample = rename_patients(sample) %>% factor(levels = PATIENT_ORDER)
+    ) %>% 
+    arrange(cell_type, group)
+  
+  mat <-
+    dge$cds %>% 
+    logcounts() %>% 
+    magrittr::extract(row_metadata$gene, col_metadata$cell) %>% 
+    as.matrix() %>% 
+    t() %>% scale() %>% t() %>%
+    replace_na(min(., na.rm = TRUE))
+  
+  Heatmap(
+    mat,
+    name = "expression",
+    col = circlize::colorRamp2(
+      seq(0, 1.5, length.out = 9),
+      # scico(9, palette = "oslo", direction = -1)
+      viridisLite::cividis(9)
+    ),
+    use_raster = FALSE,
+    # raster_quality = 3,
+    
+    heatmap_legend_param = list(
+      at = c(0, 1.5),
+      labels = c("low", "high"),
+      border = FALSE,
+      grid_width = unit(2, "mm"),
+      labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      legend_height = unit(15, "mm"),
+      title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+    ),
+    
+    border = FALSE,
+    show_row_names = FALSE,
+    row_split = row_metadata$pathway,
+    row_title_rot = 0,
+    cluster_row_slices = FALSE,
+    show_row_dend = FALSE,
+    row_gap = unit(.5, "mm"),
+    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    
+    cluster_columns = FALSE,
+    column_split = col_metadata$cell_type,
+    show_column_names = FALSE,
+    column_gap = unit(.5, "mm"),
+    column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    
+    top_annotation = HeatmapAnnotation(
+      group = col_metadata$group,
+      col = list(
+        group = GROUP_COLORS
+      ),
+      show_annotation_name = FALSE,
+      annotation_legend_param = list(
+        group = list(
+          grid_width = unit(2, "mm"),
+          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+        )
+      )-
+    )
+  )
+}
+
+(p <- plot_pathway_genes_sc())
+ggsave_publication("S3d_pathway_genes_sc", type = "png",
+                   plot = p, width = 9, height = 5)
 
 
 
