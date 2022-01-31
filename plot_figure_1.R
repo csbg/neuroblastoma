@@ -227,27 +227,34 @@ plot_umap <- function() {
     scale_color_manual(
       name = "cell type",
       values = CELL_TYPE_COLORS,
+      labels =
+        str_glue(
+          "{names(CELL_TYPE_ABBREVIATIONS)} ({CELL_TYPE_ABBREVIATIONS})"
+        ) %>% 
+        c("other cell"), 
       guide = guide_legend(override.aes = list(size = 1))
     ) +
     coord_fixed() +
     theme_nb(grid = FALSE) +
     theme(
-      legend.key.height = unit(1, "mm"),
+      legend.key.height = unit(2, "mm"),
       legend.key.width = unit(1, "mm"),
-      legend.position = c(.9, .22)
+      # legend.position = "bottom"
+      # legend.position = c(.9, .22),
+      legend.margin = margin()
     )
   
   p
 }
 
 plot_umap()
-ggsave_publication("1b_umap_dataset", type = "png", width = 5, height = 5)
+ggsave_publication("1b_umap_dataset", type = "png", width = 8.5, height = 5)
 
 
 
 ## 1c ----
 
-plot_celltype_heatmap <- function(clusters = 1:21, body_width = 150,
+plot_celltype_heatmap <- function(clusters = 1:20, cell_size = 2,
                                   collapse = TRUE) {
   # generate matrix of cell type abundances
   make_matrix <- function(ref) {
@@ -311,7 +318,25 @@ plot_celltype_heatmap <- function(clusters = 1:21, body_width = 150,
     arrange(abbr, .by_group = TRUE) %>% 
     ungroup()
   
-  mat <- mat[, col_metadata$colname]
+  # set up row metadata
+  row_metadata <- 
+    tibble(cluster = levels(nb_metadata$cellont_cluster)) %>% 
+    extract(
+      cluster,
+      into = c("cell_type", "cluster"),
+      regex = "(\\w+) \\((\\d+)",
+      convert = TRUE
+    ) %>%
+    filter(cluster %in% {{clusters}}) %>% 
+    mutate(
+      cell_type =
+        cell_type %>% 
+        factor(levels = names(CELL_TYPE_COLORS)) %>% 
+        fct_drop()
+    )
+  
+  # arrange matrix
+  mat <- mat[row_metadata$cluster, col_metadata$colname]
   
   if (collapse) {
     mat <-
@@ -335,24 +360,7 @@ plot_celltype_heatmap <- function(clusters = 1:21, body_width = 150,
   
   colnames(mat) <- col_metadata$cell_type
   
-  # set up row metadata
-  row_metadata <- 
-    tibble(cluster = levels(nb_metadata$cellont_cluster)) %>% 
-    extract(
-      cluster,
-      into = c("cell_type", "cluster"),
-      regex = "(\\w+) \\((\\d+)",
-      convert = TRUE
-    ) %>%
-    filter(cluster %in% {{clusters}}) %>% 
-    mutate(
-      cell_type =
-        cell_type %>% 
-        factor(levels = names(CELL_TYPE_COLORS)) %>% 
-        fct_drop()
-    ) %>%
-    arrange(cluster) %>%
-    pull(cell_type)
+  
   
   # draw heatmap  
   ht_opt(
@@ -383,22 +391,21 @@ plot_celltype_heatmap <- function(clusters = 1:21, body_width = 150,
     row_title_side = "right",
     row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-    row_dend_gp = gpar(lwd = 0.5),
-    row_dend_width = unit(3, "mm"),
-    row_km = 5,
+    row_split = row_metadata$cell_type,
+    row_gap = unit(0.5, "mm"),
+    cluster_rows = FALSE,
     
     column_split = col_metadata$ref,
     column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-    
+    column_gap = unit(0.5, "mm"),
     cluster_columns = FALSE,
-    show_parent_dend_line = FALSE,
     
-    width = unit(body_width, "mm"),
-    height = unit((body_width - 4) / ncol(mat) * nrow(mat) + 4, "mm"),
+    width = unit(cell_size * ncol(mat) + 2, "mm"),
+    height = unit(cell_size * nrow(mat) + 2, "mm"),
     
     right_annotation = rowAnnotation(
-      cell_type = row_metadata,
+      cell_type = row_metadata$cell_type,
       col = list(cell_type = CELL_TYPE_COLORS),
       show_annotation_name = FALSE,
       show_legend = FALSE,
@@ -437,9 +444,9 @@ plot_celltype_heatmap <- function(clusters = 1:21, body_width = 150,
     )
 }
 
-(p <- plot_celltype_heatmap(body_width = 80))
+(p <- plot_celltype_heatmap())
 ggsave_publication("1c_cell_type_classification",
-                   plot = p, width = 11, height = 6)
+                   plot = p, width = 10, height = 6)
 
 
 
@@ -513,7 +520,7 @@ plot_cm_dots <- function(counts, features, groups,
       labels = function(x) str_replace(x, "(.+) \\((.+)\\)", "\\2\n\\1"),
       expand = expansion(add = 0.5)
     ) +
-    scale_y_discrete(NULL, expand = expansion(add = 0.5)) +
+    scale_y_discrete("gene", expand = expansion(add = 0.5)) +
     scale_color_dotplot(
       "scaled average expression",
       guide = guide_colorbar(
@@ -606,7 +613,7 @@ plot_canonical_markers <- function() {
 }
 
 plot_canonical_markers()
-ggsave_publication("1d_markers", height = 12, width = 7)
+ggsave_publication("1d_markers", height = 12, width = 8)
 
 
 
@@ -816,7 +823,7 @@ ggsave_publication("S1a_umap_integration", type = "png", width = 9, height = 5)
 
 ## S1b ----
 
-plot_infiltration_rate <- function(show_mean = FALSE) {
+plot_infiltration_rate <- function() {
   tif_facs <-
     read_csv("metadata/sample_groups.csv", comment = "#") %>%
     filter(!is.na(facs_alive)) %>% 
@@ -836,42 +843,6 @@ plot_infiltration_rate <- function(show_mean = FALSE) {
     ) %>% 
     mutate(group = rename_groups(group) %>% fct_relevel("C", "M", "A", "S"))
   
-  if (show_mean) {
-    geom_text_mean_tif <- list(
-      geom_text(
-        data =
-          infiltration_rates %>%
-          group_by(group) %>%
-          summarise(across(starts_with("tif"), mean)) %>%
-          pivot_longer(
-            starts_with("tif"),
-            names_to = "method",
-            names_prefix = "tif_",
-            values_to = "tif"
-          ) %>%
-          mutate(
-            label = sprintf("%.1f", tif * 100),
-            tif = 0.6,
-            method = recode(method, facs = "FACS", sc = "scRNA-seq")
-          ),
-        aes(label = label),
-        color = "black",
-        size = BASE_TEXT_SIZE_MM
-      ),
-      geom_text(
-        data = tibble(
-          label = "mean over\npatients",
-          group = factor("C", levels = c("C", "M", "A", "S"))
-        ),
-        aes(label = label, x = 1.5, y = 0.52),
-        color = "black",
-        size = BASE_TEXT_SIZE_MM
-      )
-    )
-  } else {
-    geom_text_mean_tif <- NULL
-  }
-  
   p <- 
     infiltration_rates %>%
     pivot_longer(
@@ -881,32 +852,36 @@ plot_infiltration_rate <- function(show_mean = FALSE) {
       values_to = "tif"
     ) %>%
     mutate(method = recode(method, facs = "FACS", sc = "scRNA-seq")) %>% 
-    ggplot(aes(tif, method, color = group)) +
-    geom_point(show.legend = FALSE, size = .5) +
+    ggplot(aes(method, tif, color = group)) +
     geom_line(
       aes(group = sample),
       size = BASE_LINE_SIZE,
       show.legend = FALSE
     ) +
-    geom_text_mean_tif +
-    ylab(NULL) +
-    scale_x_continuous(
+    geom_point(
+      aes(shape = method),
+      size = .5,
+      fill = "white",
+      show.legend = FALSE
+    ) +
+    xlab("method") +
+    scale_y_continuous(
       name = "tumor infiltration rate",
       limits = c(0, 0.6),
       expand = expansion(mult = c(0.03, 0.01))
     ) +
     scale_color_manual(values = GROUP_COLORS) +
-    # coord_flip() +
-    facet_grid(vars(group)) +
+    scale_shape_manual(values = c(21, 19)) +
+    facet_wrap(vars(group), nrow = 1) +
     theme_nb(grid = FALSE) +
     theme(
-      panel.grid.major.x = element_line(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      panel.grid.major.y = element_line(
         color = "grey92",
         size = BASE_LINE_SIZE
       ),
       panel.border = element_blank(),
       panel.spacing = unit(1, "mm"),
-      strip.text.y = element_text(angle = 0)
     )
   
   p

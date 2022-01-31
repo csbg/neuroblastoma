@@ -209,26 +209,48 @@ plot_adrmed_profile <- function() {
     mutate(n_rel = n / sum(n) * 100) %>% 
     ungroup() %>% 
     filter(cell_type != "(Missing)") %>% 
-    mutate(mycn_status = fct_relevel(mycn_status, "normal")) %>% 
+    mutate(
+      cell_type = fct_rev(cell_type),
+      mycn_status = fct_relevel(mycn_status, "normal"),
+      tumor = fct_recode(tumor, "bone marrow" = "DTC")
+    ) %>% 
     ggplot(aes(cell_type, n_rel)) +
+    geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
     geom_col(aes(fill = cell_type), show.legend = FALSE) +
     scale_x_discrete(NULL) +
-    ylab("Percentage of cells") +
+    scale_y_continuous(
+      "Percentage of cells",
+      expand = expansion(mult = c(0, 0.05)),
+      breaks = c(0, 20, 40)
+    ) +
     scale_fill_manual(values = ADRMED_CELLS_COLORS) +
+    labs(tag = "tumor site\nMYCN status") +
     coord_flip() +
-    facet_wrap(vars(tumor, mycn_status), nrow = 1, scales = "free_x") +
+    facet_wrap(vars(tumor, mycn_status), nrow = 1) +
     theme_nb(grid = FALSE) +
-    theme()
+    theme(
+      panel.border = element_blank(),
+      panel.grid.major.x = element_line(
+        color = "grey92",
+        size = BASE_LINE_SIZE
+      ),
+      plot.tag = element_text(
+        size = BASE_TEXT_SIZE_PT,
+        hjust = 1,
+        lineheight = 1.25
+      ),
+      plot.tag.position = c(0.278, .944),
+    )
 }
 
 plot_adrmed_profile()
-ggsave_publication("2b_adrmed_profile", width = 8, height = 3)
+ggsave_publication("2b_adrmed_profile", width = 8, height = 4)
 
 
 
 ## 2c ----
 
-plot_corr_mat <- function(size, samples = NULL) {
+plot_corr_mat <- function(size, samples = NULL, annotate_mycn = FALSE) {
   if (is.null(samples)) {
     corr_mat <-
       tumor_data$pseudobulk_counts %>%
@@ -254,6 +276,50 @@ plot_corr_mat <- function(size, samples = NULL) {
       "normal"
     )
   )
+  
+  if (annotate_mycn) {
+    left_annotation <- rowAnnotation(
+      group = col_metadata$group,
+      mycn = col_metadata$mycn_status,
+      col = list(
+        group = GROUP_COLORS,
+        mycn = MYCN_STATUS_COLORS
+      ),
+      show_annotation_name = FALSE,
+      show_legend = TRUE,
+      annotation_legend_param = list(
+        group = list(
+          title = "group",
+          grid_width = unit(2, "mm"),
+          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+        ),
+        mycn = list(
+          title = "MYCN status",
+          grid_width = unit(2, "mm"),
+          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+        )
+      )
+    )
+  } else {
+    left_annotation <- rowAnnotation(
+      group = col_metadata$group,
+      col = list(
+        group = GROUP_COLORS
+      ),
+      show_annotation_name = FALSE,
+      show_legend = TRUE,
+      annotation_legend_param = list(
+        group = list(
+          title = "group",
+          grid_width = unit(2, "mm"),
+          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+        )
+      )
+    )
+  }
   
   Heatmap(
     corr_mat,
@@ -284,35 +350,12 @@ plot_corr_mat <- function(size, samples = NULL) {
     show_column_dend = FALSE,
     show_column_names = FALSE,
     
-    left_annotation = rowAnnotation(
-      group = col_metadata$group,
-      mycn = col_metadata$mycn_status,
-      col = list(
-        group = c(GROUP_COLORS, "T" = "#433447"),
-        mycn = c("normal" = "gray90", "amplified" = "#d35f5f")
-      ),
-      show_annotation_name = FALSE,
-      show_legend = TRUE,
-      annotation_legend_param = list(
-        group = list(
-          title = "group",
-          grid_width = unit(2, "mm"),
-          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
-        ),
-        mycn = list(
-          title = "MYCN status",
-          grid_width = unit(2, "mm"),
-          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
-        )
-      )
-    ),
+    left_annotation = left_annotation
   )
 }
 
-(p <- plot_corr_mat(25, PATIENT_ORDER[-1:-5]))
-ggsave_publication("2c_pseudobulk_cor", plot = p, height = 3, width = 8)
+(p <- plot_corr_mat(25, PATIENT_ORDER %>% discard(str_starts, "C")))
+ggsave_publication("2c_pseudobulk_cor", plot = p, height = 3, width = 6)
 
 
 
@@ -581,6 +624,7 @@ plot_adrmed_heatmap <- function() {
     ungroup() %>% 
     filter(cell_type != "(Missing)") %>% 
     pivot_wider(names_from = sample, values_from = n) %>% 
+    arrange(cell_type) %>% 
     column_to_rownames("cell_type") %>%
     as.matrix() %>% 
     replace_na(0)
@@ -590,6 +634,11 @@ plot_adrmed_heatmap <- function() {
     left_join(
       singler_results %>% distinct(sample, mycn_status, tumor),
       by = "sample"
+    ) %>% 
+    mutate(
+      group =
+        str_sub(sample, 1, 1) %>%
+        fct_relevel(names(GROUP_COLORS))
     )
   
   Heatmap(
@@ -607,17 +656,17 @@ plot_adrmed_heatmap <- function() {
     
     column_split =
       fct_cross(col_metadata$tumor, col_metadata$mycn_status) %>% 
-      fct_relevel("DTC:amplified", "DTC:normal"),
+      fct_relevel("DTC:normal", "DTC:amplified", "primary:normal"),
     cluster_column_slices = FALSE,
     column_title = NULL,
-    
-    row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-    row_dend_gp = gpar(lwd = 0.5),
-    row_dend_width = unit(3, "mm"),
-    
     column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     column_dend_gp = gpar(lwd = 0.5),
     column_dend_height = unit(3, "mm"),
+    
+    cluster_rows = FALSE,
+    row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    row_dend_gp = gpar(lwd = 0.5),
+    row_dend_width = unit(3, "mm"),
     
     width = unit(60, "mm"),
     height = unit(27, "mm"),
@@ -625,17 +674,13 @@ plot_adrmed_heatmap <- function() {
     border = FALSE,
     
     top_annotation = HeatmapAnnotation(
-      tumor = col_metadata$tumor,
+      group = col_metadata$group,
       mycn = col_metadata$mycn_status,
       col = list(
-        mycn = c("normal" = "gray90", "amplified" = "#d35f5f"),
-        tumor = c(DTC = "black", primary = "grey80")
+        mycn = MYCN_STATUS_COLORS,
+        group = GROUP_COLORS
       ),
-      annotation_label = list(
-        mycn = "MYCN status",
-        title = "tumor"
-      ),
-      annotation_name_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      show_annotation_name = FALSE,
       annotation_legend_param = list(
         mycn = list(
           title = "MYCN status",
@@ -643,8 +688,7 @@ plot_adrmed_heatmap <- function() {
           labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
           title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
         ),
-        tumor = list(
-          title = "tumor",
+        group = list(
           grid_width = unit(2, "mm"),
           labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
           title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
@@ -661,6 +705,6 @@ ggsave_publication("S2d_adrmed_heatmap", plot = p, height = 5, width = 12)
 
 ## S2e ----
 
-(p <- plot_corr_mat(40))
+(p <- plot_corr_mat(40, annotate_mycn = TRUE))
 ggsave_publication("S2e_pseudobulk_cor_all", plot = p, height = 4.5, width = 8)
 

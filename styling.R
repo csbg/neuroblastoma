@@ -16,11 +16,11 @@ CELL_TYPE_ABBREVIATIONS <- c(
   "T" = "T cell",
   NK  = "natural killer cell",
   B   = "B cell",
-  M   = "monocyte",
+  M   = "myeloid cell",
   pDC = "plasmacytoid dendritic cell",
   E   = "erythroid lineage cell",
   SC  = "hematopoietic precursor cell",
-  NB  = "neuron"
+  NB  = "neuroblastoma cell"
 )
 
 # color cell types using ColorBrewer's Set1
@@ -48,21 +48,22 @@ GROUP_NAMES_LONG = c(
 # (https://wesandersonpalettes.tumblr.com/post/110716093015/ash-should-we-dance)
 # factors should be ordered like this vector
 GROUP_COLORS <- c(
-  C = "#b9b09f",
-  M = "#a9d8c8",
-  A = "#d16b54",
-  S = "#e8c95d"
+  C   = "#b9b09f",
+  M   = "#a9d8c8",
+  A   = "#d16b54",
+  S   = "#e8c95d",
+  "T" = "#433447"
 )
 
 # same as group colors; Ma (M vs A) etc are blends
 CONTRAST_COLORS <- c(
-  Mc = "#a9d8c8",
-  Ac = "#d16b54",
-  Sc = "#e8c95d",
-  Ma = "#bda28e",
-  Ms = "#c9d193",
-  As = "#dd9a59",
-  Mas = "#c3b991"
+  "M vs C" = "#a9d8c8",
+  "A vs C" = "#d16b54",
+  "S vs C" = "#e8c95d",
+  "M vs A" = "#bda28e",
+  "M vs S" = "#c9d193",
+  "A vs S" = "#dd9a59",
+  "M vs A+S" = "#c3b991"
 )
 
 PATIENT_ORDER <- c("C1", "C2", "C3", "C4", "C5",
@@ -100,6 +101,20 @@ ADRMED_CELLS_COLORS <- c(
   "cycling Neuroblasts" = "#aacedc",
   "Neuroblasts" = "#244a94",
   "late Neuroblasts" = "#303d63"
+)
+
+# MYCN status
+MYCN_STATUS_COLORS <- c(
+  "normal" = "gray95",
+  "amplified" = "gray50"
+)
+
+# consistently differentially expressed genes
+CONSISTENT_GENES_COLORS <- c(
+  "A, M, and S" = "#205d89",
+  "M and S" = "#cf784b",
+  "A and S" = "#73a87c",
+  "A and M" = "#c1bc78"
 )
 
 
@@ -342,13 +357,13 @@ rename_contrast <- partial(
   rename_str_or_fct,
   nm = tribble(
     ~old,       ~new,
-    "II_vs_I",  "Mc",
-    "III_vs_I", "Ac",
-    "IV_vs_I",  "Sc",
-    "II_vs_IV", "Ms",
-    "III_vs_IV", "As",
-    "II_vs_III", "Ma",
-    "MNA_vs_other", "Mas",
+    "II_vs_I",  "M vs C",
+    "III_vs_I", "A vs C",
+    "IV_vs_I",  "S vs C",
+    "II_vs_IV", "M vs S",
+    "III_vs_IV", "A vs S",
+    "II_vs_III", "M vs S",
+    "MNA_vs_other", "M vs A+S",
   )
 )
 

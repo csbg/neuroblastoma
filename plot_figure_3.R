@@ -102,27 +102,32 @@ plot_consistent_genes <- function() {
         shared %>% 
         fct_relevel("AM", "AS", "MS") %>% 
         fct_recode("A and M" = "AM", "A and S" = "AS",
-                   "M and S" = "MS", "A, M, and S" = "AMS")
+                   "M and S" = "MS", "A, M, and S" = "AMS"),
+      cell_type = factor(cell_type, levels = names(CELL_TYPE_ABBREVIATIONS))
     )
   
   consistent_genes %>% 
-    # filter(shared == "AMS") %>% 
     ggplot(aes(cell_type, n, fill = shared)) +
     geom_col() +
     geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
-    scale_fill_hue(
+    scale_fill_manual(
       "shared\nbetween",
-      guide = guide_legend(
-        
-      )
+      values = CONSISTENT_GENES_COLORS,
+      guide = guide_legend(reverse = TRUE)
     ) +
     xlab("cell type") +
     ylab("number of consistently\ndown- and upregulated genes") +
     theme_nb(grid = FALSE) +
     theme(
+      axis.ticks.length.x = unit(0, "mm"),
       legend.key.height = unit(2, "mm"),
       legend.key.width = unit(2, "mm"),
-      legend.margin = margin(0, 0, 0, -2, "mm")
+      legend.margin = margin(0, 0, 0, -2, "mm"),
+      panel.border = element_blank(),
+      panel.grid.major.y = element_line(
+        color = "grey92",
+        size = BASE_LINE_SIZE
+      )
     )
 }
 
@@ -283,6 +288,7 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
     scale_y_discrete() +
     horizontal_grid +    
     geom_point(aes(color = NES)) +
+    xlab(NULL) +
     ylab(NULL) +
     scale_color_gsea(
       "normalized\nenrichment\nscore",
@@ -300,6 +306,7 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
       max_size = 2.5,
       limits = c(0, 40),
       breaks = c(0, 20, 40),
+      labels = c("0", "20", "40 or higher"),
       oob = scales::oob_squish
     )  +
     coord_fixed() +
@@ -309,20 +316,32 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
       axis.text.x = element_text(angle = 90, vjust = .5, hjust = 1),
       legend.key.height = unit(3, "mm"),
       legend.key.width = unit(3, "mm"),
-      legend.spacing = unit(0, "mm"),
+      legend.margin = margin(),
       panel.spacing = unit(-.5, "pt"),
     )
 }
 
 wrap_plots(
-  plot_gsea(comparisons = c("Mc", "Ac", "Sc"), cell_types = "B"),
-  plot_gsea(comparisons = c("Mc", "Ac", "Sc"), cell_types = "M"),
-  plot_gsea(comparisons = "Mas", cell_types = "B"),
-  plot_gsea(comparisons = "Mas", cell_types = "M"),
-  nrow = 1,
-  guides = "collect"
-)
-ggsave_publication("3d_gsea", width = 16, height = 5)
+  plot_gsea(comparisons = c("M vs C", "A vs C", "S vs C"), cell_types = "B"),
+  plot_gsea(comparisons = c("M vs C", "A vs C", "S vs C"), cell_types = "M"),
+  plot_gsea(comparisons = "M vs A+S", cell_types = "B"),
+  plot_gsea(comparisons = "M vs A+S", cell_types = "M"),
+  wrap_elements(
+    panel = textGrob(
+      "comparison",
+      just = "center",
+      gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+    ),
+    clip = FALSE
+  )
+) +
+  plot_layout(
+    design = "ABCD\nEEEE",
+    widths = c(5, 5, 3, 3),
+    heights = c(30, 1),
+    guides = "collect"
+  )
+ggsave_publication("3d_gsea", width = 18, height = 6)
 
 
 
@@ -339,7 +358,7 @@ selected_genes <- list(
 
 plot_pathway_genes <- function(db = "MSigDB_Hallmark_2020",
                                pathways = selected_genes,
-                               level = c("sample", "group"),
+                               level = c("group", "sample"),
                                cell_types = c("B", "M")) {
   level <- match.arg(level)
   
@@ -461,9 +480,9 @@ plot_pathway_genes <- function(db = "MSigDB_Hallmark_2020",
   )
 }
 
-(p <- plot_pathway_genes(level = "sample"))
-ggsave_publication("3e_pathway_genes_sample",
-                   plot = p, width = 13, height = 6)
+(p <- plot_pathway_genes())
+ggsave_publication("3e_pathway_genes",
+                   plot = p, width = 9, height = 6)
 
 
 
@@ -572,15 +591,22 @@ ggsave_publication("S3a_cell_type_enrichment", width = 5, height = 4)
 
 ## S3b ----
 
-plot_gsea(comparisons = c("Mc", "Ac", "Sc"))
+plot_gsea(comparisons = c("M vs C", "A vs C", "S vs C")) +
+  xlab("comparison")
 ggsave_publication("S3b_gsea_all_vs_C", width = 10, height = 10)
 
 
 
 ## S3c ----
 
-plot_gsea(comparisons = "Mas")
-ggsave_publication("S3c_gsea_all_vs_AS", width = 10, height = 7)
+plot_gsea(comparisons = "M vs A+S") +
+  xlab("M vs A+S\ncomparison") +
+  theme(
+    axis.ticks.length.x = unit(0, "mm"),
+    axis.text.x = element_blank(),
+    strip.text = element_text(angle = 90, hjust = 0)
+  )
+ggsave_publication("S3c_gsea_all_vs_AS", width = 7, height = 7)
 
 
 
@@ -695,7 +721,7 @@ plot_pathway_genes_sc <- function(db = "MSigDB_Hallmark_2020",
           labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
           title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
         )
-      )-
+      )
     )
   )
 }

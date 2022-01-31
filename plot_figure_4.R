@@ -30,7 +30,9 @@ sig_data <- readRDS("data_generated/ccc_signaling_data.rds")
 ## 4a ----
 
 plot_n_interactions <- function() {
-  mat <- cellchat@net$count
+  rc_order <- names(CELL_TYPE_ABBREVIATIONS)
+  mat <- cellchat@net$count[rc_order, rc_order]
+  # mat <- cellchat@net$count
   bar_colors <- CELL_TYPE_COLORS[colnames(mat)]
   total_target <- colSums(mat)
   total_source <- rowSums(mat)
@@ -126,20 +128,26 @@ plot_contribution_celltype <- function(cell_type = "NB", signif = 0.05) {
     mutate(interaction = fct_reorder(interaction, prob.norm)) %>% 
     ggplot(aes(interaction, prob.norm)) +
     geom_col(fill = "#23cfc3", width = 0.85) +
+    geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
     geom_text(
       aes(y = 2.68, label = pathway_name),
       size = BASE_TEXT_SIZE_MM
     ) +
     xlab("Ligand-receptor pair") +
     scale_y_continuous(
-      "Total outgoing communication score",
+      "Total outgoing communication score from NB",
       expand = expansion(0)
     ) +
     coord_flip() +
     theme_nb(grid = FALSE) +
     theme(
+      axis.title.x = element_text(hjust = 1),
       axis.ticks.y = element_blank(),
-      panel.border = element_blank()
+      panel.border = element_blank(),
+      panel.grid.major.x = element_line(
+        color = "grey92",
+        size = BASE_LINE_SIZE
+      )
     )
 }
 
@@ -156,7 +164,11 @@ plot_selected_dots <- function(pathways, source_type = "NB") {
       pathway_name %in% {{pathways}}, 
       source == {{source_type}}
     ) %>%
-    mutate(pathway_name = factor(pathway_name, levels = pathways))
+    mutate(
+      pathway_name = factor(pathway_name, levels = pathways),
+      source = fct_recode(source, "from NB (source) to" = "NB"),
+      target = factor(target, levels = names(CELL_TYPE_ABBREVIATIONS))
+    )
   
   ggplot(vis_data, aes(target, interaction_name_2)) +
     geom_point(
@@ -180,8 +192,8 @@ plot_selected_dots <- function(pathways, source_type = "NB") {
         title.vjust = .9
       )
     ) +
-    xlab("Cell types (source -> target)") +
-    ylab("Ligand-receptor pairs and pathways") +
+    xlab("Cell type (target)") +
+    ylab("Ligand-receptor pair and pathway") +
     facet_grid(
       vars(pathway_name), 
       vars(source),
@@ -255,8 +267,10 @@ plot_centrality <- function(pathway) {
     ) %>%
     mutate(
       across(everything(), ~. / max(.)),
-      cell_type = names(centralities$outdeg)
+      cell_type = names(centralities$outdeg) %>% 
+        factor(levels = names(CELL_TYPE_ABBREVIATIONS))
     ) %>%
+    arrange(cell_type) %>% 
     column_to_rownames("cell_type") %>% 
     as.matrix() %>% 
     t()
