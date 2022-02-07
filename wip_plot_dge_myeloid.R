@@ -372,3 +372,49 @@ plot_logfc_correlation_heatmap <- function() {
 (p <- plot_logfc_correlation_heatmap())
 ggsave_default("dge_myeloid/logfc_correlation",
                    plot = p, width = 70, height = 70)
+
+
+
+# Tables ------------------------------------------------------------------
+
+## S4 ----
+
+gene_pathways <- 
+  CellChatDB.human$interaction %>% 
+  as_tibble() %>% 
+  select(interaction_name, pathway_name) %>% 
+  mutate(genes = str_split(interaction_name, "_")) %>% 
+  unnest_longer(genes) %>% 
+  distinct(pathway_name, genes) %>% 
+  group_by(Gene = genes) %>% 
+  summarise(
+    Pathways =
+      unique(pathway_name) %>%
+      str_sort() %>%
+      str_c(collapse = ", ")
+  )
+
+rename_columns <- function(s) {
+  comparison <- str_sub(s, 7)
+  case_when(
+    str_starts(s, "log") ~ paste0("Log fold change (", comparison, ")"),
+    str_starts(s, "p_adj") ~ paste0("Adjusted p-value (", comparison, ")"),
+    TRUE ~ s
+  )
+}
+
+dge$results_wide_filtered %>% 
+  arrange(comparison, cell_type, desc(logFC)) %>%
+  mutate(
+    logFC = logFC / log(2),  # nebula returns natural log fold changes
+    comparison = recode(comparison, Ac = "A vs C", Mc = "M vs C",
+                        Sc = "S vs C", Mas = "M vs A+S"),
+  ) %>%
+  select(!c(p, frq, frq_ref, direction)) %>%
+  pivot_wider(names_from = comparison, values_from = c(logFC, p_adj)) %>%
+  relocate(1, 2, 3, 7, 4, 8, 5, 9, 6, 10) %>%
+  rename_with(rename_columns) %>%
+  left_join(gene_pathways, by = c(gene = "Gene")) %>%
+  split(.$cell_type) %>%
+  map(select, !cell_type) %>%
+  save_table("Sxxx_dge_myeloid")
