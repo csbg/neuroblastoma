@@ -71,6 +71,17 @@ my_metadata <-
 cds_my %>% saveRDS("data_wip/cds_myeloid.rds")
 my_metadata %>% saveRDS("data_wip/metadata_myeloid.rds")
 
+cds_my <- readRDS("data_wip/cds_myeloid.rds")
+my_metadata <- readRDS("data_wip/metadata_myeloid.rds")
+
+reducedDim(cds_my, "UMAP") %>% 
+  magrittr::set_colnames(c("X Coordinate", "Y Coordinate")) %>% 
+  as_tibble(rownames = "Barcode") %>% 
+  write_csv("~/Desktop/my_umap.csv")
+
+my_metadata %>% 
+  select(Barcode = cell, MyeloidCluster = collcluster) %>% 
+  write_csv("~/Desktop/my_types.csv")
 
 
 # Plots -------------------------------------------------------------------
@@ -194,6 +205,20 @@ walk(
     ggsave_default(str_glue("myeloid/markers_{t}"), width = 100)
   }
 )
+
+
+## Selected markers ----
+
+plot_dots(
+  logcounts(cds_my),
+  c("CD14", "CD36", "HLA-DRA", "HLA-DRB1", "HLA-DRB2", "HLA-DRB3",
+    "HLA-DPA1", "HLA-DPB1", "CFP", "TGFB1", "PILRA",
+    "CD163", "CD74", "CD86", "FCGR3A", "C1QA") %>% rev(),
+  my_metadata$collcluster
+) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave_default("myeloid/selected_markers", height = 100)
+
 
 
 ## Cell types ----
