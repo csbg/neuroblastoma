@@ -1,5 +1,5 @@
 # manual assignment of overall cell types to celldex labels
-# used for the column annotation in figure S1e
+# used for the column annotation in the celltype heatmap
 colname,abbr
 blueprint_Monocytes,M
 blueprint_B-cells,B

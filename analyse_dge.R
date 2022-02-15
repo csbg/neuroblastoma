@@ -1,6 +1,6 @@
 # @DEPI rna_decontaminated.rds
 # @DEPI metadata.rds
-# @DEPO dge_mm_results.rds
+# @DEPO dge_results.rds
 
 library(monocle3)
 library(muscat)
@@ -566,4 +566,4 @@ list(
   gsea = gsea_results,
   gene_sets = enrichr_genesets
 ) %>%
-  saveRDS("data_generated/dge_mm_results.rds")
+  saveRDS("data_generated/dge_results.rds")

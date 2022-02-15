@@ -1,11 +1,9 @@
 # Creates the following files:
-# * metadata.csv - combined metadata exported via `write_csv()`
-# * metadata.rds - combined metadata stored with factor levels
+# * metadata.rds - combined metadata
 # * celltype_details.rds - processed SingleR details
 #
 # @DEPI metadata_monocle.csv
 # @DEPI cell_types_[ref]_[labels].csv
-# @DEPO metadata.csv
 # @DEPO metadata.rds
 # @DEPO celltype_details.rds
 
@@ -304,6 +302,5 @@ nb_data <-
 
 # Export data -------------------------------------------------------------
 
-nb_data %>% write_csv(str_glue("{folder}/metadata.csv"))
 nb_data %>% saveRDS(str_glue("{folder}/metadata.rds"))
 singler_data %>% saveRDS(str_glue("{folder}/celltype_details.rds"))

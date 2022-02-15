@@ -1,5 +1,4 @@
-# @DEPI dge_mm_results.rds
-# @DEPI dge_pb_results.rds
+# @DEPI dge_results.rds
 
 library(scater)
 library(monocle3)
@@ -19,8 +18,7 @@ source("styling.R")
 
 # Load data ---------------------------------------------------------------
 
-dge <- readRDS("data_generated/dge_mm_results.rds")
-dge_pb <- readRDS("data_generated/dge_pb_results.rds")
+dge <- readRDS("data_generated/dge_results.rds")
 
 # are there problematic genes with convergence <= -20 ?
 stopifnot(
@@ -68,7 +66,7 @@ bind_rows(
     panel.grid = element_blank(),
     strip.background = element_blank()
   )
-ggsave_default("dge_mm/number_of_de_genes", height = 80, width = 150)
+ggsave_default("dge/number_of_de_genes", height = 80, width = 150)
 
 
 ## Consistent genes ----
@@ -106,7 +104,7 @@ ggplot(consistent_genes, aes(cell_type, shared_AMS)) +
   xlab("cell type") +
   ylab("number of consistently down- and upregulated genes") +
   theme_nb()
-ggsave_default("dge_mm/number_of_consistent_genes", width = 40, height = 60)
+ggsave_default("dge/number_of_consistent_genes", width = 40, height = 60)
 
 consistent_genes %>% 
   select(!c(Ac, Mc, Sc)) %>% 
@@ -123,7 +121,7 @@ consistent_genes %>%
   xlab("cell type") +
   ylab("number of consistently down- and upregulated genes") +
   theme_nb()
-ggsave_default("dge_mm/number_of_consistent_genes_groups", width = 60, height = 60)
+ggsave_default("dge/number_of_consistent_genes_groups", width = 60, height = 60)
 
 
   
@@ -135,7 +133,7 @@ ggplot(dge$results_wide, aes(logFC, -log10(p))) +
   coord_cartesian(xlim = c(-10, 10), ylim = c(0, 25)) +
   theme_bw() +
   theme(panel.grid = element_blank())
-ggsave_default("dge_mm/volcano")
+ggsave_default("dge/volcano")
 
 
 dge$results_wide %>% 
@@ -146,7 +144,7 @@ dge$results_wide %>%
   coord_cartesian(xlim = c(-10, 10), ylim = c(0, 25)) +
   theme_bw() +
   theme(panel.grid = element_blank())
-ggsave_default("dge_mm/volcano_all")
+ggsave_default("dge/volcano_all")
 
 
 
@@ -188,88 +186,6 @@ plot_violin("HIST1H1E", "B", "IV")
 # ... cases that still have extreme log fold changes
 plot_violin("HIST1H1B", "SC", "III")
 plot_violin("PTPN6", "NK", "III")
-
-
-
-# currently, the commented code below does not work!
-# plot_top_violins <- function(cell_type, n = 10, direction = c("up", "down")) {
-#   direction <- match.arg(direction)
-#   
-#   dge$results_wide_filtered %>% 
-#     filter(
-#       p_adj <= 0.05,
-#       cell_type == "B",
-#       direction == "up"
-#     ) %>% 
-#     arrange(desc(abs(logFC))) %>% 
-#     mutate(col = factor(comparison) %>% as.integer()) %>%
-#     extract(
-#       comparison,
-#       into = c("group", "ref_group"),
-#       regex = "(.+)_vs_(.+)"
-#     ) %>%
-#     group_by(col) %>%
-#     mutate(row = row_number()) %>%
-#     ungroup() %>%
-#     arrange(col, row) %>% 
-#     select(row, col, gene, cell_type, ref_group, group, direction) %>%
-#     filter(row <= n) %>% 
-#     # plot_violin() %>% 
-#     {.}
-# }
-# 
-# plot_top_violins("B")
-# ggsave_default("dge_mm/violins_B", height = 120, width = 150)
-# plot_top_violins("M")
-# ggsave_default("dge_mm/violins_M", height = 120, width = 150)
-
-
-
-# Comparison to pseudobulk ------------------------------------------------
-
-plot_comparison <- function(data, lim = NULL, filename = NULL) {
-  # note that nebula returns natural log fold changes
-  # -> add reference line with slope log(2)
-  p <-
-    dge_pb$results %>% 
-    filter(contrast != "tif") %>% 
-    select(gene, cell_type = cluster_id,
-           contrast, logFC_pb = logFC, p_pb = p_val) %>% 
-    extract(contrast, into = "group", regex = "(.+)_vs_I") %>% 
-    left_join(
-      data %>%
-        rename(logFC_mm = logFC, p_mm = p) %>% 
-        filter(comparison %in% c("II_vs_I", "III_vs_I", "IV_vs_I")) %>% 
-        extract(comparison, "group", "(.+)_vs"),
-      by = c("gene", "cell_type", "group")
-    ) %>% 
-    ggplot(aes(logFC_pb, logFC_mm)) +
-    geom_point(size = 0.1) +
-    geom_abline(intercept = 0, slope = log(2), color = "blue", alpha = .25) +
-    facet_grid(vars(group), vars(cell_type)) +
-    coord_fixed(xlim = lim, ylim = lim) +
-    theme_bw() +
-    theme(panel.grid = element_blank())
-  
-  ggsave_default(filename)
-  p
-}
-
-plot_comparison(
-  dge$results_wide,
-  lim = NULL,
-  filename = "dge_mm/comparison_pb_mm_full"
-)
-plot_comparison(
-  dge$results_wide_filtered,
-  lim = NULL,
-  filename = "dge_mm/comparison_pb_mm_full_filtered"
-)
-plot_comparison(
-  dge$results_wide,
-  lim = c(-10, 10),
-  filename = "dge_mm/comparison_pb_mm"
-)
 
 
 
@@ -365,7 +281,7 @@ plot_enrichr_dots <- function(data,
     NULL
   
   if (filename == "auto") {
-    filename <- str_glue("dge_mm/enrichr_{db}")
+    filename <- str_glue("dge/enrichr_{db}")
   }
   ggsave_default(filename, ...)
   p
@@ -488,7 +404,7 @@ plot_gsea_dots <- function(data,
     NULL
   
   if (filename == "auto") {
-    filename <- str_glue("dge_mm/gsea_{db}")
+    filename <- str_glue("dge/gsea_{db}")
   }
   ggsave_default(filename, width = 400, ...)
   p
@@ -664,12 +580,12 @@ plot_pathway_heatmap_sc <- function(db = "MSigDB_Hallmark_2020",
 }
 
 (p <- plot_pathway_heatmap_sc(norm_method = "scale"))
-ggsave_default("dge_mm/pathway_heatmap_sc_scale_allX",
+ggsave_default("dge/pathway_heatmap_sc_scale_allX",
                plot = p, width = 180, height = 100)
 
 
 (p <- plot_pathway_heatmap_sc(norm_method = "quantile"))
-ggsave_default("dge_mm/pathway_heatmap_sc_quantile_allX", plot = p)
+ggsave_default("dge/pathway_heatmap_sc_quantile_allX", plot = p)
 
 
 
@@ -870,64 +786,35 @@ plot_pathway_heatmap <- function(db = "MSigDB_Hallmark_2020",
 
 (p <- plot_pathway_heatmap(level = "sample", pathways = selected_genes,
                            genes = "selected"))
-ggsave_default("dge_mm/pathway_heatmap_sample_selected",
+ggsave_default("dge/pathway_heatmap_sample_selected",
                plot = p, width = 130, height = 60)
 
 (p <- plot_pathway_heatmap(level = "group", pathways = selected_genes,
                            genes = "selected"))
-ggsave_default("dge_mm/pathway_heatmap_group_selected",
+ggsave_default("dge/pathway_heatmap_group_selected",
                plot = p, width = 86, height = 60)
 
 # (p <- plot_pathway_heatmap(level = "sample", genes = "all"))
-# ggsave_default("dge_mm/pathway_heatmap_sample_all",
+# ggsave_default("dge/pathway_heatmap_sample_all",
 #                plot = p, width = 200, height = 200)
 # 
 # (p <- plot_pathway_heatmap(level = "group", genes = "all"))
-# ggsave_default("dge_mm/pathway_heatmap_group_all",
+# ggsave_default("dge/pathway_heatmap_group_all",
 #                plot = p, width = 150, height = 200)
 # 
 # 
 # (p <- plot_pathway_heatmap(level = "sample", genes = "top"))
-# ggsave_default("dge_mm/pathway_heatmap_sample_top",
+# ggsave_default("dge/pathway_heatmap_sample_top",
 #                plot = p, width = 200, height = 100)
 # 
 # (p <- plot_pathway_heatmap(level = "group", genes = "top"))
-# ggsave_default("dge_mm/pathway_heatmap_group_top",
+# ggsave_default("dge/pathway_heatmap_group_top",
 #                plot = p, width = 150, height = 100)
 
 
 
 
-# Tumor cells -------------------------------------------------------------
-
-## Comparison to bulk data ----
-
-dge$results_wide %>% 
-  filter(cell_type == "NB", comparison == "II_vs_IV", logFC < 10) %>% 
-  inner_join(
-    read_csv("metadata/rifatbegovic2018_table_s5.csv", comment = "#"),
-    by = "gene"
-  ) %>%
-  rename(logfc_sc = logFC, q_sc = p_adj, logfc_bulk = logfc, q_bulk = q) %>%
-  ggplot(aes(logfc_sc, logfc_bulk)) +
-  geom_point(aes(size = -log10(q_sc)), alpha = .5) +
-  geom_smooth(method = "lm") +
-  geom_text_repel(aes(label = gene), seed = 42) +
-  scale_radius(range = c(0.5, 6)) +
-  coord_fixed() +
-  labs(
-    x = "log FC (scRNA-seq)",
-    y = "log FC (bulk)",
-    size = TeX("-log_{10} (p_{adj})"),
-    caption = "bulk values: Table S5 from Rifatbegovic et al 2018"
-  ) +
-  theme_bw()
-
-ggsave_default("dge_mm/mycn_bulk_vs_sc")
-
-
-
-## Pseudobulk correlation ----
+# Pseudobulk correlation of tumor cells -----------------------------------
 
 plot_expc_heatmap_samples <- function() {
   cds_tumor <- dge$cds[, colData(dge$cds)$cellont_abbr == "NB"]
@@ -993,7 +880,7 @@ plot_expc_heatmap_samples <- function() {
 
 (p <- plot_expc_heatmap_samples())
 ggsave_default(
-  "dge_mm/pseudobulk_correlation_tumor",
+  "dge/pseudobulk_correlation_tumor",
   plot = p
 )
 
@@ -1094,7 +981,7 @@ plot_pbc_heatmap <- function(level = "group") {
 (p <- plot_pbc_heatmap())
 
 ggsave_default(
-  "dge_mm/pseudobulk_correlation_group",
+  "dge/pseudobulk_correlation_group",
   plot = p,
   height = 700,
   width = 700
@@ -1103,7 +990,7 @@ ggsave_default(
 (p <- plot_pbc_heatmap("sample"))
 
 ggsave_default(
-  "dge_mm/pseudobulk_correlation_sample",
+  "dge/pseudobulk_correlation_sample",
   plot = p,
   height = 700,
   width = 700

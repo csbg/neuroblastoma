@@ -1,5 +1,5 @@
 # @DEPI metadata.rds
-# @DEPI dge_mm_results.rds
+# @DEPI dge_results.rds
 
 library(scuttle)
 library(monocle3)
@@ -27,7 +27,7 @@ ht_opt(
 
 nb_metadata <- readRDS("data_generated/metadata.rds")
 
-dge <- readRDS("data_generated/dge_mm_results.rds")
+dge <- readRDS("data_generated/dge_results.rds")
 
 
 
