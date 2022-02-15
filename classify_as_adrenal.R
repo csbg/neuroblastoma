@@ -23,11 +23,7 @@ nb <- nb[, colData(nb)$cellont_abbr == "NB"]
 
 tumor_dong <- readRDS("data_generated/tumor_data_dong.rds")
 
-# tumor_jansky <-
-#   readRDS("data_wip/tumor_data_jansky.rds") %>% 
-#   subset(subset = anno_new == "Tumor cells")
-
-ref <- readRDS("data_raw/jansky/reference_adrenal_medulla.rds")
+ref <- readRDS("data_raw/adrmed/reference_adrenal_medulla.rds")
 
 
 

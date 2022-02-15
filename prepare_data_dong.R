@@ -11,7 +11,7 @@ library(fs)
 files_dong <- read_csv("metadata/samples_dong.csv", comment = "#")
 
 metadata_dong <-
-  read_csv("data_raw/GSE137804/GSE137804_tumor_dataset_annotation.csv") %>%
+  read_csv("data_raw/GSE137804/GSE137804_tumor_dataset_annotation.csv.gz") %>%
   separate(cellname, into = c("sample", "cell"), sep = "_")
 
 data_dong <- pmap(
