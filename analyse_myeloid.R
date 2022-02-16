@@ -35,8 +35,6 @@ nb <-
   magrittr::extract(, myeloid_barcodes) %>% 
   logNormCounts(assay.type = "soupx_counts")
 
-markers <- read_csv("metadata/myeloid_markers.csv")
-
 
 
 # Alignment and clustering ------------------------------------------------
