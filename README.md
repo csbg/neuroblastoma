@@ -65,6 +65,8 @@ required by figures and tables.
   analyse copy number variations
 - [analyse_ccc.R](analyse_ccc.R) -
   analyse cell-cell communication
+- [analyse_myeloid.R](analyse_myeloid.R) -
+  analyse myeloid subpopulation
 - [prepare_data_dong.R](prepare_data_dong.R) –
   prepare dataset by Dong et al for analysis
 - [classify_as_adrenal.R](classify_as_adrenal.R) –
@@ -94,6 +96,7 @@ Run these R scripts in arbitrary order to generate publication figures and table
 - [plot_figure_2.R](plot_figure_2.R)
 - [plot_figure_3.R](plot_figure_3.R) - includes Tables S4 and S5
 - [plot_figure_4.R](plot_figure_4.R) - includes Table S6
+- [plot_figure_Sx.R](plot_figure_Sx.R)
 
 
 
