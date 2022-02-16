@@ -55,8 +55,7 @@ required by figures and tables.
 - [correct_ambiance.R](correct_ambiance.R) –
   remove cell-free RNA contamination
 - [classify_cell_types.R](classify_cell_types.R) -
-  perform cell type classification via SingleR;
-  invoke via [sge_classify_cell_types.sh](sge_classify_cell_types.sh)
+  perform cell type classification via SingleR
 - [assemble_metadata.R](assemble_metadata.R) -
   generate one CSV and RDS file with all metadata
 - [analyse_dge.R](analyse_dge.R) -
