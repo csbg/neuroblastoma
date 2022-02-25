@@ -1,0 +1,107 @@
+gene,cell_type,synonym,note,source
+CD14,classical,,,10.3389/fimmu.2019.02035
+FCGR3A,classical,CD16,,10.3389/fimmu.2019.02035
+CD36,classical,,,10.3389/fimmu.2019.02035
+CCR2,classical,,,10.3389/fimmu.2019.02035
+FCGR1A,classical,CD64,,10.3389/fimmu.2019.02035
+CD14,intermediate,,,10.3389/fimmu.2019.02035
+FCGR3A,intermediate,CD16,,10.3389/fimmu.2019.02035
+CCR5,intermediate,,,10.3389/fimmu.2019.02035
+HLA-DRA,intermediate,,,10.3389/fimmu.2019.02035
+LYZ,intermediate,,,10.3389/fimmu.2019.02035
+S100A8,intermediate,,,10.3389/fimmu.2019.02035
+S100A10,intermediate,,,10.3389/fimmu.2019.02035
+CD74,intermediate,,,10.3389/fimmu.2019.02035
+IFI30,intermediate,,,10.3389/fimmu.2019.02035
+HLA-DPB1,intermediate,,,10.3389/fimmu.2019.02035
+CD14,nonclassical,,,10.3389/fimmu.2019.02035
+FCGR3A,nonclassical,CD16,,10.3389/fimmu.2019.02035
+CX3CR1,nonclassical,,,10.3389/fimmu.2019.02035
+CXCR4,nonclassical,,,10.3389/fimmu.2019.02035
+SECISBP2L,nonclassical,SLAN,,10.3389/fimmu.2019.02035
+CD5L,macrophage,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+FCGR3A,macrophage,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+ITGB5,macrophage,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+MERTK,macrophage,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+PILRA,macrophage,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+CCL8,macrophage,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+C1QC,macrophage,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+C1QB,macrophage,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+C1QA,macrophage,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+TLR2,M1,CD282,,10.1186/s12931-018-0891-z
+TLR4,M1,CD284,,10.1186/s12931-018-0891-z
+CD80,M1,,,10.1186/s12931-018-0891-z
+CD86,M1,,,10.1186/s12931-018-0891-z
+TNF,M1,,,10.1126/sciadv.aaz6105
+IL1B,M1,,,10.1126/sciadv.aaz6105
+CXCL8,M1,IL8,,10.1126/sciadv.aaz6105
+IL6,M1,,,10.1126/sciadv.aaz6105
+IL12A,M1,,,10.1126/sciadv.aaz6105
+IL12B,M1,,,10.1126/sciadv.aaz6105
+CCR7,M1,,,10.1126/sciadv.aaz6105
+CD40,M1,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+CXCL10,M1,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+CXCL11,M1,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+CXCL9,M1,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+SLAMF1,M1,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+TNIP3,M1,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+C1QC,M1,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+C1QB,M1,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+C1QA,M1,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+CD5L,M1,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+FCGR3A,M1,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+ITGB5,M1,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+MERTK,M1,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+PILRA,M1,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+CCL8,M1,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+MRC1,M2,CD206,,"10.1186/s12931-018-0891-z, 10.1126/sciadv.aaz6105 "
+MSR1,M2,CD204,,10.1186/s12931-018-0891-z
+CD163,M2,,,"10.1186/s12931-018-0891-z, 10.1126/sciadv.aaz6105 "
+IL10,M2,,,10.1126/sciadv.aaz6105
+ALOX15,M2,,,10.1126/sciadv.aaz6105
+IL1R1,M2,,,10.1126/sciadv.aaz6105
+TGFB1,M2,,,10.1126/sciadv.aaz6105
+HRH1,M2,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+NPL,M2,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+PDCD1LG2,M2,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+RENBP,M2,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+CFP,M2,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+C1QC,M2,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+C1QB,M2,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+C1QA,M2,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+CD5L,M2,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+FCGR3A,M2,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+ITGB5,M2,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+MERTK,M2,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+PILRA,M2,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+CCL8,M2,,,"cansysbio/ConsensusTME, data-raw/Davoli_genes.txt"
+C1QA,TAM,,,10.1101/2020.03.19.998658 
+C1QB,TAM,,,10.1101/2020.03.19.998658 
+C1QC,TAM,,,10.1101/2020.03.19.998658 
+CSF1,TAM,,,10.1101/2020.03.19.998658 
+IL10,TAM,,,10.1101/2020.03.19.998658 
+CD163,TAM,,,10.1101/2020.03.19.998658 
+CCL20,TIM,,,10.1101/2020.03.19.998658 
+CXCL2,TIM,,,10.1101/2020.03.19.998658 
+EREG,TIM,,,10.1101/2020.03.19.998658 
+G0S2,TIM,,,10.1101/2020.03.19.998658 
+ARG1,G-MDSC,,,10.1126/sciimmunol.aay6017
+ARG2,G-MDSC,,,10.1126/sciimmunol.aay6017
+IDO1,G-MDSC,,,10.1126/sciimmunol.aay6017
+IDO2,G-MDSC,,,10.1126/sciimmunol.aay6017
+IL10,G-MDSC,,,10.1126/sciimmunol.aay6017
+TGFB1,G-MDSC,,,10.1126/sciimmunol.aay6017
+ITGAM,G-MDSC,CD11B,,10.1126/sciimmunol.aay6017
+CD14,G-MDSC,,absent,10.1126/sciimmunol.aay6017
+FUT4,G-MDSC,CD15,,10.1126/sciimmunol.aay6017
+CEACAM8,G-MDSC,CD66b,,10.1126/sciimmunol.aay6017
+ARG1,M-MDSC,,,10.1126/sciimmunol.aay6017
+ARG2,M-MDSC,,,10.1126/sciimmunol.aay6017
+IDO1,M-MDSC,,,10.1126/sciimmunol.aay6017
+IDO2,M-MDSC,,,10.1126/sciimmunol.aay6017
+IL10,M-MDSC,,,10.1126/sciimmunol.aay6017
+TGFB1,M-MDSC,,,10.1126/sciimmunol.aay6017
+ITGAM,M-MDSC,CD11B,,10.1126/sciimmunol.aay6017
+CD14,M-MDSC,,,10.1126/sciimmunol.aay6017
+HLA-DRA,M-MDSC,,absent,10.1126/sciimmunol.aay6017
+FUT4,M-MDSC,CD15,absent,10.1126/sciimmunol.aay6017

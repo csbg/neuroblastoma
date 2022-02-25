@@ -3,18 +3,12 @@
 # @DEPI metadata_myeloid.rds
 # @DEPI dge_results_myeloid.rds
 
-# library(scater)
 library(monocle3)
-# library(CellChat)
 library(tidyverse)
 library(latex2exp)
 library(ComplexHeatmap)
-# library(muscat)
-# library(ggrepel)
 library(scico)
 library(RColorBrewer)
-# library(ggpmisc)
-# library(patchwork)
 source("common_functions.R")
 source("styling.R")
 
@@ -375,7 +369,7 @@ dge$gsea %>%
       "nonclass" = "nonclassical mono"
     )
   ) %>% 
-  plot_gsea_dots(db = "MSigDB_Hallmark_2020", height = 150)
+  plot_gsea_dots(db = "TRRUST_Transcription_Factors_2019", height = 250)
 
 dge$gsea %>% 
   filter(comparison == "Mas") %>% 
@@ -448,3 +442,292 @@ reducedDim(cds_my, "UMAP") %>%
 my_metadata %>% 
   select(Barcode = cell, MyeloidCluster = collcluster) %>% 
   write_csv("~/Desktop/my_types.csv")
+
+
+
+
+
+# Gene plots --------------------------------------------------------------
+
+markers <- read_csv("metadata/myeloid_markers.csv")
+markers
+
+
+## Violins ----
+
+diff_genes <-
+  dge$results_wide_filtered %>% 
+  filter(comparison != "Mas", gene %in% markers$gene, p_adj < 0.05) %>% 
+  pull(gene) %>% 
+  unique()
+  {.}
+
+
+
+make_matrix <- function(gene, cell_type) {
+  barcodes <- 
+    my_metadata %>% 
+    filter(collcluster == {{cell_type}}) %>% 
+    pull(cell)
+  
+  logcounts(cds_my)[gene, barcodes, drop = FALSE] %>%
+    t() %>%
+    as.matrix() %>%
+    magrittr::set_colnames("logexp") %>%
+    as_tibble(rownames = "cell") %>%
+    left_join(my_metadata, by = "cell") %>%
+    transmute(
+      gene = gene,
+      cell_type = cell_type,
+      sample = rename_patients(sample),
+      group = rename_groups(group),
+      logexp = logexp / max(logexp)
+    )
+}
+
+plot_violin <- function(genes, cell_types) {
+  plot_data <-
+    list(gene = genes, cell_type = cell_types) %>%
+    cross_df() %>% 
+    pmap_dfr(make_matrix) %>% 
+    mutate(
+      gene = as_factor(gene),
+      cell_type = as_factor(cell_type),
+      cancer_state = fct_collapse(group, C = "C", other_level = "MAS")
+    )
+  
+  ggplot(plot_data, aes(cancer_state, logexp)) +
+    geom_violin(
+      aes(color = cancer_state, fill = cancer_state),
+      size = BASE_LINE_SIZE,
+      scale = "width",
+      width = 0.8,
+      show.legend = FALSE
+    ) +
+    stat_summary(geom = "point", fun = mean, size = .2) +
+    scale_y_continuous(
+      "log-normalized expression",
+      limits = c(0, 1)
+    ) +
+    scale_fill_manual(
+      values = c(GROUP_COLORS, MAS = "purple"),
+      aesthetics = c("color", "fill")
+    ) +
+    facet_grid(
+      vars(gene),
+      vars(cell_type),
+      scales = "free_x",
+      space = "free_x",
+      switch = "y"
+    ) +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      strip.placement = "outside"
+    )
+}
+
+plot_violin(
+  genes = diff_genes,
+  cell_types = c("classical mono", "nonclassical mono", "mDCs", "other")
+)
+ggsave_default("myeloid/genes_violin_sample", height = 400, width = 150)
+ggsave_default("myeloid/genes_violin_group", height = 400, width = 150)
+ggsave_default("myeloid/genes_violin_state", height = 400, width = 150)
+
+
+
+## Pathway genes ----
+
+selected_genes <- list(
+  "TNF-alpha Signaling via NF-kB" = c("IL1B", "FOS", "NFKB1", "MYC", "IFNGR2",
+                                      "CD44", "RELB", "SOD2", "MAP3K8"),
+  "Interferon Gamma Response" = c("IFI44", "NFKB1", "MYD88", "HLA-A", "CD86",
+                                  "HLA-DQA1", "HLA-DQB1", "TNFSF10"),
+  "Myc Targets V1" = c("TRIM28", "PCNA", "CDK4", "MCM5", "HDAC2"),
+  "E2F Targets" = c("DNMT1", "EZH2", "MKI67", "PCNA")
+)
+
+plot_pathway_genes <- function(db = "MSigDB_Hallmark_2020",
+                               pathways = selected_genes,
+                               level = c("group", "sample"),
+                               cell_types = c("classical mono",
+                                              "nonclassical mono",
+                                              "mDCs",
+                                              "other")) {
+  level <- match.arg(level)
+  
+  row_metadata <-
+    pathways %>%
+    enframe("pathway", "gene") %>% 
+    mutate(pathway = as_factor(pathway)) %>% 
+    unnest_longer(gene) %>% 
+    filter(gene %in% rownames(dge$cds))
+  
+  # collect barcodes per column
+  col_metadata <-
+    dge$metadata %>% 
+    filter(
+      collcluster %in% {{cell_types}},
+      cell %in% colnames(dge$cds)
+    ) %>% 
+    mutate(
+      cell_type = factor(collcluster),
+    ) %>% 
+    arrange(group) %>% 
+    {
+      if (level == "sample")
+        group_by(., cell_type, group, sample)
+      else
+        group_by(., cell_type, group)
+    } %>% 
+    summarise(cells = list(cell))
+  
+  # make expression matrix
+  mat <-
+    dge$cds %>% 
+    logcounts() %>% 
+    magrittr::extract(row_metadata$gene, ) %>% 
+    as.matrix()
+  
+  mat <- 
+    col_metadata %>% 
+    pull(cells) %>% 
+    map(~mat[, .] %>% rowMeans()) %>%
+    purrr::reduce(cbind)
+  
+  # scale within cell types
+  if (level == "sample") {
+    mat <- cbind(
+      mat[, 1:16] %>% t() %>% scale() %>% t(),
+      mat[, 17:32] %>% t() %>% scale() %>% t()
+    )
+  } else {
+    mat <- cbind(
+      mat[, 1:4] %>% t() %>% scale() %>% t(),
+      mat[, 5:8] %>% t() %>% scale() %>% t(),
+      mat[, 9:12] %>% t() %>% scale() %>% t(),
+      mat[, 13:16] %>% t() %>% scale() %>% t()
+    )
+  }
+  
+  mat <- replace_na(mat, min(mat, na.rm = TRUE))
+  
+  # plot heatmap
+  Heatmap(
+    mat,
+    name = "expression",
+    col = circlize::colorRamp2(
+      seq(
+        min(mat),
+        max(mat),
+        length.out = 9
+      ),
+      viridisLite::cividis(9)
+    ),
+    border = FALSE,
+    heatmap_legend_param = list(
+      at = c(min(mat), max(mat)),
+      labels = c("low", "high"),
+      border = FALSE,
+      grid_width = unit(2, "mm"),
+      labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      legend_height = unit(15, "mm"),
+      title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+    ),
+    
+    show_row_names = TRUE,
+    row_split = row_metadata$pathway,
+    row_title_rot = 0,
+    cluster_rows = TRUE,
+    cluster_row_slices = FALSE,
+    show_row_dend = TRUE,
+    row_gap = unit(.5, "mm"),
+    row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    
+    cluster_columns = FALSE,
+    column_split = col_metadata$cell_type,
+    show_column_names = FALSE,
+    column_gap = unit(.5, "mm"),
+    column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    
+    width = unit(.5 * (length(cell_types) - 1) + ncol(mat) * 2, "mm"),
+    height = unit(.5 * (length(pathways) - 1) + nrow(mat) * 2, "mm"),
+    
+    top_annotation = HeatmapAnnotation(
+      group = col_metadata$group,
+      col = list(
+        group = GROUP_COLORS
+      ),
+      show_annotation_name = FALSE,
+      annotation_legend_param = list(
+        group = list(
+          grid_width = unit(2, "mm"),
+          labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+          title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+        )
+      )
+    )
+  )
+}
+
+(p <- plot_pathway_genes())
+ggsave_default("myeloid/genes_pathway_heatmap",
+               plot = p, width = 120, height = 180)
+
+
+selected_genes_my <- 
+  markers %>% 
+  group_by(cell_type) %>% 
+  summarise(gene = list(gene)) %>% 
+  deframe()
+
+(p <- plot_pathway_genes(pathways = selected_genes_my))
+ggsave_default("myeloid/genes_my_heatmap",
+               plot = p, width = 120, height = 500)
+
+
+
+## Hexbin UMAP ----
+
+plot_umap_hexbin <- function(...) {
+  genes <- c(...)
+  unknown_genes <- setdiff(genes, rownames(cds_my))
+  if (length(unknown_genes) > 0) {
+    info("Ignoring genes: {unknown_genes}")
+    genes <- setdiff(genes, unknown_genes)
+  }
+  my_metadata %>% 
+    left_join(
+      logcounts(cds_my)[genes, , drop = FALSE] %>% 
+        as.matrix() %>% 
+        t() %>% 
+        as_tibble(rownames = "cell") %>% 
+        pivot_longer(!cell, names_to = "gene", values_to = "expression"),
+      by = "cell"
+    ) %>% 
+    mutate(gene = factor(gene, levels = genes)) %>% 
+    arrange(expression) %>%
+    ggplot(aes(UMAP1, UMAP2)) +
+    geom_hex(aes(weight = expression), bins = 50) +
+    scale_fill_viridis_c(
+      "sum of expression",
+      limits = c(0, 30),
+      breaks = c(0, 30),
+      labels = c("0", "30 or higher"),
+      oob = scales::oob_squish_any
+    ) +
+    coord_fixed() +
+    facet_grid(vars(gene), vars(if_else(group == "C", "C", "M/A/S"))) +
+    theme_nb(grid = FALSE)
+}
+
+plot_umap_hexbin("CD14", "FCGR3A", "EREG", "CD163", "CXCL2", "G0S2",
+                 "IL10", "MSR1", "VEGFA", "PILRA", "TGFB1",
+                 "CD86", "CD58", "CXCR4")
+ggsave_default("myeloid/genes_umap_hexbin", height = 500)
+
+plot_umap_hexbin(diff_genes)
+ggsave_default("myeloid/genes_umap_hexbin_diffgenes", height = 500)
