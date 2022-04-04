@@ -7,6 +7,7 @@ library(monocle3)
 library(tidyverse)
 library(latex2exp)
 library(ComplexHeatmap)
+library(CellChat)
 library(scico)
 library(RColorBrewer)
 source("common_functions.R")
@@ -27,6 +28,9 @@ stopifnot(
   all(dge$results_MNA_vs_other$convergence > -20)
 )
 
+markers <- read_csv("metadata/myeloid_markers.csv")
+markers
+
 
 
 # UMAPs -------------------------------------------------------------------
@@ -38,15 +42,24 @@ plot_umap <- function(cluster_col = collcluster) {
     summarise(UMAP1 = mean(UMAP1), UMAP2 = mean(UMAP2))
   
   ggplot(my_metadata, aes(UMAP1, UMAP2)) +
-    geom_point(aes(color = {{cluster_col}}), size = 0.1, show.legend = FALSE) +
-    geom_text(data = cluster_labels, aes(label = cluster)) +
+    geom_point(
+      aes(color = {{cluster_col}}),
+      size = 0.001,
+      shape = 16,
+      show.legend = FALSE
+    ) +
+    geom_text(
+      data = cluster_labels,
+      aes(label = cluster),
+      size = BASE_TEXT_SIZE_MM
+    ) +
     coord_fixed() +
-    theme_bw() +
+    theme_nb() +
     theme(panel.grid = element_blank())
 }
 
 plot_umap()
-ggsave_default("myeloid/umap")
+ggsave_default("myeloid/umap", height = 50, width = 60)
 
 
 
@@ -220,7 +233,7 @@ plot_celltype_heatmap <- function(cluster_col = collcluster,
 }
 
 (p <- plot_celltype_heatmap(collcluster))
-ggsave_default("myeloid/cell_types", plot = p, width = 150, height = 60)
+ggsave_default("myeloid/cell_types", plot = p, width = 150, height = 56)
 
 
 
@@ -266,7 +279,8 @@ consistent_genes %>%
   geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +  
   xlab("cell type") +
   ylab("number of consistently down- and upregulated genes") +
-  theme_nb()
+  theme_nb() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ggsave_default("myeloid/number_of_consistent_genes", width = 60, height = 60)
 
 
@@ -345,7 +359,7 @@ plot_gsea_dots <- function(data,
     ) +
     theme_bw() +
     theme(
-      axis.text.x = element_text(angle = 90),
+      axis.text.x = element_text(angle = 90, vjust = .5),
       panel.grid = element_blank(),
       panel.spacing = unit(0, "mm"),
       strip.background = element_blank(),
@@ -369,7 +383,7 @@ dge$gsea %>%
       "nonclass" = "nonclassical mono"
     )
   ) %>% 
-  plot_gsea_dots(db = "TRRUST_Transcription_Factors_2019", height = 250)
+  plot_gsea_dots(db = "MSigDB_Hallmark_2020", height = 150)
 
 dge$gsea %>% 
   filter(comparison == "Mas") %>% 
@@ -440,7 +454,12 @@ reducedDim(cds_my, "UMAP") %>%
   write_csv("~/Desktop/my_umap.csv")
 
 my_metadata %>% 
-  select(Barcode = cell, MyeloidCluster = collcluster) %>% 
+  select(
+    Barcode = cell,
+    patient = sample,
+    group,
+    myeloid_cluster = collcluster
+  ) %>% 
   write_csv("~/Desktop/my_types.csv")
 
 
@@ -449,10 +468,6 @@ my_metadata %>%
 
 # Gene plots --------------------------------------------------------------
 
-markers <- read_csv("metadata/myeloid_markers.csv")
-markers
-
-
 ## Violins ----
 
 diff_genes <-
@@ -460,8 +475,6 @@ diff_genes <-
   filter(comparison != "Mas", gene %in% markers$gene, p_adj < 0.05) %>% 
   pull(gene) %>% 
   unique()
-  {.}
-
 
 
 make_matrix <- function(gene, cell_type) {
@@ -485,7 +498,10 @@ make_matrix <- function(gene, cell_type) {
     )
 }
 
-plot_violin <- function(genes, cell_types) {
+plot_violin <- function(genes, split_by, color_by, cell_types = NULL) {
+  if (is.null(cell_types))
+    cell_types <- levels(my_metadata$collcluster)
+  
   plot_data <-
     list(gene = genes, cell_type = cell_types) %>%
     cross_df() %>% 
@@ -496,9 +512,9 @@ plot_violin <- function(genes, cell_types) {
       cancer_state = fct_collapse(group, C = "C", other_level = "MAS")
     )
   
-  ggplot(plot_data, aes(cancer_state, logexp)) +
+  ggplot(plot_data, aes({{split_by}}, logexp)) +
     geom_violin(
-      aes(color = cancer_state, fill = cancer_state),
+      aes(color = {{color_by}}, fill = {{color_by}}),
       size = BASE_LINE_SIZE,
       scale = "width",
       width = 0.8,
@@ -510,7 +526,7 @@ plot_violin <- function(genes, cell_types) {
       limits = c(0, 1)
     ) +
     scale_fill_manual(
-      values = c(GROUP_COLORS, MAS = "purple"),
+      values = c(PATIENT_COLORS, GROUP_COLORS, MAS = "purple"),
       aesthetics = c("color", "fill")
     ) +
     facet_grid(
@@ -528,12 +544,13 @@ plot_violin <- function(genes, cell_types) {
     )
 }
 
-plot_violin(
-  genes = diff_genes,
-  cell_types = c("classical mono", "nonclassical mono", "mDCs", "other")
-)
+plot_violin(diff_genes, sample, group)
 ggsave_default("myeloid/genes_violin_sample", height = 400, width = 150)
+
+plot_violin(diff_genes, group, group)
 ggsave_default("myeloid/genes_violin_group", height = 400, width = 150)
+
+plot_violin(diff_genes, cancer_state, cancer_state)
 ggsave_default("myeloid/genes_violin_state", height = 400, width = 150)
 
 
@@ -554,6 +571,7 @@ plot_pathway_genes <- function(db = "MSigDB_Hallmark_2020",
                                level = c("group", "sample"),
                                cell_types = c("classical mono",
                                               "nonclassical mono",
+                                              "special mono",
                                               "mDCs",
                                               "other")) {
   level <- match.arg(level)
@@ -608,7 +626,8 @@ plot_pathway_genes <- function(db = "MSigDB_Hallmark_2020",
       mat[, 1:4] %>% t() %>% scale() %>% t(),
       mat[, 5:8] %>% t() %>% scale() %>% t(),
       mat[, 9:12] %>% t() %>% scale() %>% t(),
-      mat[, 13:16] %>% t() %>% scale() %>% t()
+      mat[, 13:16] %>% t() %>% scale() %>% t(),
+      mat[, 17:20] %>% t() %>% scale() %>% t()
     )
   }
   
@@ -652,6 +671,7 @@ plot_pathway_genes <- function(db = "MSigDB_Hallmark_2020",
     show_column_names = FALSE,
     column_gap = unit(.5, "mm"),
     column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    column_title_rot = 90,
     
     width = unit(.5 * (length(cell_types) - 1) + ncol(mat) * 2, "mm"),
     height = unit(.5 * (length(pathways) - 1) + nrow(mat) * 2, "mm"),
@@ -731,3 +751,63 @@ ggsave_default("myeloid/genes_umap_hexbin", height = 500)
 
 plot_umap_hexbin(diff_genes)
 ggsave_default("myeloid/genes_umap_hexbin_diffgenes", height = 500)
+
+
+
+## Normal UMAP ----
+
+plot_umap_points <- function(...) {
+  genes <- c(...)
+  unknown_genes <- setdiff(genes, rownames(cds_my))
+  if (length(unknown_genes) > 0) {
+    info("Ignoring genes: {unknown_genes}")
+    genes <- setdiff(genes, unknown_genes)
+  }
+  
+  plot_data <- 
+    my_metadata %>% 
+    left_join(
+      logcounts(cds_my)[genes, , drop = FALSE] %>% 
+        as.matrix() %>% 
+        t() %>% 
+        scale() %>% 
+        as_tibble(rownames = "cell") %>% 
+        pivot_longer(!cell, names_to = "gene", values_to = "expression"),
+      by = "cell"
+    ) %>% 
+    mutate(gene = factor(gene, levels = genes)) %>% 
+    arrange(expression)
+  
+  ggplot(plot_data, aes(UMAP1, UMAP2)) +
+    geom_point(
+      aes(color = expression),
+      size = 0.001,
+      shape = 16,
+    ) +
+    scale_color_viridis_c(
+      "scaled expression",
+      limits = c(NA, quantile(plot_data$expression, .99)),
+      # breaks = c(0, 30),
+      # labels = c("0", "30 or higher"),
+      oob = scales::oob_squish_any
+    ) +
+    coord_fixed() +
+    facet_grid(vars(gene), vars(if_else(group == "C", "C", "M/A/S"))) +
+    theme_nb(grid = FALSE)
+}
+
+plot_umap_points("IL10", "STAT3", "STAT5A", "STAT5B")
+ggsave_default("myeloid/genes_umap_points_IL10_STAT3_5", height = 150)
+
+plot_umap_points("CD14", "FCGR3A", "EREG", "CD163", "CXCL2", "G0S2",
+                 "IL10", "MSR1", "VEGFA", "PILRA", "TGFB1",
+                 "CD86", "CD58", "CXCR4")
+ggsave_default("myeloid/genes_umap_points", height = 500)
+
+plot_umap_points(diff_genes)
+ggsave_default("myeloid/genes_umap_points_diffgenes", height = 500)
+
+plot_umap_points("IFNA2")
+
+
+logcounts(cds_my)["IFNG", , drop = FALSE] 
