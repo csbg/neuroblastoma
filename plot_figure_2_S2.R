@@ -196,7 +196,7 @@ plot_patient_dots <- function(min_exp = -2.5, max_exp = 2.5) {
 }
 
 plot_patient_dots()
-ggsave_publication("2a_nb_markers_patients", width = 7.5, height = 5)
+ggsave_publication("2a_nb_markers_patients", width = 7, height = 5)
 
 
 
@@ -219,7 +219,7 @@ plot_adrmed_profile <- function() {
     geom_col(aes(fill = cell_type), show.legend = FALSE) +
     scale_x_discrete(NULL) +
     scale_y_continuous(
-      "Percentage of cells",
+      "percentage of cells",
       expand = expansion(mult = c(0, 0.05)),
       breaks = c(0, 20, 40)
     ) +
@@ -239,12 +239,12 @@ plot_adrmed_profile <- function() {
         hjust = 1,
         lineheight = 1.25
       ),
-      plot.tag.position = c(0.278, .944),
+      plot.tag.position = c(0.278, .924),
     )
 }
 
 plot_adrmed_profile()
-ggsave_publication("2b_adrmed_profile", width = 8, height = 4)
+ggsave_publication("2b_adrmed_profile", width = 8, height = 3)
 
 
 
@@ -391,7 +391,7 @@ plot_gene_signature <- function() {
   
   ggplot(vis_data, aes(cells, value)) +
     geom_violin(
-      aes(fill = cells),
+      aes(fill = cells, color = cells),
       scale = "width",
       size = BASE_LINE_SIZE
     ) +
@@ -410,7 +410,8 @@ plot_gene_signature <- function() {
       expand = expansion(add = .025)
     ) +
     scale_fill_manual(
-      values = c(CELL_TYPE_COLORS["NB"], "gray80")
+      values = c(CELL_TYPE_COLORS["NB"], "gray60"),
+      aesthetics = c("color", "fill")
     ) +
     coord_flip() +
     facet_grid(vars(signature)) +
@@ -479,19 +480,26 @@ plot_mesenchymal <- function(top_prop = 0.05) {
       labels = function(x) round(x, 2),
       guide = guide_colorbar(
         barwidth = unit(2, "mm"),
-        barheight = unit(15, "mm")
+        barheight = unit(15, "mm"),
+        ticks = FALSE
       )
     ) +
     coord_fixed() +
     facet_wrap(vars(signature)) +
     theme_nb(grid = FALSE) +
     theme(
-      legend.position = c(.95, .32)
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
+      legend.position = c(.95, .32),
+      panel.border = element_blank(),
+      plot.background = element_blank()
     )
 }
 
 plot_mesenchymal()
-ggsave_publication("S2b_signature_umap", type = "png", width = 9, height = 5)
+ggsave_publication("S2b_signature_umap", type = "png",
+                   width = 9, height = 5, bg = "transparent")
 
 
 
@@ -640,25 +648,29 @@ plot_adrmed_heatmap <- function() {
         str_sub(sample, 1, 1) %>%
         fct_relevel(names(GROUP_COLORS))
     )
-  
+  Legend
   Heatmap(
     mat,
     col = RColorBrewer::brewer.pal(9, "YlOrBr"),
-    name = "relative\nabundance",
+    name = "relative abundance",
     heatmap_legend_param = list(
       at = round(c(min(mat), max(mat)), 2),
+      direction = "horizontal",
       border = FALSE,
-      grid_width = unit(2, "mm"),
+      grid_height = unit(2, "mm"),
       labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-      legend_height = unit(15, "mm"),
-      title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
+      legend_width = unit(15, "mm"),
+      title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+      title_position = "lefttop"
     ),
     
     column_split =
       fct_cross(col_metadata$tumor, col_metadata$mycn_status) %>% 
       fct_relevel("DTC:normal", "DTC:amplified", "primary:normal"),
     cluster_column_slices = FALSE,
-    column_title = NULL,
+    column_title = "patient",
+    column_title_side = "bottom",
+    column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     column_dend_gp = gpar(lwd = 0.5),
     column_dend_height = unit(3, "mm"),
@@ -680,7 +692,12 @@ plot_adrmed_heatmap <- function() {
         mycn = MYCN_STATUS_COLORS,
         group = GROUP_COLORS
       ),
-      show_annotation_name = FALSE,
+      show_legend = FALSE,
+      show_annotation_name = TRUE,
+      annotation_label = list(
+        mycn = "MYCN status"
+      ),
+      annotation_name_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
       annotation_legend_param = list(
         mycn = list(
           title = "MYCN status",
@@ -695,16 +712,17 @@ plot_adrmed_heatmap <- function() {
         )
       )
     )
-  )
+  ) %>% 
+    draw(heatmap_legend_side = "bottom")
 }
 
 (p <- plot_adrmed_heatmap())
-ggsave_publication("S2d_adrmed_heatmap", plot = p, height = 5, width = 12)
+ggsave_publication("S2d_adrmed_heatmap", plot = p, height = 6, width = 9)
 
 
 
 ## S2e ----
 
-(p <- plot_corr_mat(40, annotate_mycn = TRUE))
-ggsave_publication("S2e_pseudobulk_cor_all", plot = p, height = 4.5, width = 8)
+(p <- plot_corr_mat(45, annotate_mycn = TRUE))
+ggsave_publication("S2e_pseudobulk_cor_all", plot = p, height = 5, width = 9)
 

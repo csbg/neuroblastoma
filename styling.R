@@ -117,6 +117,14 @@ CONSISTENT_GENES_COLORS <- c(
   "A and M" = "#c1bc78"
 )
 
+# Paul Tol's bright
+MYELOID_COLORS <- c(
+  "classical mono" = "#ccbb44",
+  "nonclassical mono" = "#66ccee",
+  "mDCs" = "#ee6677",
+  other = "#bbbbbb"
+)
+
 
 
 # ggplot functions --------------------------------------------------------
@@ -398,15 +406,27 @@ rename_adrenal_cells <- partial(
   )
 )
 
-rename_enrichment_terms <- function(s) {
-  s %>%
-    str_replace_all("[:punct:]GO[:punct:]", "") %>%
-    str_replace_all("[0-9]{7}", "") %>%
-    str_replace_all("[:space:][:punct:]$", "") %>%
-    str_replace_all("[:space:][:punct:]human[:punct:]", "") %>%
-    str_replace_all("[:space:]Homo sapiens", "") %>%
-    str_replace_all("[:space:][:graph:]{36}$", "")
-}
+rename_myeloid <- partial(
+  rename_str_or_fct,
+  nm = tribble(
+    ~old,  ~new,
+    "classical mono",    "classical monocytes",
+    "nonclassical mono", "nonclassical monocytes",
+    "mDCs",              "myeloid dendritic cells",
+    "other",             "other"
+  )
+)
+
+rename_myeloid_newline <- partial(
+  rename_str_or_fct,
+  nm = tribble(
+    ~old,  ~new,
+    "classical mono",    "classical\nmonocytes",
+    "nonclassical mono", "nonclassical\nmonocytes",
+    "mDCs",              "myeloid\ndendritic cells",
+    "other",             "other"
+  )
+)
 
 
 

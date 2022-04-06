@@ -165,17 +165,9 @@ snparray_data <- read_snparray_data("data_raw/snp_array", snparray_sample_names)
 
 # Figures -----------------------------------------------------------------
 
-ht_opt(
-  simple_anno_size = unit(1.5, "mm"),
-  DENDROGRAM_PADDING = unit(1, "pt"),
-  ROW_ANNO_PADDING = unit(1, "pt"),
-  TITLE_PADDING = unit(1, "mm")
-)
-
-
 ## 1a ----
 
-# no coded needed
+# drawn manually
 
 
 
@@ -237,24 +229,28 @@ plot_umap <- function() {
     coord_fixed() +
     theme_nb(grid = FALSE) +
     theme(
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
       legend.key.height = unit(2, "mm"),
       legend.key.width = unit(1, "mm"),
-      # legend.position = "bottom"
-      # legend.position = c(.9, .22),
-      legend.margin = margin()
+      legend.margin = margin(),
+      panel.border = element_blank(),
+      plot.background = element_blank()
     )
   
   p
 }
 
 plot_umap()
-ggsave_publication("1b_umap_dataset", type = "png", width = 8.5, height = 5)
+ggsave_publication("1b_umap_dataset", type = "png",
+                   width = 8.5, height = 5, bg = "transparent")
 
 
 
 ## 1c ----
 
-plot_celltype_heatmap <- function(clusters = 1:20, cell_size = 2,
+plot_celltype_heatmap <- function(clusters = 1:20, cell_size = 2.2,
                                   collapse = TRUE) {
   # generate matrix of cell type abundances
   make_matrix <- function(ref) {
@@ -731,9 +727,9 @@ plot_cnv_data_comparison <- function(selected_samples,
     ) +
     scale_fill_identity(
       name = NULL,
-      guide = guide_legend(ncol = 1),
+      guide = guide_legend(nrow = 2),
       breaks = cn_metadata$color,
-      labels = cn_metadata$label
+      labels = cn_metadata$label,
     ) +
     coord_cartesian(ylim = c(0, 2)) +
     facet_grid(
@@ -751,7 +747,8 @@ plot_cnv_data_comparison <- function(selected_samples,
       axis.text.x = element_blank(),
       legend.key.height = unit(2, "mm"),
       legend.key.width = unit(2, "mm"),
-      legend.margin = margin(0, 0, -3, -1, "mm"),
+      legend.position = "bottom",
+      legend.margin = margin(-1, 0, 0, 0, "mm"),
       panel.spacing.x = unit(-.5, "pt"),
       panel.spacing.y = unit(1, "mm"),
       panel.background = element_rect(color = NA, fill = cn_color(0)),
@@ -764,7 +761,7 @@ plot_cnv_data_comparison <- function(selected_samples,
 }
 
 plot_cnv_data_comparison(c("2016_4503", "2005_1702", "2006_2684"))
-ggsave_publication("1e_cnv_comparison", width = 18, height = 6)
+ggsave_publication("1e_cnv_comparison", width = 11, height = 6)
 
 
 
@@ -809,15 +806,21 @@ plot_umap_unintegrated <- function() {
     facet_wrap(vars(aligned)) +
     theme_nb(grid = FALSE) +
     theme(
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title = element_blank(),
       legend.title.align = 1,
       legend.key.height = unit(1, "mm"),
       legend.key.width = unit(1, "mm"),
-      legend.position = c(.92, .24)
+      legend.position = c(.92, .24),
+      panel.border = element_blank(),
+      plot.background = element_blank()
     )
 }
 
 plot_umap_unintegrated()
-ggsave_publication("S1a_umap_integration", type = "png", width = 9, height = 5)
+ggsave_publication("S1a_umap_integration", type = "png",
+                   width = 9, height = 5, bg = "transparent")
 
 
 
@@ -875,7 +878,7 @@ plot_infiltration_rate <- function() {
     facet_wrap(vars(group), nrow = 1) +
     theme_nb(grid = FALSE) +
     theme(
-      axis.text.x = element_text(angle = 45, hjust = 1),
+      # axis.text.x = element_text(angle = 45, hjust = 1),
       panel.grid.major.y = element_line(
         color = "grey92",
         size = BASE_LINE_SIZE
@@ -888,7 +891,7 @@ plot_infiltration_rate <- function() {
 }
 
 plot_infiltration_rate()
-ggsave_publication("S1b_tif", width = 5, height = 4)
+ggsave_publication("S1b_tif", width = 9, height = 5)
 
 
 
@@ -994,7 +997,7 @@ plot_resexp_tumor <- function(cells_per_sample = 50L) {
 
 (p <- plot_resexp_tumor())
 ggsave_publication("S1c_resexp_tumor", plot = p,
-                   type = "png", width = 11, height = 6)
+                   type = "png", width = 18, height = 7.5)
 
 
 
