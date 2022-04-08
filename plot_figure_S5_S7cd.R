@@ -47,7 +47,7 @@ markers <- read_csv("metadata/myeloid_markers.csv")
 
 # Figures -----------------------------------------------------------------
 
-## S4a ----
+## S5a ----
 
 plot_celltype_heatmap <- function(cluster_col = collcluster,
                                   clusters = NULL,
@@ -168,11 +168,11 @@ plot_celltype_heatmap <- function(cluster_col = collcluster,
 }
 
 (p <- plot_celltype_heatmap(collcluster))
-ggsave_publication("S4a_myeloid_types", plot = p, width = 14, height = 6)
+ggsave_publication("S5a_myeloid_types", plot = p, width = 14, height = 6)
 
 
 
-## S4b ----
+## S5b ----
 
 plot_umap <- function() {
   adjust_positions <- tribble(
@@ -223,12 +223,12 @@ plot_umap <- function() {
 }
 
 plot_umap()
-ggsave_publication("S4b_umap_myeloid", type = "png",
+ggsave_publication("S5b_umap_myeloid", type = "png",
                    height = 5, width = 6, bg = "transparent")
 
 
 
-## S4c ----
+## S5c ----
 
 plot_gsea <- function(db = "MSigDB_Hallmark_2020",
                       comparisons = NULL,
@@ -341,11 +341,11 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
 }
 
 plot_gsea()
-ggsave_publication("S4c_gsea", width = 8, height = 8)
+ggsave_publication("S5c_gsea", width = 8, height = 8)
 
 
 
-## S4d ----
+## S5d ----
 
 plot_genes <- function(...,
                        dataset = c("myeloid", "all"),
@@ -425,11 +425,11 @@ plot_genes <- function(...,
 }
 
 plot_genes("CD163", "CXCL2", "VEGFA", "EREG")
-ggsave_publication("S4d_genes", type = "png",
+ggsave_publication("S5d_genes", type = "png",
                    width = 10, height = 8, bg = "transparent")
 
 
-## S6c ----
+## S7c ----
 
 plot_genes("IL10", dataset = "all", colorbar_quantiles = c(0, 0.995)) +
   theme(
@@ -437,16 +437,16 @@ plot_genes("IL10", dataset = "all", colorbar_quantiles = c(0, 0.995)) +
     strip.text.y = element_blank(),
     legend.position = "none"
   )
-ggsave_publication("S6c_IL10_all", type = "png",
+ggsave_publication("S7c_IL10_all", type = "png",
                    width = 5, height = 11, bg = "transparent")
 
 
 
-## S6d ----
+## S7d ----
 
 plot_genes("IL10") +
   theme(strip.text.x = element_blank())
-ggsave_publication("S6d_IL10_myeloid", type = "png",
+ggsave_publication("S7d_IL10_myeloid", type = "png",
                    width = 5, height = 11, bg = "transparent")
 
 

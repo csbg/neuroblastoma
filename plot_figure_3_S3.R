@@ -407,6 +407,54 @@ ggsave_publication("3g_violins_MK", width = 8.5, height = 9)
 
 
 
+## S3 ----
+
+plot_netvisual <- function(layout = "hierarchy", width = 16, height = 16) {
+  colors_ccc_network <-
+    CELL_TYPE_COLORS[c("NB", "pDC", "M", "B", "T", "NK", "SC", "E")]
+  
+  target_cells <- 2:6
+  
+  pdf("plots/final/S3_interactions.pdf",
+      width = width / 2.54,
+      height = height / 2.54)
+  
+  netVisual_individual(
+    cellchat,
+    signaling = "MIF",
+    pairLR.use = "MIF_CD74_CXCR4",
+    vertex.receiver = target_cells,
+    color.use = colors_ccc_network,
+    layout = layout
+  )
+  
+  netVisual_individual(
+    cellchat,
+    signaling = "MIF",
+    pairLR.use = "MIF_CD74_CD44",
+    vertex.receiver = target_cells,
+    color.use = colors_ccc_network,
+    layout = layout
+  )
+  
+  netVisual_individual(
+    cellchat,
+    signaling = "MK",
+    pairLR.use = "MDK_NCL",
+    vertex.receiver = target_cells,
+    color.use = colors_ccc_network,
+    layout = layout
+  )
+  
+  dev.off()
+}
+
+plot_netvisual()
+plot_netvisual("circle", width = 12, height = 12)
+plot_netvisual("chord", width = 12, height = 12)
+
+
+
 # Tables ------------------------------------------------------------------
 
 ## S6 ----

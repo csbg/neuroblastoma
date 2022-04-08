@@ -468,7 +468,7 @@ ggsave_publication("4e_pathway_genes",
 
 
 
-## S3a ----
+## S4a ----
 
 plot_celltype_enrichment <- function(p_lim = 20, or_lim = 3) {
   do_fisher_test <- function(sample, cellont_abbr) {
@@ -567,11 +567,11 @@ plot_celltype_enrichment <- function(p_lim = 20, or_lim = 3) {
 }
 
 plot_celltype_enrichment()
-ggsave_publication("S3a_cell_type_enrichment", width = 5, height = 4)
+ggsave_publication("S4a_cell_type_enrichment", width = 5, height = 4)
 
 
 
-## S3b ----
+## S4b ----
 
 plot_gsea(comparisons = "M vs A+S") +
   xlab("M vs A+S\ncomparison") +
@@ -580,11 +580,11 @@ plot_gsea(comparisons = "M vs A+S") +
     axis.text.x = element_blank(),
     strip.text = element_text(angle = 90, hjust = 0)
   )
-ggsave_publication("S3b_gsea_all_vs_AS", width = 9, height = 9)
+ggsave_publication("S4b_gsea_all_vs_AS", width = 9, height = 9)
 
 
 
-## S3c ----
+## S4c ----
 
 plot_pathway_genes_sc <- function(db = "MSigDB_Hallmark_2020",
                                   pathways = c(
@@ -701,16 +701,16 @@ plot_pathway_genes_sc <- function(db = "MSigDB_Hallmark_2020",
 }
 
 (p <- plot_pathway_genes_sc())
-ggsave_publication("S3c_pathway_genes_sc", type = "png",
+ggsave_publication("S4c_pathway_genes_sc", type = "png",
                    plot = p, width = 9, height = 5)
 
 
 
-## S6b ----
+## S7b ----
 
 plot_gsea(db = "TRRUST_Transcription_Factors_2019",
           comparisons = c("M vs C", "A vs C", "S vs C"))
-ggsave_publication("S6b_gsea", width = 8, height = 11)
+ggsave_publication("S7b_gsea", width = 8, height = 11)
 
 
 

@@ -91,11 +91,11 @@ Run these R scripts in arbitrary order to generate exploratory figures:
 
 Run these R scripts in arbitrary order to generate publication figures and tables:
 
-- [plot_figure_1.R](plot_figure_1.R) - includes Tables S2 and S3
-- [plot_figure_2.R](plot_figure_2.R)
-- [plot_figure_3.R](plot_figure_3.R) - includes Tables S4 and S5
-- [plot_figure_4.R](plot_figure_4.R) - includes Table S6
-- [plot_figure_Sx.R](plot_figure_Sx.R)
+- [plot_figure_1_S1.R](plot_figure_1_S1.R) - includes Tables S2 and S3
+- [plot_figure_2_S2.R](plot_figure_2_S2.R)
+- [plot_figure_3_S3.R](plot_figure_3_S3.R) - includes Table S6
+- [plot_figure_4_S4_S7b.R](plot_figure_4_S4_S7b.R) - includes Tables S4 and S5
+- [plot_figure_S5_S7cd.R](plot_figure_S5_S7cd.R)
 
 
 
