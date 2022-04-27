@@ -95,7 +95,7 @@ Run these R scripts in arbitrary order to generate publication figures and table
 - [plot_figure_2_S2.R](plot_figure_2_S2.R)
 - [plot_figure_3_S3.R](plot_figure_3_S3.R) - includes Table S6
 - [plot_figure_4_S4_S7b.R](plot_figure_4_S4_S7b.R) - includes Tables S4 and S5
-- [plot_figure_S5_S7cd.R](plot_figure_S5_S7cd.R)
+- [plot_figure_S5_S7c.R](plot_figure_S5_S7c.R) - includes Table S7 and S8
 
 
 

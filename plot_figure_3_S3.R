@@ -32,14 +32,13 @@ sig_data <- readRDS("data_generated/ccc_signaling_data.rds")
 plot_n_interactions <- function() {
   rc_order <- names(CELL_TYPE_ABBREVIATIONS)
   mat <- cellchat@net$count[rc_order, rc_order]
-  bar_colors <- CELL_TYPE_COLORS[colnames(mat)]
   total_target <- colSums(mat)
   total_source <- rowSums(mat)
   bar_ylim <- c(0, max(total_source, total_target))
   
   Heatmap(
     mat,
-    col = RColorBrewer::brewer.pal(9, "Reds"),
+    col = RColorBrewer::brewer.pal(9, "YlOrBr"),
     name = "number of\ninteractions",
     
     cluster_rows = FALSE, 
@@ -63,7 +62,7 @@ plot_n_interactions <- function() {
         ylim = bar_ylim,
         border = FALSE, 
         axis = FALSE,
-        gp = gpar(fill = bar_colors, col = bar_colors)
+        gp = gpar(fill = "gray70", col = "gray70")
       ),
       count_text = anno_text(
         total_target, 
@@ -83,7 +82,7 @@ plot_n_interactions <- function() {
         ylim = bar_ylim,
         border = FALSE, 
         axis = FALSE,
-        gp = gpar(fill = bar_colors, col = bar_colors)
+        gp = gpar(fill = "gray70", col = "gray70")
       ),
       simple_anno_size_adjust = TRUE,
       show_annotation_name = FALSE
@@ -126,11 +125,12 @@ plot_contribution_celltype <- function(cell_type = "NB", signif = 0.05) {
     mutate(prob.avg = prob.norm / count) %>% 
     mutate(interaction = fct_reorder(interaction, prob.norm)) %>% 
     ggplot(aes(interaction, prob.norm)) +
-    geom_col(fill = "#23cfc3", width = 0.85) +
+    geom_col(fill = "#ffb03e", width = 0.85) +
     geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
     geom_text(
       aes(y = 2.68, label = pathway_name),
-      size = BASE_TEXT_SIZE_MM
+      size = BASE_TEXT_SIZE_MM,
+      fontface = "italic"
     ) +
     xlab("ligand-receptor pair") +
     scale_y_continuous(
@@ -181,7 +181,7 @@ plot_selected_dots <- function(pathways, source_type = "NB") {
     scale_color_distiller(
       "relative communication score",
       type = "seq",
-      palette = "Reds",
+      palette = "YlOrBr",
       direction = 1,
       breaks = round(range(vis_data$prob.norm), 2),
       guide = guide_colorbar(
@@ -217,11 +217,11 @@ plot_selected_dots <- function(pathways, source_type = "NB") {
       panel.spacing = unit(-BASE_LINE_SIZE / 2, "pt"),
       
       strip.background.y = element_rect(
-        fill = "#FBDE96",
+        fill = "gray95",
         size = BASE_LINE_SIZE
       ),
       strip.background.x = element_rect(
-        fill = "lightblue", 
+        fill = "gray95",
         size = BASE_LINE_SIZE
       ),
       strip.text.x =  element_text(
@@ -236,9 +236,6 @@ plot_selected_dots <- function(pathways, source_type = "NB") {
       ),
       strip.switch.pad.grid = unit(0, "pt"),
       
-      # legend.box.spacing = unit(1, "mm"),
-      # legend.key.size = unit(5, "mm"),
-      # legend.margin = margin(t = 2, b = 0, r = 0, l = 0, unit = "mm"),
       legend.position = c(-.4, -.2),
       legend.direction = "horizontal",
       legend.text = element_text(size = BASE_TEXT_SIZE_PT),
@@ -253,7 +250,7 @@ ggsave_publication("3c_dots", height = 5, width = 7)
 
 ## 3d ----
 
-plot_centrality <- function(pathway) {
+plot_centrality <- function(pathway, row_names_side = "left") {
   centralities <- cellchat@netP$centr[[pathway]]
   
   mat <- 
@@ -277,36 +274,29 @@ plot_centrality <- function(pathway) {
   
   Heatmap(
     mat, 
-    col = RColorBrewer::brewer.pal(9, "YlOrRd"),
+    col = RColorBrewer::brewer.pal(9, "PuBu"),
     name = "importance",
     
     cluster_rows = FALSE,
-    row_names_side = "left",
+    row_names_side = row_names_side,
     row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
     
     cluster_columns = FALSE, 
+    column_names_side = "top",
     column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
-    column_title = str_glue("{pathway} signaling pathway network"),
+    column_title = str_glue("cell type"),
+    column_title_side = "top",
     column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
     
-    width = unit(36, "mm"),
-    height = unit(18, "mm"), 
-    
-    bottom_annotation = HeatmapAnnotation(
-      group = colnames(mat), 
-      col = list(group = CELL_TYPE_COLORS[colnames(mat)]), 
-      which = "column", 
-      show_legend = FALSE, 
-      show_annotation_name = FALSE, 
-      simple_anno_size = grid::unit(0.2, "cm")
-    ), 
+    width = unit(20, "mm"),
+    height = unit(10, "mm"), 
     
     heatmap_legend_param = list(
       title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT, fontface = "plain"), 
       title_position = "leftcenter-rot", 
       border = NA, 
       at = c(0, 1), 
-      legend_height = unit(20, "mm"), 
+      legend_height = unit(10, "mm"), 
       labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT), 
       grid_width = unit(2, "mm")
     )
@@ -314,13 +304,12 @@ plot_centrality <- function(pathway) {
 }
 
 (p <- plot_centrality("MIF"))
-ggsave_publication("3d_importance_MIF", plot = p, width = 6, height = 3.5)
-Legend
+ggsave_publication("3d_importance_MIF", plot = p, width = 5, height = 3)
 
 
 ## 3e ----
 
-(p <- plot_centrality("MK"))
+(p <- plot_centrality("MK", row_names_side = "right"))
 ggsave_publication("3e_importance_MK", plot = p, width = 6, height = 3.5)
 
 
@@ -352,12 +341,20 @@ make_matrix <- function(gene, cell_type) {
     )
 }
 
-plot_violin <- function(genes, cell_types) {
+plot_violin <- function(genes, cell_types, y_axis_pos = "left") {
   plot_data <-
     list(gene = genes, cell_type = cell_types) %>%
     cross_df() %>% 
     pmap_dfr(make_matrix) %>% 
     mutate(gene = as_factor(gene), cell_type = as_factor(cell_type))
+  
+  if (y_axis_pos == "left") {
+    switch <- "y"
+    position <- "left"
+  } else {
+    switch <- NULL
+    position <- "right"
+  }
     
   ggplot(plot_data, aes(sample, logexp)) +
     geom_violin(
@@ -370,8 +367,9 @@ plot_violin <- function(genes, cell_types) {
     stat_summary(geom = "point", fun = mean, size = .2) +
     xlab("patient") +
     scale_y_continuous(
-      "log-normalized expression",
-      limits = c(0, 1)
+      "log-normalized expression of gene",
+      limits = c(0, 1),
+      position = position
     ) +
     scale_fill_manual(values = GROUP_COLORS, aesthetics = c("color", "fill")) +
     facet_grid(
@@ -379,13 +377,15 @@ plot_violin <- function(genes, cell_types) {
       vars(cell_type),
       scales = "free_x",
       space = "free_x",
-      switch = "y"
+      switch = switch
     ) +
     theme_nb(grid = FALSE) +
     theme(
       axis.text.y = element_blank(),
       axis.ticks.y = element_blank(),
-      strip.placement = "outside"
+      axis.title.y.right = element_text(margin = margin(l = 6.75, unit = "pt")),
+      strip.placement = "outside",
+      strip.switch.pad.grid = unit(0, "mm")
     )
 }
 
@@ -401,7 +401,8 @@ ggsave_publication("3f_violins_MIF", width = 8.5, height = 9)
 
 plot_violin(
   genes = c("MDK", "LRP1", "NCL", "ALK"),
-  cell_types = c("NB", "M")
+  cell_types = c("NB", "M"),
+  y_axis_pos = "right"
 )
 ggsave_publication("3g_violins_MK", width = 8.5, height = 9)
 
@@ -450,8 +451,6 @@ plot_netvisual <- function(layout = "hierarchy", width = 16, height = 16) {
 }
 
 plot_netvisual()
-plot_netvisual("circle", width = 12, height = 12)
-plot_netvisual("chord", width = 12, height = 12)
 
 
 

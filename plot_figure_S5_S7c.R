@@ -11,6 +11,7 @@ library(ComplexHeatmap)
 library(CellChat)
 library(scico)
 library(RColorBrewer)
+library(patchwork)
 source("common_functions.R")
 source("styling.R")
 
@@ -125,12 +126,11 @@ plot_celltype_heatmap <- function(cluster_col = collcluster,
   
   mat <- mat[, col_metadata$colname]
   colnames(mat) <- col_metadata$cell_type
-  rownames(mat) <- rename_myeloid(rownames(mat))
   
   # draw heatmap  
   set.seed(2)
   Heatmap(
-    mat,
+    mat %>% magrittr::set_rownames(rename_myeloid(rownames(.))),
     col = colorRampPalette(brewer.pal(9, "YlOrBr"))(100),
     
     heatmap_legend_param = list(
@@ -155,9 +155,17 @@ plot_celltype_heatmap <- function(cluster_col = collcluster,
     column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     
     cluster_columns = FALSE,
-    column_gap = unit(1, "mm"),  # 50 x 4 cells, 4 gaps
-    width = unit(95, "mm"),
-    height = unit(7.28, "mm")
+    column_gap = unit(0.5, "mm"),  # 50 x 4 cells, 4 gaps
+    
+    width = unit(93, "mm"),
+    height = unit(7.28, "mm"),
+    
+    right_annotation = rowAnnotation(
+      cell_type = rownames(mat),
+      col = list(cell_type = MYELOID_COLORS),
+      show_annotation_name = FALSE,
+      show_legend = FALSE
+    )
   ) %>%
     draw(
       gap = unit(50, "mm"),
@@ -293,7 +301,7 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
   if (nlevels(data_vis$pathway) > 5) {
     horizontal_grid <-
       geom_hline(
-        yintercept = seq(5, nlevels(data_vis$pathway), 5),
+        yintercept = seq(6, nlevels(data_vis$pathway), 5) - 0.5,
         size = BASE_LINE_SIZE,
         color = "grey92"
       )
@@ -307,8 +315,8 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
     scale_y_discrete() +
     horizontal_grid +    
     geom_point(aes(color = NES)) +
-    xlab("comparison (genetic subtype vs control)") +
-    ylab(NULL) +
+    xlab("comparison (NB subtype vs control)") +
+    ylab(str_glue("{str_replace_all(db, '_', ' ')} gene set")) +
     scale_color_gsea(
       "normalized\nenrichment\nscore",
       limits = c(-color_limit, color_limit),
@@ -341,7 +349,7 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
 }
 
 plot_gsea()
-ggsave_publication("S5c_gsea", width = 8, height = 8)
+ggsave_publication("S5c_gsea", width = 8, height = 7.8)
 
 
 
@@ -395,8 +403,13 @@ plot_genes <- function(...,
       size = 0.001,
       shape = 16,
     ) +
-    scale_color_viridis_c(
+    scico::scale_color_scico(
       "scaled\nexpression",
+      palette = "acton",
+      direction = -1,
+      # palette = "bilbao",
+      # direction = 1,
+      # begin = 0.1,
       limits = colorbar_limits,
       breaks = colorbar_limits,
       labels = c("low", "high"),
@@ -410,13 +423,14 @@ plot_genes <- function(...,
         title.vjust = 1
       )
     ) +
+    scale_x_continuous("gene", position = "top") +
     coord_fixed() +
-    facet_grid(vars(if_else(group == "C", "C", "M/A/S")), vars(gene)) +
+    facet_grid(vars(if_else(group == "C", "control group", "NB patients")), vars(gene)) +
     theme_nb(grid = FALSE) +
     theme(
       axis.text = element_blank(),
       axis.ticks = element_blank(),
-      axis.title = element_blank(),
+      axis.title.y = element_blank(),
       legend.position = "bottom",
       legend.spacing.x = unit(2, "mm"),
       panel.border = element_blank(),
@@ -429,31 +443,36 @@ ggsave_publication("S5d_genes", type = "png",
                    width = 10, height = 8, bg = "transparent")
 
 
+
 ## S7c ----
 
-plot_genes("IL10", dataset = "all", colorbar_quantiles = c(0, 0.995)) +
+wrap_plots(
+  plot_genes("IL10", dataset = "all", colorbar_quantiles = c(0, 0.995)) +
+    ggtitle("all cells") +
+    theme(strip.text.y = element_blank()),
+  plot_genes("IL10") +
+    ggtitle("myeloid cells"),
+  nrow = 1,
+  guides = "collect"
+) &
   theme(
+    axis.title.x = element_blank(),
+    legend.position = "bottom",
+    plot.title = element_text(
+      size = BASE_TEXT_SIZE_PT,
+      hjust = 0.5,
+      margin = margin(b = -1, unit = "mm")
+    ),
     strip.text.x = element_blank(),
-    strip.text.y = element_blank(),
-    legend.position = "none"
   )
-ggsave_publication("S7c_IL10_all", type = "png",
-                   width = 5, height = 11, bg = "transparent")
-
-
-
-## S7d ----
-
-plot_genes("IL10") +
-  theme(strip.text.x = element_blank())
-ggsave_publication("S7d_IL10_myeloid", type = "png",
-                   width = 5, height = 11, bg = "transparent")
+ggsave_publication("S7c_IL10", type = "png",
+                   width = 11, height = 11, bg = "transparent")
 
 
 
 # Tables ------------------------------------------------------------------
 
-## S4 ----
+## S7 ----
 
 gene_pathways <- 
   CellChatDB.human$interaction %>% 
@@ -483,8 +502,7 @@ dge$results_wide_filtered %>%
   arrange(comparison, cell_type, desc(logFC)) %>%
   mutate(
     logFC = logFC / log(2),  # nebula returns natural log fold changes
-    comparison = recode(comparison, Ac = "A vs C", Mc = "M vs C",
-                        Sc = "S vs C", Mas = "M vs A+S"),
+    comparison = rename_contrast_long_alt(comparison),
   ) %>%
   select(!c(p, frq, frq_ref, direction)) %>%
   pivot_wider(names_from = comparison, values_from = c(logFC, p_adj)) %>%
@@ -493,4 +511,31 @@ dge$results_wide_filtered %>%
   left_join(gene_pathways, by = c(gene = "Gene")) %>%
   split(.$cell_type) %>%
   map(select, !cell_type) %>%
-  save_table("Sxxx_dge_myeloid")
+  save_table("S7_dge_myeloid")
+
+
+
+## S8 ----
+
+dge$gsea %>% 
+  arrange(db, comparison, cell_type, desc(NES)) %>%
+  mutate(
+    comparison = rename_contrast_long_alt(comparison),
+    cell_type = rename_myeloid(cell_type),
+    leadingEdge = map_chr(leadingEdge, str_c, collapse = ", ")
+  ) %>%
+  filter(
+    db %in% c("MSigDB_Hallmark_2020", "TRRUST_Transcription_Factors_2019")
+  ) %>% 
+  select(
+    "Database" = db,
+    "Comparison" = comparison,
+    "Cell type" = cell_type,
+    "Pathway" = pathway,
+    "Normalized Enrichment Score" = NES,
+    "Adjusted p-value" = padj,
+    "Leading edge genes" = leadingEdge
+  ) %>%
+  split(.$`Cell type`) %>%
+  map(select, !`Cell type`) %>%
+  save_table("S8_gsea_myeloid")

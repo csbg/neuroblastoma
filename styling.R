@@ -100,12 +100,13 @@ ADRMED_CELLS_COLORS <- c(
   "late Chromaffin cells" = "#686c58",
   "cycling Neuroblasts" = "#aacedc",
   "Neuroblasts" = "#244a94",
-  "late Neuroblasts" = "#303d63"
+  "late Neuroblasts" = "#303d63",
+  "other" = "gray50"
 )
 
 # MYCN status
 MYCN_STATUS_COLORS <- c(
-  "normal" = "gray95",
+  "wildtype" = "gray95",
   "amplified" = "gray50"
 )
 
@@ -338,6 +339,21 @@ rename_groups <- partial(
   )
 )
 
+rename_groups_long <- function(s, with_newline = TRUE) {
+  long_group_names <- c(
+    "C<br>(control)" = "C",
+    "M<br>(<i>MYCN</i> amplified)" = "M",
+    "A<br>(<i>ATRX<sup>mut</sup></i>)" = "A",
+    "S<br>(sporadic)" = "S"
+  )
+  if (!with_newline) {
+    names(long_group_names) <-
+      names(long_group_names) %>%
+      str_replace_all("<br>", " ")
+  }
+  suppressWarnings(fct_recode(s, !!!long_group_names)) 
+}
+
 rename_patients <- partial(
   rename_str_or_fct,
   nm = tribble(
@@ -380,12 +396,26 @@ rename_contrast_long <- partial(
   nm = tribble(
     ~old,       ~new,
     "II_vs_I",  "MYCN amplified vs control",
-    "III_vs_I", "ATRX deleted vs control",
+    "III_vs_I", "ATRXmut vs control",
     "IV_vs_I",  "sporadic vs control",
     "II_vs_IV", "MYCN amplified vs sporadic",
-    "III_vs_IV", "ATRX deleted vs sporadic",
-    "II_vs_III", "MYCN amplified vs ATRX deleted",
-    "MNA_vs_other", "MYCN amplified vs MYCN normal"
+    "III_vs_IV", "ATRXmut vs sporadic",
+    "II_vs_III", "MYCN amplified vs ATRXmut",
+    "MNA_vs_other", "MYCN amplified vs MYCN wildtype"
+  )
+)
+
+rename_contrast_long_alt <- partial(
+  rename_str_or_fct,
+  nm = tribble(
+    ~old,       ~new,
+    "Mc",  "MYCN amplified vs control",
+    "Ac", "ATRXmut vs control",
+    "Sc",  "sporadic vs control",
+    "Ms", "MYCN amplified vs sporadic",
+    "As", "ATRXmut vs sporadic",
+    "Ma", "MYCN amplified vs ATRXmut",
+    "Mas", "MYCN amplified vs MYCN wildtype"
   )
 )
 

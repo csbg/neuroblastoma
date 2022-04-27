@@ -4,11 +4,13 @@
 library(scuttle)
 library(monocle3)
 library(ComplexHeatmap)
+library(CellChat)
 library(RColorBrewer)
 library(scico)
 library(latex2exp)
 library(tidyverse)
 library(patchwork)
+library(ggtext)
 source("common_functions.R")
 source("styling.R")
 
@@ -26,7 +28,6 @@ ht_opt(
 # Load data ---------------------------------------------------------------
 
 nb_metadata <- readRDS("data_generated/metadata.rds")
-
 dge <- readRDS("data_generated/dge_results.rds")
 
 
@@ -41,23 +42,37 @@ nb_metadata %>%
   mutate(
     n = n / sum(n) * 100,
     sample = rename_patients(sample),
-    group = rename_groups(group)
+    group = rename_groups(group),
   ) %>%
   complete(nesting(group, sample), cell_type, fill = list(n = 0)) %>% 
-  ggplot(aes(cell_type, n, color = group)) +
-  geom_boxplot(outlier.shape = NA, size = .25, show.legend = FALSE) +
-  geom_point(position = position_jitterdodge(seed = 1), size = .5, alpha = .5) +
+  ggplot(aes(cell_type, n)) +
+  geom_boxplot(
+    aes(fill = group),
+    width = .5,
+    outlier.shape = NA,
+    size = .25,
+    key_glyph = "rect"
+  ) +
+  geom_point(
+    aes(fill = group),
+    position = position_jitterdodge(seed = 1, dodge.width = .5),
+    size = .25,
+    alpha = .5,
+    shape = 16,
+    show.legend = FALSE
+  ) +
   xlab("cell type") +
   ylab("relative abundance (%)") +
-  scale_color_manual(
+  scale_fill_manual(
     values = GROUP_COLORS,
-    guide = guide_legend(override.aes = list(alpha = 1))
+    labels = partial(rename_groups_long, with_newline = FALSE)
   ) +
   theme_nb(grid = FALSE) +
   theme(
-    legend.key.height = unit(1, "mm"),
-    legend.key.width = unit(1, "mm"),
-    legend.position = c(.95, .8)
+    legend.text = element_markdown(),
+    legend.key.height = unit(2, "mm"),
+    legend.key.width = unit(2, "mm"),
+    legend.position = c(.88, .8),
   )
 ggsave_publication("4a_cell_type_abundances", width = 10, height = 4)
 
@@ -180,10 +195,13 @@ plot_logfc_correlation_heatmap <- function() {
       legend_height = unit(15, "mm"),
       title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
     ),
-    name = "log fold change\ncorrelation",
+    name = "correlation of\nlog fold changes",
     
     clustering_distance_rows = distance,
     row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
+    row_title = "cell type",
+    row_title_side = "right",
+    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     row_dend_gp = gpar(lwd = 0.5),
     row_dend_width = unit(3, "mm"),
     
@@ -214,7 +232,7 @@ plot_logfc_correlation_heatmap <- function() {
 
 (p <- plot_logfc_correlation_heatmap())
 ggsave_publication("4c_logfc_correlation_heatmap",
-                   plot = p, width = 7, height = 5)
+                   plot = p, width = 8, height = 5)
 
 
 
@@ -276,7 +294,7 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
   if (nlevels(data_vis$pathway) > 5) {
     horizontal_grid <-
       geom_hline(
-        yintercept = seq(5, nlevels(data_vis$pathway), 5),
+        yintercept = seq(6, nlevels(data_vis$pathway), 5) - 0.5,
         size = BASE_LINE_SIZE,
         color = "grey92"
       )
@@ -290,8 +308,8 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
     scale_y_discrete() +
     horizontal_grid +    
     geom_point(aes(color = NES)) +
-    xlab("comparison (genetic subtype vs control)") +
-    ylab(NULL) +
+    xlab("comparison (NB subtype vs control)") +
+    ylab(str_glue("{str_replace_all(db, '_', ' ')} gene set")) +
     scale_color_gsea(
       "normalized\nenrichment\nscore",
       limits = c(-color_limit, color_limit),
@@ -323,7 +341,7 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
 }
 
 plot_gsea(comparisons = c("M vs C", "A vs C", "S vs C"))
-ggsave_publication("4d_gsea", width = 11, height = 11)
+ggsave_publication("4d_gsea", width = 11, height = 10.8)
 
 
 
@@ -332,7 +350,7 @@ ggsave_publication("4d_gsea", width = 11, height = 11)
 selected_genes <- list(
   "TNF-alpha Signaling via NF-kB" = c("IL1B", "FOS", "NFKB1", "MYC", "IFNGR2",
                                       "CD44", "RELB", "SOD2", "MAP3K8"),
-  "Interferon Gamma Response" = c("IFI44", "NFKB1", "MYD88", "HLA-A", "CD86",
+  "Interferon Gamma Response" = c("IFI44", "MYD88", "HLA-A", "CD86",
                                   "HLA-DQA1", "HLA-DQB1", "TNFSF10"),
   "Myc Targets V1" = c("TRIM28", "PCNA", "CDK4", "MCM5", "HDAC2"),
   "E2F Targets" = c("DNMT1", "EZH2", "MKI67", "PCNA")
@@ -450,6 +468,7 @@ plot_pathway_genes <- function(db = "MSigDB_Hallmark_2020",
       col = list(
         group = GROUP_COLORS
       ),
+      annotation_label = list(group = "NB subtype"),
       show_annotation_name = FALSE,
       annotation_legend_param = list(
         group = list(
@@ -574,13 +593,13 @@ ggsave_publication("S4a_cell_type_enrichment", width = 5, height = 4)
 ## S4b ----
 
 plot_gsea(comparisons = "M vs A+S") +
-  xlab("M vs A+S\ncomparison") +
+  xlab("M vs A/S\ncomparison") +
   theme(
     axis.ticks.length.x = unit(0, "mm"),
     axis.text.x = element_blank(),
     strip.text = element_text(angle = 90, hjust = 0)
   )
-ggsave_publication("S4b_gsea_all_vs_AS", width = 9, height = 9)
+ggsave_publication("S4b_gsea_all_vs_AS", width = 9, height = 8.8)
 
 
 
@@ -628,10 +647,6 @@ plot_pathway_genes_sc <- function(db = "MSigDB_Hallmark_2020",
     ) %>% 
     group_by(cellont_abbr, group) %>%
     slice_sample(n = 300) %>%
-    # group_by(cellont_abbr, group, sample) %>% 
-    # slice_sample(n = 150) %>% 
-    # group_by(cellont_abbr, group) %>%
-    # slice_sample(prop = 1) %>%
     mutate(
       cell_type = factor(cellont_abbr, names(CELL_TYPE_ABBREVIATIONS)),
       group = rename_groups(group),
@@ -652,7 +667,6 @@ plot_pathway_genes_sc <- function(db = "MSigDB_Hallmark_2020",
     name = "expression",
     col = circlize::colorRamp2(
       seq(0, 1.5, length.out = 9),
-      # scico(9, palette = "oslo", direction = -1)
       viridisLite::cividis(9)
     ),
     use_raster = FALSE,
@@ -683,12 +697,16 @@ plot_pathway_genes_sc <- function(db = "MSigDB_Hallmark_2020",
     column_gap = unit(.5, "mm"),
     column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     
+    width = unit(45, "mm"),
+    height = unit(40, "mm"),
+    
     top_annotation = HeatmapAnnotation(
       group = col_metadata$group,
       col = list(
         group = GROUP_COLORS
       ),
       show_annotation_name = FALSE,
+      annotation_label = list(group = "NB subtype"),
       annotation_legend_param = list(
         group = list(
           grid_width = unit(2, "mm"),
@@ -702,7 +720,7 @@ plot_pathway_genes_sc <- function(db = "MSigDB_Hallmark_2020",
 
 (p <- plot_pathway_genes_sc())
 ggsave_publication("S4c_pathway_genes_sc", type = "png",
-                   plot = p, width = 9, height = 5)
+                   plot = p, width = 10, height = 5)
 
 
 
@@ -710,7 +728,7 @@ ggsave_publication("S4c_pathway_genes_sc", type = "png",
 
 plot_gsea(db = "TRRUST_Transcription_Factors_2019",
           comparisons = c("M vs C", "A vs C", "S vs C"))
-ggsave_publication("S7b_gsea", width = 8, height = 11)
+ggsave_publication("S7b_gsea", width = 8, height = 10.8)
 
 
 
@@ -778,6 +796,9 @@ dge$gsea %>%
     cell_type = CELL_TYPE_ABBREVIATIONS[cell_type],
     leadingEdge = map_chr(leadingEdge, str_c, collapse = ", ")
   ) %>%
+  filter(
+    db %in% c("MSigDB_Hallmark_2020", "TRRUST_Transcription_Factors_2019")
+  ) %>% 
   select(
     "Database" = db,
     "Comparison" = comparison,

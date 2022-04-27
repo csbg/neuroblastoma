@@ -9,6 +9,7 @@ library(RColorBrewer)
 library(scico)
 library(latex2exp)
 library(tidyverse)
+library(ggtext)
 source("common_functions.R")
 source("styling.R")
 
@@ -82,7 +83,7 @@ singler_results <-
     singler_results_nb
   ) %>% 
   mutate(
-    mycn_status = if_else(group %in% c("M", "T-M"), "amplified", "normal"),
+    mycn_status = if_else(group %in% c("M", "T-M"), "amplified", "wildtype"),
     tumor = if_else(group %in% c("A", "M", "S"), "DTC", "primary"),
     pruned_labels =
       pruned_labels %>% 
@@ -149,8 +150,8 @@ plot_patient_dots <- function(min_exp = -2.5, max_exp = 2.5) {
       feature = factor(feature, levels = features),
       type = if_else(
         id %in% PATIENT_ORDER,
-        "cancer cells",
-        "microenvironment cells"
+        "NB cells",
+        "other cells"
       )
     )
   
@@ -171,12 +172,11 @@ plot_patient_dots <- function(min_exp = -2.5, max_exp = 2.5) {
       )
     ) +
     scale_radius(
-      "% expressed",
-      range = c(0, 2), 
+      "% cells expressing gene",
+      range = c(0, 3), 
       limits = c(0, 100),
       breaks = c(0, 50, 100)
     ) +
-    # coord_fixed() +
     facet_grid(
       cols = vars(type),
       scales = "free_x",
@@ -191,12 +191,11 @@ plot_patient_dots <- function(min_exp = -2.5, max_exp = 2.5) {
       legend.spacing = unit(0, "mm"),
       legend.margin = margin(-5, 1, 0, 1, "mm"),
       panel.spacing = unit(1, "mm")
-      # plot.margin = margin(0, 1, 0, 1, "mm"),
     )
 }
 
 plot_patient_dots()
-ggsave_publication("2a_nb_markers_patients", width = 7, height = 5)
+ggsave_publication("2a_nb_markers_patients", width = 8, height = 5.5)
 
 
 
@@ -205,26 +204,32 @@ ggsave_publication("2a_nb_markers_patients", width = 7, height = 5)
 plot_adrmed_profile <- function() {
   singler_results %>% 
     group_by(tumor, mycn_status) %>% 
-    count(cell_type = pruned_labels) %>% 
-    mutate(n_rel = n / sum(n) * 100) %>% 
-    ungroup() %>% 
-    filter(cell_type != "(Missing)") %>% 
     mutate(
-      cell_type = fct_rev(cell_type),
-      mycn_status = fct_relevel(mycn_status, "normal"),
-      tumor = fct_recode(tumor, "bone marrow" = "DTC")
+      cell_type = 
+        fct_rev(pruned_labels) %>%
+        fct_collapse(other = c("late Chromaffin cells",
+                               "cycling SCPs",
+                               "SCPs",
+                               "late SCPs")),
+    ) %>% 
+    count(cell_type) %>%
+    mutate(n_rel = n / sum(n) * 100) %>%
+    ungroup() %>%
+    filter(cell_type != "(Missing)") %>%
+    mutate(
+      mycn_status = fct_relevel(mycn_status, "wildtype"),
+      tumor = fct_recode(tumor, "metastatic" = "DTC")
     ) %>% 
     ggplot(aes(cell_type, n_rel)) +
     geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
     geom_col(aes(fill = cell_type), show.legend = FALSE) +
-    scale_x_discrete(NULL) +
+    scale_x_discrete("adrenal medullary cell type") +
     scale_y_continuous(
       "percentage of cells",
       expand = expansion(mult = c(0, 0.05)),
       breaks = c(0, 20, 40)
     ) +
     scale_fill_manual(values = ADRMED_CELLS_COLORS) +
-    labs(tag = "tumor site\nMYCN status") +
     coord_flip() +
     facet_wrap(vars(tumor, mycn_status), nrow = 1) +
     theme_nb(grid = FALSE) +
@@ -234,12 +239,6 @@ plot_adrmed_profile <- function() {
         color = "grey92",
         size = BASE_LINE_SIZE
       ),
-      plot.tag = element_text(
-        size = BASE_TEXT_SIZE_PT,
-        hjust = 1,
-        lineheight = 1.25
-      ),
-      plot.tag.position = c(0.278, .924),
     )
 }
 
@@ -273,7 +272,7 @@ plot_corr_mat <- function(size, samples = NULL, annotate_mycn = FALSE) {
     mycn_status = if_else(
       sample %in% c("T162", "T200", "T230") | str_starts(sample, "M"),
       "amplified",
-      "normal"
+      "wildtype"
     )
   )
   
@@ -289,7 +288,7 @@ plot_corr_mat <- function(size, samples = NULL, annotate_mycn = FALSE) {
       show_legend = TRUE,
       annotation_legend_param = list(
         group = list(
-          title = "group",
+          title = "NB subtype",
           grid_width = unit(2, "mm"),
           labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
           title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
@@ -312,7 +311,7 @@ plot_corr_mat <- function(size, samples = NULL, annotate_mycn = FALSE) {
       show_legend = TRUE,
       annotation_legend_param = list(
         group = list(
-          title = "group",
+          title = "NB subtype",
           grid_width = unit(2, "mm"),
           labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
           title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
@@ -327,7 +326,7 @@ plot_corr_mat <- function(size, samples = NULL, annotate_mycn = FALSE) {
       seq(min(corr_mat), max(corr_mat), length.out = 9),
       scico(9, palette = "davos", direction = -1),
     ),
-    name = "correlation of\npseudobulk\nexpression",
+    name = "correlation of\ngene expression",
     heatmap_legend_param = list(
       at = round(c(min(corr_mat), max(corr_mat)), 2),
       border = FALSE,
@@ -342,6 +341,9 @@ plot_corr_mat <- function(size, samples = NULL, annotate_mycn = FALSE) {
     row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     row_dend_gp = gpar(lwd = 0.5),
     row_dend_width = unit(3, "mm"),
+    row_title = "patient",
+    row_title_side = "right",
+    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     
     width = unit(size, "mm"),
     height = unit(size, "mm"),
@@ -355,7 +357,7 @@ plot_corr_mat <- function(size, samples = NULL, annotate_mycn = FALSE) {
 }
 
 (p <- plot_corr_mat(25, PATIENT_ORDER %>% discard(str_starts, "C")))
-ggsave_publication("2c_pseudobulk_cor", plot = p, height = 3, width = 6)
+ggsave_publication("2c_pseudobulk_cor", plot = p, height = 3, width = 7)
 
 
 
@@ -366,11 +368,7 @@ plot_gene_signature <- function() {
     nb_metadata %>% 
     mutate(
       cells =
-        case_when(
-          cellont_cluster == "NB (8)" ~ "tumor",
-          TRUE ~ "other"
-        ) %>% 
-        fct_rev()
+        if_else(cellont_cluster == "NB (8)", "NB", "other")
     ) %>%
     pivot_longer(
       starts_with("signature"),
@@ -384,11 +382,6 @@ plot_gene_signature <- function() {
         fct_relevel("adrenergic", "noradrenergic")
     )
   
-  label_data <-
-    vis_data %>% 
-    distinct(signature) %>% 
-    mutate(label = signature, cells = "other", value = 0.95)
-  
   ggplot(vis_data, aes(cells, value)) +
     geom_violin(
       aes(fill = cells, color = cells),
@@ -396,13 +389,6 @@ plot_gene_signature <- function() {
       size = BASE_LINE_SIZE
     ) +
     stat_summary(geom = "point", fun = mean, size = .1) +
-    geom_text(
-      data = label_data,
-      aes(label = label),
-      size = BASE_TEXT_SIZE_MM,
-      hjust = 1
-    ) +
-    xlab(NULL) +
     scale_y_continuous(
       name = "gene signature score",
       limits = c(0, 1),
@@ -413,23 +399,23 @@ plot_gene_signature <- function() {
       values = c(CELL_TYPE_COLORS["NB"], "gray60"),
       aesthetics = c("color", "fill")
     ) +
-    coord_flip() +
-    facet_grid(vars(signature)) +
+    facet_wrap(vars(signature), nrow = 1) +
+    ggtitle("gene signature") +
     theme_nb(grid = FALSE) +
     theme(
       legend.position = "none",
       strip.background = element_blank(),
-      strip.text.y = element_blank(),
       panel.border = element_blank(),
-      panel.grid.major.x = element_line(
+      panel.grid.major.y = element_line(
         color = "grey92",
         size = BASE_LINE_SIZE
       ),
+      plot.title = element_text(size = BASE_TEXT_SIZE_PT, hjust = 0.5)
     )
 }
 
 plot_gene_signature()
-ggsave_publication("S2a_gene_signatures", width = 4, height = 4)
+ggsave_publication("S2a_gene_signatures", width = 6, height = 5)
 
 
 
@@ -440,21 +426,24 @@ plot_mesenchymal <- function(top_prop = 0.05) {
     bind_rows(
       mesenchymal =
         nb_metadata %>%
-        slice_max(signature_mesenchymal, prop = top_prop) %>% 
+        slice_max(signature_mesenchymal, prop = top_prop, with_ties = FALSE) %>% 
         select(
           cell, umap_1_monocle, umap_2_monocle,
           value = signature_mesenchymal
         ),
       `NCC-like` =
         nb_metadata %>%
-        slice_max(signature_ncc_like, prop = top_prop) %>% 
+        slice_max(signature_ncc_like, prop = top_prop, with_ties = FALSE) %>% 
         select(
           cell, umap_1_monocle, umap_2_monocle,
           value = signature_ncc_like
         ),
       .id = "signature"
     ) %>% 
-    arrange(value)
+    arrange(value) %>% 
+    mutate(signature = str_glue(
+      "cells with high <span style='color:#e6479a'>{signature}</span> score"
+    ))
   
   color_breaks <- round(
     c(min(data_highlight$value), max(data_highlight$value)),
@@ -493,7 +482,8 @@ plot_mesenchymal <- function(top_prop = 0.05) {
       axis.title = element_blank(),
       legend.position = c(.95, .32),
       panel.border = element_blank(),
-      plot.background = element_blank()
+      plot.background = element_blank(),
+      strip.text.x = element_markdown()
     )
 }
 
@@ -566,7 +556,18 @@ plot_nb_dots <- function(top_prop = 0.05, min_exp = -2.5, max_exp = 2.5) {
     replace_na(list(cluster = "8")) %>% 
     mutate(
       feature = factor(feature, levels = nb_markers),
-      type = fct_relevel(type, "NB") %>% fct_recode("NCC-like" = "ncc_like"),
+      type =
+        fct_relevel(type, "NB") %>%
+        fct_recode("NCC-like" = "ncc_like") %>% 
+        fct_relabel(
+          ~if_else(
+            . == "NB",
+            str_glue("{.}"),
+            str_glue(
+              "cells with high <span style='color:#e6479a'>{.}</span> score"
+            )
+          )
+        ),
       cluster = fct_inseq(cluster)
     )
   
@@ -593,9 +594,10 @@ plot_nb_dots <- function(top_prop = 0.05, min_exp = -2.5, max_exp = 2.5) {
       )
     ) +
     scale_radius(
-      "% expressed",
+      "% cells expressing gene",
       range = c(0, 2), 
-      limits = c(0, 100)
+      limits = c(0, 100),
+      breaks = c(0, 50, 100)
     ) +
     facet_grid(
       cols = vars(type),
@@ -610,8 +612,8 @@ plot_nb_dots <- function(top_prop = 0.05, min_exp = -2.5, max_exp = 2.5) {
       legend.position = "bottom",
       legend.spacing = unit(0, "mm"),
       legend.margin = margin(-5, 1, 0, 1, "mm"),
-      panel.spacing = unit(1, "mm")
-      # plot.margin = margin(0, 1, 0, 1, "mm"),
+      panel.spacing = unit(1, "mm"),
+      strip.text.x = element_markdown()
     )
 }
 
@@ -626,8 +628,17 @@ plot_adrmed_heatmap <- function() {
   mat <- 
     singler_results %>% 
     filter(dataset != "jansky") %>%
+    mutate(
+      cell_type = 
+        fct_collapse(pruned_labels,
+                     other = c("late Chromaffin cells",
+                               "cycling SCPs",
+                               "SCPs",
+                               "late SCPs")) %>% 
+        fct_relevel("other", after = Inf),
+    ) %>% 
     group_by(sample) %>%
-    count(cell_type = pruned_labels) %>% 
+    count(cell_type) %>% 
     mutate(n = n / sum(n) * 100) %>% 
     ungroup() %>% 
     filter(cell_type != "(Missing)") %>% 
@@ -648,11 +659,11 @@ plot_adrmed_heatmap <- function() {
         str_sub(sample, 1, 1) %>%
         fct_relevel(names(GROUP_COLORS))
     )
-  Legend
+  
   Heatmap(
     mat,
     col = RColorBrewer::brewer.pal(9, "YlOrBr"),
-    name = "relative abundance",
+    name = "% of cells",
     heatmap_legend_param = list(
       at = round(c(min(mat), max(mat)), 2),
       direction = "horizontal",
@@ -666,7 +677,7 @@ plot_adrmed_heatmap <- function() {
     
     column_split =
       fct_cross(col_metadata$tumor, col_metadata$mycn_status) %>% 
-      fct_relevel("DTC:normal", "DTC:amplified", "primary:normal"),
+      fct_relevel("DTC:wildtype", "DTC:amplified", "primary:wildtype"),
     cluster_column_slices = FALSE,
     column_title = "patient",
     column_title_side = "bottom",
@@ -676,12 +687,15 @@ plot_adrmed_heatmap <- function() {
     column_dend_height = unit(3, "mm"),
     
     cluster_rows = FALSE,
+    row_title = "adrenal medullary cell type",
+    row_title_side = "right",
+    row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     row_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     row_dend_gp = gpar(lwd = 0.5),
     row_dend_width = unit(3, "mm"),
     
     width = unit(60, "mm"),
-    height = unit(27, "mm"),
+    height = unit(18.62, "mm"),
     column_gap = unit(0.5, "mm"),
     border = FALSE,
     
@@ -695,7 +709,8 @@ plot_adrmed_heatmap <- function() {
       show_legend = FALSE,
       show_annotation_name = TRUE,
       annotation_label = list(
-        mycn = "MYCN status"
+        mycn = "MYCN status",
+        group = "NB subtype"
       ),
       annotation_name_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
       annotation_legend_param = list(

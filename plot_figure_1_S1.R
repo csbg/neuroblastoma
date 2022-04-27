@@ -11,6 +11,7 @@ library(scico)
 library(ComplexHeatmap)
 library(tidyverse)
 library(fs)
+library(ggtext)
 source("common_functions.R")
 source("styling.R")
 
@@ -136,6 +137,7 @@ read_snparray_data <- function(folder, new_sample_names = NULL) {
 }
 
 
+
 # Load data ---------------------------------------------------------------
 
 nb_metadata <- readRDS("data_generated/metadata.rds")
@@ -207,7 +209,8 @@ plot_umap <- function() {
     geom_point(
       aes(color = cellont_abbr),
       size = .001,
-      shape = 16
+      shape = 16,
+      show.legend = FALSE
     ) +
     geom_text(
       data = cluster_labels,
@@ -216,16 +219,7 @@ plot_umap <- function() {
     ) +
     scale_x_continuous("UMAP1", breaks = c(-10, 0, 10)) +
     scale_y_continuous("UMAP2", breaks = c(-10, 0, 10)) +
-    scale_color_manual(
-      name = "cell type",
-      values = CELL_TYPE_COLORS,
-      labels =
-        str_glue(
-          "{names(CELL_TYPE_ABBREVIATIONS)} ({CELL_TYPE_ABBREVIATIONS})"
-        ) %>% 
-        c("other cell"), 
-      guide = guide_legend(override.aes = list(size = 1))
-    ) +
+    scale_color_manual(values = CELL_TYPE_COLORS) +
     coord_fixed() +
     theme_nb(grid = FALSE) +
     theme(
@@ -244,7 +238,7 @@ plot_umap <- function() {
 
 plot_umap()
 ggsave_publication("1b_umap_dataset", type = "png",
-                   width = 8.5, height = 5, bg = "transparent")
+                   width = 5, height = 5, bg = "transparent")
 
 
 
@@ -308,7 +302,8 @@ plot_celltype_heatmap <- function(clusters = 1:20, cell_size = 2.2,
           "Novershtern" = "dmap",
           "Monaco" = "monaco"
         ),
-      abbr = factor(abbr, levels = names(CELL_TYPE_COLORS))
+      abbr = factor(abbr, levels = names(CELL_TYPE_COLORS)) %>% 
+        fct_recode(neurons = "NB")
     ) %>% 
     group_by(ref) %>% 
     arrange(abbr, .by_group = TRUE) %>% 
@@ -356,18 +351,12 @@ plot_celltype_heatmap <- function(clusters = 1:20, cell_size = 2.2,
   
   colnames(mat) <- col_metadata$cell_type
   
-  
-  
-  # draw heatmap  
-  ht_opt(
-    simple_anno_size = unit(1.5, "mm"),
-    COLUMN_ANNO_PADDING = unit(1, "pt"),
-    DENDROGRAM_PADDING = unit(1, "pt"),
-    HEATMAP_LEGEND_PADDING = unit(1, "mm"),
-    ROW_ANNO_PADDING = unit(1, "pt"),
-    TITLE_PADDING = unit(1, "mm")
+  cell_type_colors_with_neurons <- c(
+    CELL_TYPE_COLORS,
+    neurons = unname(CELL_TYPE_COLORS["NB"]) 
   )
   
+  # draw heatmap  
   set.seed(2)
   Heatmap(
     mat,
@@ -418,7 +407,7 @@ plot_celltype_heatmap <- function(clusters = 1:20, cell_size = 2.2,
     
     bottom_annotation = HeatmapAnnotation(
       cell_type = col_metadata$abbr,
-      col = list(cell_type = CELL_TYPE_COLORS),
+      col = list(cell_type = cell_type_colors_with_neurons),
       show_annotation_name = FALSE,
       show_legend = FALSE,
       annotation_legend_param = list(
@@ -529,7 +518,7 @@ plot_cm_dots <- function(counts, features, groups,
       breaks = color_limits,
       labels = function(x) round(x, 1)
     ) +
-    scale_radius("% expressed", range = c(0, 2.5)) +
+    scale_radius("% cells expressing gene", range = c(0, 2.5)) +
     theme_nb(grid = FALSE) +
     theme(panel.grid = element_blank()) +
     theme(
@@ -609,7 +598,7 @@ plot_canonical_markers <- function() {
 }
 
 plot_canonical_markers()
-ggsave_publication("1d_markers", height = 12, width = 8)
+ggsave_publication("1d_markers", height = 12, width = 9)
 
 
 
@@ -740,6 +729,7 @@ plot_cnv_data_comparison <- function(selected_samples,
       switch = "both"
     ) +
     theme_nb(grid = FALSE) +
+    ggtitle("comparison of copy number variation regions") +
     theme(
       axis.line = element_blank(),
       axis.ticks.x = element_blank(),
@@ -752,6 +742,7 @@ plot_cnv_data_comparison <- function(selected_samples,
       panel.spacing.x = unit(-.5, "pt"),
       panel.spacing.y = unit(1, "mm"),
       panel.background = element_rect(color = NA, fill = cn_color(0)),
+      plot.title = element_text(size = BASE_TEXT_SIZE_PT, hjust = 0.5),
       strip.placement = "outside",
       strip.text.x = element_text(margin = margin()),
       strip.text.y.left = element_text(angle = 0, margin = margin())
@@ -844,7 +835,10 @@ plot_infiltration_rate <- function() {
       tif_data,
       by = c("group", "sample")
     ) %>% 
-    mutate(group = rename_groups(group) %>% fct_relevel("C", "M", "A", "S"))
+    mutate(
+      group = rename_groups(group) %>% fct_relevel("C", "M", "A", "S"),
+      group_long = rename_groups_long(group)
+    )
   
   p <- 
     infiltration_rates %>%
@@ -867,7 +861,7 @@ plot_infiltration_rate <- function() {
       fill = "white",
       show.legend = FALSE
     ) +
-    xlab("method") +
+    xlab("experimental technique") +
     scale_y_continuous(
       name = "tumor infiltration rate",
       limits = c(0, 0.6),
@@ -875,23 +869,26 @@ plot_infiltration_rate <- function() {
     ) +
     scale_color_manual(values = GROUP_COLORS) +
     scale_shape_manual(values = c(21, 19)) +
-    facet_wrap(vars(group), nrow = 1) +
+    facet_wrap(vars(group_long), nrow = 1) +
     theme_nb(grid = FALSE) +
+    ggtitle("NB subtype") +
     theme(
-      # axis.text.x = element_text(angle = 45, hjust = 1),
+      axis.text.x = element_text(angle = 45, hjust = 1),
       panel.grid.major.y = element_line(
         color = "grey92",
         size = BASE_LINE_SIZE
       ),
       panel.border = element_blank(),
       panel.spacing = unit(1, "mm"),
+      strip.text.x = element_markdown(size = BASE_TEXT_SIZE_PT),
+      plot.title = element_text(size = BASE_TEXT_SIZE_PT, hjust = 0.5,)
     )
   
   p
 }
 
 plot_infiltration_rate()
-ggsave_publication("S1b_tif", width = 9, height = 5)
+ggsave_publication("S1b_tif", width = 6, height = 5)
 
 
 
@@ -968,11 +965,15 @@ plot_resexp_tumor <- function(cells_per_sample = 50L) {
     border = TRUE,
     border_gp = gpar(lwd = 0.5),
     
+    width = unit(145, "mm"),
+    height = unit(65, "mm"),
+    
     left_annotation = rowAnnotation(
       group = cell_metadata$group,
       col = list(group = GROUP_COLORS[c("M", "A", "S")]),
       annotation_name_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
       annotation_name_side = "bottom",
+      annotation_label = list(group = "NB subtype"),
       annotation_legend_param = list(
         group = list(
           grid_width = unit(2, "mm"),
@@ -997,7 +998,7 @@ plot_resexp_tumor <- function(cells_per_sample = 50L) {
 
 (p <- plot_resexp_tumor())
 ggsave_publication("S1c_resexp_tumor", plot = p,
-                   type = "png", width = 18, height = 7.5)
+                   type = "png", width = 20, height = 8)
 
 
 
@@ -1079,10 +1080,14 @@ plot_resexp_marrow <- function(cells_per_type = 50L) {
     border = TRUE,
     border_gp = gpar(lwd = 0.5),
     
+    width = unit(145, "mm"),
+    height = unit(65, "mm"),
+    
     left_annotation = rowAnnotation(
       group = cell_metadata$group,
       patient = cell_metadata$sample,
       col = list(group = GROUP_COLORS, patient = PATIENT_COLORS),
+      annotation_label = list(group = "NB subtype"),
       annotation_name_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
       annotation_name_side = "bottom",
       annotation_legend_param = list(
@@ -1112,7 +1117,7 @@ plot_resexp_marrow <- function(cells_per_type = 50L) {
 
 (p <- plot_resexp_marrow())
 ggsave_publication("S1d_resexp_marrow", plot = p,
-                   type = "png", width = 18, height = 7.5)
+                   type = "png", width = 20, height = 8)
 
 
 
