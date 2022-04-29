@@ -40,7 +40,7 @@ CELL_TYPE_COLORS <- c(
 GROUP_NAMES_LONG = c(
   C = "control",
   M = "MYCN amplified",
-  A = "ATRX deleted",
+  A = "ATRXmut",
   S = "sporadic"
 )
 
@@ -70,6 +70,11 @@ PATIENT_ORDER <- c("C1", "C2", "C3", "C4", "C5",
                    "M1", "M2", "M3", "M4",
                    "A1", "A2",
                    "S1", "S2", "S3", "S4", "S5")
+
+PATIENT_ORDER_DETAILED <- c("C1", "C2", "C3", "C4", "C5",
+                            "M1", "M2a", "M2b", "M3", "M4",
+                            "A1", "A2",
+                            "S1", "S2", "S3", "S4", "S5")
 
 # color patients using the cyclic romaO from the Scientific Colour Maps
 PATIENT_COLORS <-
