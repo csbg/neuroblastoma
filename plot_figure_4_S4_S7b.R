@@ -45,6 +45,8 @@ nb_metadata %>%
     group = rename_groups(group),
   ) %>%
   complete(nesting(group, sample), cell_type, fill = list(n = 0)) %>% 
+  ungroup() %>% 
+  filter(!cell_type %in% c("NB", "other")) %>% 
   ggplot(aes(cell_type, n)) +
   geom_boxplot(
     aes(fill = group),
@@ -592,19 +594,6 @@ ggsave_publication("S4a_cell_type_enrichment", width = 5, height = 4)
 
 ## S4b ----
 
-plot_gsea(comparisons = "M vs A+S") +
-  xlab("M vs A/S\ncomparison") +
-  theme(
-    axis.ticks.length.x = unit(0, "mm"),
-    axis.text.x = element_blank(),
-    strip.text = element_text(angle = 90, hjust = 0)
-  )
-ggsave_publication("S4b_gsea_all_vs_AS", width = 9, height = 8.8)
-
-
-
-## S4c ----
-
 plot_pathway_genes_sc <- function(db = "MSigDB_Hallmark_2020",
                                   pathways = c(
                                     "TNF-alpha Signaling via NF-kB" = "up",
@@ -719,7 +708,7 @@ plot_pathway_genes_sc <- function(db = "MSigDB_Hallmark_2020",
 }
 
 (p <- plot_pathway_genes_sc())
-ggsave_publication("S4c_pathway_genes_sc", type = "png",
+ggsave_publication("S4b_pathway_genes_sc", type = "png",
                    plot = p, width = 10, height = 5)
 
 

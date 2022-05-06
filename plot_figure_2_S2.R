@@ -209,7 +209,6 @@ plot_adrmed_profile <- function() {
         fct_rev(pruned_labels) %>%
         fct_collapse(other = c("late Chromaffin cells",
                                "cycling SCPs",
-                               "SCPs",
                                "late SCPs")),
     ) %>% 
     count(cell_type) %>%
@@ -633,7 +632,6 @@ plot_adrmed_heatmap <- function() {
         fct_collapse(pruned_labels,
                      other = c("late Chromaffin cells",
                                "cycling SCPs",
-                               "SCPs",
                                "late SCPs")) %>% 
         fct_relevel("other", after = Inf),
     ) %>% 
@@ -695,7 +693,7 @@ plot_adrmed_heatmap <- function() {
     row_dend_width = unit(3, "mm"),
     
     width = unit(60, "mm"),
-    height = unit(18.62, "mm"),
+    height = unit(21.28, "mm"),
     column_gap = unit(0.5, "mm"),
     border = FALSE,
     

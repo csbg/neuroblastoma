@@ -400,11 +400,11 @@ ggsave_publication("3f_violins_MIF", width = 8.5, height = 9)
 ## 3g ----
 
 plot_violin(
-  genes = c("MDK", "LRP1", "NCL", "ALK"),
+  genes = c("MDK", "NCL", "LRP1"),
   cell_types = c("NB", "M"),
   y_axis_pos = "right"
 )
-ggsave_publication("3g_violins_MK", width = 8.5, height = 9)
+ggsave_publication("3g_violins_MK", width = 8.5, height = 6.97)
 
 
 
