@@ -354,8 +354,10 @@ selected_genes <- list(
                                       "CD44", "RELB", "SOD2", "MAP3K8"),
   "Interferon Gamma Response" = c("IFI44", "MYD88", "HLA-A", "CD86",
                                   "HLA-DQA1", "HLA-DQB1", "TNFSF10"),
-  "Myc Targets V1" = c("TRIM28", "PCNA", "CDK4", "MCM5", "HDAC2"),
-  "E2F Targets" = c("DNMT1", "EZH2", "MKI67", "PCNA")
+  "Myc Targets V1" = c("TRIM28", "PCNA", "CDK4", "MCM5", "HDAC2",
+                       "PA2G4", "NPM1", "APEX1"),
+  "E2F Targets" = c("DNMT1", "EZH2", "MKI67", "SMC4",
+                    "PRKDC", "HMGB2", "BIRC5")
 )
 
 plot_pathway_genes <- function(db = "MSigDB_Hallmark_2020",
@@ -485,7 +487,7 @@ plot_pathway_genes <- function(db = "MSigDB_Hallmark_2020",
 
 (p <- plot_pathway_genes())
 ggsave_publication("4e_pathway_genes",
-                   plot = p, width = 9, height = 6)
+                   plot = p, width = 9, height = 7)
 
 
 
