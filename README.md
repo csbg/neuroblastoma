@@ -9,6 +9,7 @@
 - `doc`: project documentation
 - `literature`: relevant publications
 - `metadata`: additional required data
+- `misc`: miscellaneous scripts
 - `plots`: generated plots
 - `renv`: R environment data
 - `tables`: exported tables
@@ -73,8 +74,8 @@ required by figures and tables.
 - [compare_tumors_pseudobulk.R](compare_tumors_pseudobulk.R) –
   comparison of tumor samples via pseudobulk correlation
 
-  
-  
+
+
 ## Plotting functions
 
 Run these R scripts in arbitrary order to generate exploratory figures:
@@ -87,7 +88,7 @@ Run these R scripts in arbitrary order to generate exploratory figures:
   canonical cell type markers
 - [plot_misc.R](plot_misc.R) -
   miscellaneous plots
-  
+
 
 Run these R scripts in arbitrary order to generate publication figures and tables:
 
