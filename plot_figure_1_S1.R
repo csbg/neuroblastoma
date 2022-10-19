@@ -1173,12 +1173,11 @@ list(
     dir_ls("data_raw/", recurse = TRUE, regex = "/summary.json") %>% 
     map_dfr(~read_json(.) %>% compact, .id = "file") %>%
     extract(file, into = "sample", regex = "([\\w\\d_]*)_ATAC") %>%
-    mutate(sample = str_replace(sample, "^A", "R")) %>%
     left_join(
       read_csv("metadata/sample_groups.csv", comment = "#") %>%
-        select(bsf_id, sample, group) %>%
+        select(bsf_id_atac, sample, group) %>%
         mutate(sample = rename_patients(sample), group = rename_groups(group)),
-      by = c(sample = "bsf_id")
+      by = c(sample = "bsf_id_atac")
     ) %>%
     mutate(sample.y = rename_sample(sample, sample.y)) %>% 
     transmute(
