@@ -50,7 +50,7 @@ nb_metadata %>%
   ggplot(aes(cell_type, n)) +
   geom_boxplot(
     aes(fill = group),
-    width = .5,
+    width = .75,
     outlier.shape = NA,
     size = .25,
     key_glyph = "rect"
@@ -74,9 +74,9 @@ nb_metadata %>%
     legend.text = element_markdown(),
     legend.key.height = unit(2, "mm"),
     legend.key.width = unit(2, "mm"),
-    legend.position = c(.88, .8),
+    legend.position = c(.8, .8),
   )
-ggsave_publication("4a_cell_type_abundances", width = 10, height = 4)
+ggsave_publication("4a_cell_type_abundances", width = 6, height = 4)
 
 
 
@@ -245,6 +245,7 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
                       cell_types = NULL,
                       top_n_positive = 5L,
                       top_n_negative = 5L,
+                      terms = NULL,
                       max_p_adj = 0.05,
                       min_abs_NES = 1) {
   data <- 
@@ -262,29 +263,34 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
       data %>% 
       filter(cell_type %in% {{cell_types}})
   
-  data_top_terms <-
-    data %>% 
-    filter(
-      padj <= max_p_adj,
-      abs(NES) >= min_abs_NES
-    ) %>% 
-    group_by(comparison, cell_type)
-  
-  top_terms_pos <- 
-    data_top_terms %>% 
-    slice_max(n = top_n_positive, order_by = NES, with_ties = FALSE) %>%
-    pull(pathway) %>%
-    unique()
-  
-  top_terms_neg <- 
-    data_top_terms %>% 
-    slice_min(n = top_n_negative, order_by = NES, with_ties = FALSE) %>%
-    pull(pathway) %>%
-    unique()
+  if (is.null(terms)) {
+    data_top_terms <-
+      data %>% 
+      filter(
+        padj <= max_p_adj,
+        abs(NES) >= min_abs_NES
+      ) %>% 
+      group_by(comparison, cell_type)
+    
+    top_terms_pos <- 
+      data_top_terms %>% 
+      slice_max(n = top_n_positive, order_by = NES, with_ties = FALSE) %>%
+      pull(pathway) %>%
+      unique()
+    
+    top_terms_neg <- 
+      data_top_terms %>% 
+      slice_min(n = top_n_negative, order_by = NES, with_ties = FALSE) %>%
+      pull(pathway) %>%
+      unique()
+    
+    terms <- c(top_terms_pos, top_terms_neg)
+    print(terms)
+  }
   
   data_vis <- 
     data %>% 
-    filter(pathway %in% c(top_terms_pos, top_terms_neg)) %>% 
+    filter(pathway %in% terms) %>% 
     mutate(
       pathway =
         as_factor(pathway) %>%
@@ -342,8 +348,32 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
     )
 }
 
-plot_gsea(comparisons = c("M vs C", "A vs C", "S vs C"))
-ggsave_publication("4d_gsea", width = 11, height = 10.8)
+plot_gsea(
+  comparisons = c("M vs C", "A vs C", "S vs C"),
+  terms = c(
+    # positive
+    "TNF-alpha Signaling via NF-kB",
+    "Interferon Gamma Response",
+    "heme Metabolism",
+    "Interferon Alpha Response",
+    "Inflammatory Response",
+    "Hypoxia",
+    "IL-2/STAT5 Signaling",
+    "p53 Pathway",
+    "Estrogen Response Early",
+    "TGF-beta Signaling",
+    "Apoptosis",
+    "Epithelial Mesenchymal Transition",
+    
+    # negative
+    "G2-M Checkpoint",
+    "Fatty Acid Metabolism",
+    "Myc Targets V2",
+    "Myc Targets V1",
+    "E2F Targets"
+  )
+)
+ggsave_publication("4d_gsea", width = 11, height = 6)
 
 
 
