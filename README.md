@@ -88,6 +88,8 @@ Run these R scripts in arbitrary order to generate exploratory figures:
   canonical cell type markers
 - [plot_misc.R](plot_misc.R) -
   miscellaneous plots
+- [plot_revision.R](plot_revision.R) –
+  plots for the reply to reviewers
 
 
 Run these R scripts in arbitrary order to generate publication figures and tables:
