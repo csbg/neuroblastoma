@@ -39,10 +39,10 @@ ht_opt(
 read_infercnv_data <- function(folder) {
   final_obj <- readRDS(path_join(c(folder, "run.final.infercnv_obj")))
   regions_data <-
-    dir_ls(folder, glob = "*Pnorm*regions*") %>% 
-    map_dfr(read_tsv, .id = "file") %>% 
+    dir_ls(folder, glob = "*Pnorm*regions*") %>%
+    map_dfr(read_tsv, .id = "file") %>%
     extract(file, into = "prob", regex = "Pnorm_(.+)\\.pred", convert = TRUE)
-    
+
   list(
     final_obj = final_obj,
     regions_data = regions_data
@@ -66,16 +66,16 @@ read_infercnv_data <- function(folder) {
 #'   and end.
 read_snparray_data <- function(folder, new_sample_names = NULL) {
   # chromosome sizes from GenomeInfoDb
-  chromosome_size <- 
+  chromosome_size <-
     Seqinfo(genome = "GRCh38.p13") %>%
-    seqlengths() %>% 
-    enframe("chr", "end") %>% 
+    seqlengths() %>%
+    enframe("chr", "end") %>%
     filter(str_detect(chr, "^(\\d\\d?|X|Y)$")) %>%
     mutate(chr = as_factor(chr) %>% fct_inseq())
-  
+
   # manually curated data
   cnv_regions <-
-    dir_ls(folder, glob = "*.bed") %>% 
+    dir_ls(folder, glob = "*.bed") %>%
     map_dfr(
       read_tsv,
       col_names = FALSE,
@@ -92,10 +92,10 @@ read_snparray_data <- function(folder, new_sample_names = NULL) {
       ploidy = replace_na(X21, "2") %>% as.numeric(),
       delta_copy_number = copy_number - ploidy
     )
-  
+
   # raw SNP array signal
   logrr_data <-
-    dir_ls(folder, glob = "*.bedgraph") %>% 
+    dir_ls(folder, glob = "*.bedgraph") %>%
     map_dfr(
       read_tsv,
       col_names = c("chr", "start", "end", "logrr", "smoothed"),
@@ -110,17 +110,17 @@ read_snparray_data <- function(folder, new_sample_names = NULL) {
         path_ext_remove(),
       chr = factor(chr, levels = chromosome_size$chr)
     )
-  
+
   # recode sample names
   if (!is.null(new_sample_names)) {
-    cnv_regions <- 
-      cnv_regions %>% 
+    cnv_regions <-
+      cnv_regions %>%
       mutate(sample = recode(sample, !!!new_sample_names))
-    logrr_data <- 
-      logrr_data %>% 
+    logrr_data <-
+      logrr_data %>%
       mutate(sample = recode(sample, !!!new_sample_names))
   }
-  
+
   # check for missing data
   samples1 <- unique(cnv_regions$sample)
   samples2 <- unique(logrr_data$sample)
@@ -129,7 +129,7 @@ read_snparray_data <- function(folder, new_sample_names = NULL) {
   if (length(common_samples) != length(all_samples))
     warn("Data missing for some samples")
   info("Loaded samples: {str_c(common_samples, collapse = ', ')}")
-    
+
   list(
     logrr_data = logrr_data,
     cnv_regions = cnv_regions,
@@ -144,12 +144,12 @@ read_snparray_data <- function(folder, new_sample_names = NULL) {
 nb_metadata <- readRDS("data_generated/metadata.rds")
 
 nb <-
-  readRDS("data_generated/rna_decontaminated.rds") %>% 
+  readRDS("data_generated/rna_decontaminated.rds") %>%
   logNormCounts(assay.type = "soupx_counts")
 colData(nb) <-
   nb_metadata %>%
-  mutate(Size_Factor = colData(nb)$Size_Factor) %>% 
-  column_to_rownames("cell") %>% 
+  mutate(Size_Factor = colData(nb)$Size_Factor) %>%
+  column_to_rownames("cell") %>%
   as("DataFrame")
 rowData(nb)[["gene_short_name"]] <- rownames(nb)
 
@@ -157,10 +157,10 @@ selected_markers <- read_csv("metadata/cell_markers.csv", comment = "#")
 
 infercnv_data <- read_infercnv_data("data_generated/infercnv_output")
 
-snparray_sample_names <- 
-  read_csv("metadata/sample_groups.csv", comment = "#") %>% 
-  select(snp_array_id, sample) %>% 
-  filter(!is.na(snp_array_id)) %>% 
+snparray_sample_names <-
+  read_csv("metadata/sample_groups.csv", comment = "#") %>%
+  select(snp_array_id, sample) %>%
+  filter(!is.na(snp_array_id)) %>%
   deframe()
 snparray_data <- read_snparray_data("data_raw/snp_array", snparray_sample_names)
 
@@ -189,22 +189,22 @@ plot_umap <- function() {
     "20", 1, 0,
     "21", -.5, 1
   )
-  
-  cluster_labels <- 
-    nb_metadata %>% 
-    group_by(label = cluster_50) %>% 
+
+  cluster_labels <-
+    nb_metadata %>%
+    group_by(label = cluster_50) %>%
     summarise(
       umap_1_monocle = mean(umap_1_monocle),
       umap_2_monocle = mean(umap_2_monocle)
-    ) %>% 
+    ) %>%
     left_join(adjust_positions, by = "label") %>%
     mutate(
       label = as_factor(label),
       umap_1_monocle = umap_1_monocle + replace_na(dx, 0),
       umap_2_monocle = umap_2_monocle + replace_na(dy, 0)
     )
-  
-  p <- 
+
+  p <-
     nb_metadata %>%
     ggplot(aes(umap_1_monocle, umap_2_monocle)) +
     geom_point(
@@ -233,7 +233,7 @@ plot_umap <- function() {
       panel.border = element_blank(),
       plot.background = element_blank()
     )
-  
+
   p
 }
 
@@ -250,52 +250,52 @@ plot_celltype_heatmap <- function(clusters = 1:20, cell_size = 2.2,
   # generate matrix of cell type abundances
   make_matrix <- function(ref) {
     cell_type_column <- rlang::sym(str_glue("cell_type_{ref}_broad"))
-    
-    nb_metadata %>% 
-      filter(cluster_50 %in% {{clusters}}) %>% 
+
+    nb_metadata %>%
+      filter(cluster_50 %in% {{clusters}}) %>%
       mutate(
         cell_type =
           as_factor(!!cell_type_column) %>%
-          fct_infreq() %>% 
-          fct_explicit_na("Unknown") %>% 
+          fct_infreq() %>%
+          fct_explicit_na("Unknown") %>%
           fct_relabel(~str_c(ref, .x, sep = "_"))
-      ) %>% 
+      ) %>%
       count(cluster = cluster_50, cell_type) %>%
       group_by(cluster) %>%
       mutate(n_rel = n / sum(n)) %>%
       select(!n) %>%
       ungroup() %>%
-      arrange(cell_type) %>% 
+      arrange(cell_type) %>%
       pivot_wider(names_from = "cell_type", values_from = "n_rel") %>%
-      arrange(cluster) %>% 
+      arrange(cluster) %>%
       column_to_rownames("cluster") %>%
       as.matrix() %>%
       replace_na(0)
   }
-  
-  mat <- 
+
+  mat <-
     map(
       c("blueprint", "hpca", "dice", "dmap", "monaco"),
       make_matrix
-    ) %>% 
+    ) %>%
     reduce(cbind)
-  
+
   # set up column metadata
   col_metadata <-
-    tibble(colname = colnames(mat)) %>% 
+    tibble(colname = colnames(mat)) %>%
     left_join(
       read_csv("metadata/celldex_celltypes.csv", comment = "#"),
       by = "colname"
-    ) %>% 
+    ) %>%
     separate(
       colname,
       into = c("ref", "cell_type"),
       extra = "merge",
       remove = FALSE
-    ) %>% 
+    ) %>%
     mutate(
       ref =
-        as_factor(ref) %>% 
+        as_factor(ref) %>%
         fct_recode(
           "Human Primary Cell Atlas" = "hpca",
           "Blueprint/ENCODE" = "blueprint",
@@ -303,66 +303,66 @@ plot_celltype_heatmap <- function(clusters = 1:20, cell_size = 2.2,
           "Novershtern" = "dmap",
           "Monaco" = "monaco"
         ),
-      abbr = factor(abbr, levels = names(CELL_TYPE_COLORS)) %>% 
+      abbr = factor(abbr, levels = names(CELL_TYPE_COLORS)) %>%
         fct_recode(neurons = "NB")
-    ) %>% 
-    group_by(ref) %>% 
-    arrange(abbr, .by_group = TRUE) %>% 
+    ) %>%
+    group_by(ref) %>%
+    arrange(abbr, .by_group = TRUE) %>%
     ungroup()
-  
+
   # set up row metadata
-  row_metadata <- 
-    tibble(cluster = levels(nb_metadata$cellont_cluster)) %>% 
+  row_metadata <-
+    tibble(cluster = levels(nb_metadata$cellont_cluster)) %>%
     extract(
       cluster,
       into = c("cell_type", "cluster"),
       regex = "(\\w+) \\((\\d+)",
       convert = TRUE
     ) %>%
-    filter(cluster %in% {{clusters}}) %>% 
+    filter(cluster %in% {{clusters}}) %>%
     mutate(
       cell_type =
-        cell_type %>% 
-        factor(levels = names(CELL_TYPE_COLORS)) %>% 
+        cell_type %>%
+        factor(levels = names(CELL_TYPE_COLORS)) %>%
         fct_drop()
     )
-  
+
   # arrange matrix
   mat <- mat[row_metadata$cluster, col_metadata$colname]
-  
+
   if (collapse) {
     mat <-
-      mat %>% 
-      t() %>% 
-      as_tibble(rownames = "colname") %>% 
-      left_join(col_metadata, by = "colname") %>% 
-      group_by(ref, abbr) %>% 
+      mat %>%
+      t() %>%
+      as_tibble(rownames = "colname") %>%
+      left_join(col_metadata, by = "colname") %>%
+      group_by(ref, abbr) %>%
       summarise(across(where(is.numeric), sum)) %>%
       ungroup() %>%
-      unite(ref, abbr, col = "ref_abbr") %>% 
+      unite(ref, abbr, col = "ref_abbr") %>%
       column_to_rownames("ref_abbr") %>%
       as.matrix() %>%
       t()
-    
-    col_metadata <- 
-      col_metadata %>% 
-      distinct(ref, abbr) %>% 
+
+    col_metadata <-
+      col_metadata %>%
+      distinct(ref, abbr) %>%
       mutate(cell_type = abbr)
   }
-  
+
   colnames(mat) <- col_metadata$cell_type
-  
+
   cell_type_colors_with_neurons <- c(
     CELL_TYPE_COLORS,
-    neurons = unname(CELL_TYPE_COLORS["NB"]) 
+    neurons = unname(CELL_TYPE_COLORS["NB"])
   )
-  
-  # draw heatmap  
+
+  # draw heatmap
   set.seed(2)
   Heatmap(
     mat,
     col = colorRampPalette(brewer.pal(9, "YlOrBr"))(100),
-    
+
     heatmap_legend_param = list(
       at = c(0, 1),
       border = FALSE,
@@ -372,7 +372,7 @@ plot_celltype_heatmap <- function(clusters = 1:20, cell_size = 2.2,
       title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
     ),
     name = "relative\nabundance",
-    
+
     row_title = "cluster and assigned cell type",
     row_title_side = "right",
     row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
@@ -380,16 +380,16 @@ plot_celltype_heatmap <- function(clusters = 1:20, cell_size = 2.2,
     row_split = row_metadata$cell_type,
     row_gap = unit(0.5, "mm"),
     cluster_rows = FALSE,
-    
+
     column_split = col_metadata$ref,
     column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     column_names_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     column_gap = unit(0.5, "mm"),
     cluster_columns = FALSE,
-    
+
     width = unit(cell_size * ncol(mat) + 2, "mm"),
     height = unit(cell_size * nrow(mat) + 2, "mm"),
-    
+
     right_annotation = rowAnnotation(
       cell_type = row_metadata$cell_type,
       col = list(cell_type = CELL_TYPE_COLORS),
@@ -405,7 +405,7 @@ plot_celltype_heatmap <- function(clusters = 1:20, cell_size = 2.2,
         )
       )
     ),
-    
+
     bottom_annotation = HeatmapAnnotation(
       cell_type = col_metadata$abbr,
       col = list(cell_type = cell_type_colors_with_neurons),
@@ -442,11 +442,11 @@ plot_cm_dots <- function(counts, features, groups,
                          min_exp = -2.5, max_exp = 2.5,
                          panel_annotation = NULL) {
   scale_and_limit <- function(x) {
-    scale(x)[,1] %>% 
-      pmax(min_exp) %>% 
+    scale(x)[,1] %>%
+      pmax(min_exp) %>%
       pmin(max_exp)
   }
-  
+
   known_features <- intersect(features, rownames(counts))
   missing_features <- setdiff(features, rownames(counts))
   if (length(missing_features) > 0)
@@ -454,13 +454,13 @@ plot_cm_dots <- function(counts, features, groups,
       "The following requested features are missing: ",
       "{str_c(missing_features, collapse = ', ')}"
     )
-  
-  vis_data <- 
-    counts[known_features, , drop = FALSE] %>% 
-    Matrix::t() %>% 
-    as.matrix() %>% 
-    as_tibble(rownames = "cell") %>% 
-    group_by(id = groups) %>% 
+
+  vis_data <-
+    counts[known_features, , drop = FALSE] %>%
+    Matrix::t() %>%
+    as.matrix() %>%
+    as_tibble(rownames = "cell") %>%
+    group_by(id = groups) %>%
     summarise(
       across(
         where(is.numeric),
@@ -470,15 +470,15 @@ plot_cm_dots <- function(counts, features, groups,
         ),
         .names = "{.col}__{.fn}"
       )
-    ) %>% 
+    ) %>%
     mutate(across(ends_with("avg_exp"), scale_and_limit)) %>%
     pivot_longer(
       !id,
       names_to = c("feature", ".value"),
       names_pattern = "(.+)__(.+)"
-    ) %>% 
+    ) %>%
     mutate(feature = factor(feature, levels = features))
-  
+
   if (!is.null(panel_annotation)) {
     panel_bg <- list(
       geom_point(color = "white"),  # initialize discrete coordinate system
@@ -495,9 +495,9 @@ plot_cm_dots <- function(counts, features, groups,
   } else {
     panel_bg <- NULL
   }
-  
+
   color_limits <- c(min(vis_data$avg_exp), max(vis_data$avg_exp))
-  
+
   ggplot(vis_data, aes(id, feature)) +
     panel_bg +
     geom_point(aes(size = pct_exp, color = avg_exp)) +
@@ -539,7 +539,7 @@ plot_canonical_markers <- function() {
   nb <- nb[, colData(nb)$cellont_abbr != "other"]
   colData(nb)$cellont_abbr <- fct_drop(colData(nb)$cellont_abbr)
   colData(nb)$cellont_cluster <- fct_drop(colData(nb)$cellont_cluster)
-  
+
   y_annotation_data <-
     selected_markers %>%
     arrange(desc(row_number())) %>%
@@ -549,9 +549,9 @@ plot_canonical_markers <- function() {
       yintercept = first(r) - 0.5,
       label_y = mean(r)
     )
-  
+
   x_annotation_data <-
-    tibble(level = levels(colData(nb)$cellont_cluster)) %>% 
+    tibble(level = levels(colData(nb)$cellont_cluster)) %>%
     extract(level, into = "label", regex = "(\\w+)") %>%
     mutate(label = as_factor(label), r = row_number()) %>%
     group_by(label) %>%
@@ -566,9 +566,9 @@ plot_canonical_markers <- function() {
         TRUE                   ~ "gray90"
       )
     )
-  
+
   n_col <- nlevels(colData(nb)$cellont_cluster)
-  
+
   p <-
     plot_cm_dots(
       logcounts(nb),
@@ -604,12 +604,12 @@ ggsave_publication("1d_markers", height = 12, width = 9)
 
 
 ## 1e ----
-
+# TODO: figure caption should state that only tumor cells were used
 plot_cnv_data_comparison <- function(selected_samples,
                                      probability = 0.5,
                                      logrr_prop = 0.01) {
   # labels and colors for copy numbers
-  cn_metadata <-  # colorbrewer 11-class BrBG 
+  cn_metadata <-  # colorbrewer 11-class BrBG
     tribble(
       ~delta_copy_number, ~label,        ~color,
       -2, "complete loss",               "#01665EFF",
@@ -625,16 +625,16 @@ plot_cnv_data_comparison <- function(selected_samples,
     cn_metadata$delta_copy_number,
     cn_metadata$color
   )
-  
+
   # prepare data for plotting
   plot_data_regions <-
-    infercnv_data$regions_data %>% 
-    filter(near(prob, probability)) %>% 
+    infercnv_data$regions_data %>%
+    filter(near(prob, probability)) %>%
     extract(
       cell_group_name,
       into = c("sample", "group"),
       regex = "malignant_(.*?)_([IV]+)"
-    ) %>% 
+    ) %>%
     transmute(
       sample = sample,
       type = "sc",
@@ -644,37 +644,38 @@ plot_cnv_data_comparison <- function(selected_samples,
       delta_copy_number = as.numeric(state) - 3,
       ymin = 0,
       ymax = 1
-    ) %>% 
+    ) %>%
     bind_rows(
-      snparray_data$cnv_regions %>% 
+      snparray_data$cnv_regions %>%
         select(!type:ploidy) %>%
         mutate(type = "snp", ymin = 1, ymax = 2)
-    ) %>% 
-    mutate(fill = cn_color(delta_copy_number)) %>% 
+    ) %>%
+    mutate(fill = cn_color(delta_copy_number)) %>%
     filter(chr != "Y")
   # return(plot_data_regions)
-  
+
+  set.seed(43)
   plot_data_logrr <-
-    snparray_data$logrr_data %>% 
-    filter(chr != "Y") %>% 
-    group_by(sample) %>% 
+    snparray_data$logrr_data %>%
+    filter(chr != "Y") %>%
+    group_by(sample) %>%
     slice_sample(prop = logrr_prop)
   # return(plot_data_logrr)
-  
+
   # filter for selected or common samples
   plot_data_regions <-
     plot_data_regions %>%
-    filter(sample %in% selected_samples) %>% 
+    filter(sample %in% selected_samples) %>%
     mutate(
       sample = sample %>% factor(level = selected_samples) %>% rename_patients()
     )
   plot_data_logrr <-
     plot_data_logrr %>%
-    filter(sample %in% selected_samples) %>% 
+    filter(sample %in% selected_samples) %>%
     mutate(
       sample = sample %>% factor(level = selected_samples) %>% rename_patients()
     )
-  
+
   # make plot
   p <-
     ggplot(NULL, aes(xmin = start, xmax = end, ymin = ymin, ymax = ymax)) +
@@ -730,7 +731,7 @@ plot_cnv_data_comparison <- function(selected_samples,
       switch = "both"
     ) +
     theme_nb(grid = FALSE) +
-    ggtitle("comparison of copy number variation regions") +
+    ggtitle("comparison of copy number variation regions in tumor cells") +
     theme(
       axis.line = element_blank(),
       axis.ticks.x = element_blank(),
@@ -748,7 +749,7 @@ plot_cnv_data_comparison <- function(selected_samples,
       strip.text.x = element_text(margin = margin()),
       strip.text.y.left = element_text(angle = 0, margin = margin())
     )
-  
+
   p
 }
 
@@ -766,21 +767,21 @@ plot_umap_unintegrated <- function() {
       cell, sample,
       umap_1_monocle, umap_2_monocle,
       umap_1_unaligned, umap_2_unaligned
-    ) %>% 
+    ) %>%
     pivot_longer(
       starts_with("umap"),
       names_to = c("coord", "aligned"),
       names_pattern = "(umap_\\d)_(.+)"
-    ) %>% 
-    pivot_wider(names_from = coord) %>% 
+    ) %>%
+    pivot_wider(names_from = coord) %>%
     mutate(
       aligned =
         as_factor(aligned) %>%
-        fct_recode(integrated = "monocle", original = "unaligned") %>% 
+        fct_recode(integrated = "monocle", original = "unaligned") %>%
         fct_rev(),
       sample = rename_patients(sample)
-    ) %>% 
-    slice_sample(prop = 1) %>% 
+    ) %>%
+    slice_sample(prop = 1) %>%
     ggplot(aes(umap_1, umap_2)) +
     geom_point(
       aes(color = sample),
@@ -821,27 +822,27 @@ ggsave_publication("S1a_umap_integration", type = "png",
 plot_infiltration_rate <- function() {
   tif_facs <-
     read_csv("metadata/sample_groups.csv", comment = "#") %>%
-    filter(!is.na(facs_alive)) %>% 
-    mutate(tif_facs = facs_tumor / facs_alive) %>% 
+    filter(!is.na(facs_alive)) %>%
+    mutate(tif_facs = facs_tumor / facs_alive) %>%
     select(group, sample, tif_facs)
-  
+
   tif_data <-
     nb_metadata %>%
-    group_by(group, sample) %>% 
+    group_by(group, sample) %>%
     summarise(tif_sc = sum(cluster_50 == "8") / n())
-  
+
   infiltration_rates <-
     left_join(
       tif_facs,
       tif_data,
       by = c("group", "sample")
-    ) %>% 
+    ) %>%
     mutate(
       group = rename_groups(group) %>% fct_relevel("C", "M", "A", "S"),
       group_long = rename_groups_long(group)
     )
-  
-  p <- 
+
+  p <-
     infiltration_rates %>%
     pivot_longer(
       starts_with("tif"),
@@ -849,7 +850,7 @@ plot_infiltration_rate <- function() {
       names_prefix = "tif_",
       values_to = "tif"
     ) %>%
-    mutate(method = recode(method, facs = "FACS", sc = "scRNA-seq")) %>% 
+    mutate(method = recode(method, facs = "FACS", sc = "scRNA-seq")) %>%
     ggplot(aes(method, tif, color = group)) +
     geom_line(
       aes(group = sample),
@@ -884,7 +885,7 @@ plot_infiltration_rate <- function() {
       strip.text.x = element_markdown(size = BASE_TEXT_SIZE_PT),
       plot.title = element_text(size = BASE_TEXT_SIZE_PT, hjust = 0.5,)
     )
-  
+
   p
 }
 
@@ -897,7 +898,7 @@ ggsave_publication("S1b_tif", width = 6, height = 5)
 
 plot_resexp_tumor <- function(cells_per_sample = 50L) {
   # cell metadata
-  cell_metadata <- 
+  cell_metadata <-
     infercnv_data$final_obj@tumor_subclusters$subclusters %>%
     enframe() %>%
     filter(str_starts(name, "malignant")) %>%
@@ -909,28 +910,28 @@ plot_resexp_tumor <- function(cells_per_sample = 50L) {
       sample = rename_patients(sample),
       group = rename_groups(group)
     )
-  
+
   # subset n cells per sample
   set.seed(1L)
-  cell_metadata <- 
-    cell_metadata %>% 
-    group_by(sample) %>% 
-    slice_sample(n = cells_per_sample) %>% 
+  cell_metadata <-
+    cell_metadata %>%
+    group_by(sample) %>%
+    slice_sample(n = cells_per_sample) %>%
     ungroup()
-  
+
   # column splits, i.e., vector of chromosme names
   col_split <-
     infercnv_data$final_obj@gene_order$chr %>%
     str_sub(4) %>%
     as_factor()
-  
+
   # matrix with residual expression, rows ordered, Y chromosome removed
   cnv_mat <-
-    infercnv_data$final_obj@expr.data %>% 
-    magrittr::extract(col_split != "Y", cell_metadata$cell_index) %>% 
+    infercnv_data$final_obj@expr.data %>%
+    magrittr::extract(col_split != "Y", cell_metadata$cell_index) %>%
     t()
   col_split <- col_split[col_split != "Y"]
-  
+
   # draw heatmap
   Heatmap(
     cnv_mat,
@@ -946,29 +947,29 @@ plot_resexp_tumor <- function(cells_per_sample = 50L) {
       labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
       title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
     ),
-    
+
     show_row_names = FALSE,
     show_column_names = FALSE,
-    
+
     row_split = cell_metadata$sample,
     row_gap = unit(0, "mm"),
     row_title_rot = 0,
     row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     row_dend_gp = gpar(lwd = 0.5),
-    
+
     cluster_columns = FALSE,
     column_split = col_split,
     cluster_column_slices = FALSE,
     column_gap = unit(0, "mm"),
     column_title_side = "bottom",
     column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-    
+
     border = TRUE,
     border_gp = gpar(lwd = 0.5),
-    
+
     width = unit(145, "mm"),
     height = unit(65, "mm"),
-    
+
     left_annotation = rowAnnotation(
       group = cell_metadata$group,
       col = list(group = GROUP_COLORS[c("M", "A", "S")]),
@@ -983,7 +984,7 @@ plot_resexp_tumor <- function(cells_per_sample = 50L) {
         )
       )
     ),
-    
+
     use_raster = FALSE,
   ) %>%
     draw(
@@ -994,7 +995,7 @@ plot_resexp_tumor <- function(cells_per_sample = 50L) {
       column_title_side = "bottom",
       column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
       padding = unit(c(0, 0, 0, 0), "mm")
-    ) 
+    )
 }
 
 (p <- plot_resexp_tumor())
@@ -1007,45 +1008,45 @@ ggsave_publication("S1c_resexp_tumor", plot = p,
 
 plot_resexp_marrow <- function(cells_per_type = 50L) {
   # cell metadata
-  cell_metadata <- 
+  cell_metadata <-
     infercnv_data$final_obj@tumor_subclusters$subclusters %>%
-    enframe(name = "row_split") %>% 
-    filter(!str_starts(row_split, "malignant")) %>% 
+    enframe(name = "row_split") %>%
+    filter(!str_starts(row_split, "malignant")) %>%
     unnest_longer(value) %>%
     select(value) %>%
     unnest_longer(value, values_to = "cell_index", indices_to = "cell") %>%
     left_join(
       nb_metadata %>%
-        select(cell, sample, group, cellont_abbr), 
+        select(cell, sample, group, cellont_abbr),
       by = "cell"
     ) %>%
-    filter(cellont_abbr != "other") %>% 
+    filter(cellont_abbr != "other") %>%
     mutate(
       sample = rename_patients(sample),
       group = rename_groups(group)
     )
-  
+
   # subset n cells per sample
   set.seed(1L)
-  cell_metadata <- 
-    cell_metadata %>% 
-    group_by(cellont_abbr) %>% 
-    slice_sample(n = cells_per_type) %>% 
+  cell_metadata <-
+    cell_metadata %>%
+    group_by(cellont_abbr) %>%
+    slice_sample(n = cells_per_type) %>%
     ungroup()
-  
+
   # column splits, i.e., vector of chromosme names
   col_split <-
     infercnv_data$final_obj@gene_order$chr %>%
     str_sub(4) %>%
     as_factor()
-  
+
   # matrix with residual expression, rows ordered, Y chromosome removed
   cnv_mat <-
-    infercnv_data$final_obj@expr.data %>% 
-    magrittr::extract(col_split != "Y", cell_metadata$cell_index) %>% 
+    infercnv_data$final_obj@expr.data %>%
+    magrittr::extract(col_split != "Y", cell_metadata$cell_index) %>%
     t()
   col_split <- col_split[col_split != "Y"]
-  
+
   # draw heatmap
   Heatmap(
     cnv_mat,
@@ -1061,29 +1062,29 @@ plot_resexp_marrow <- function(cells_per_type = 50L) {
       labels_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
       title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
     ),
-    
+
     show_row_names = FALSE,
     show_column_names = FALSE,
-    
+
     row_split = cell_metadata$cellont_abbr,
     row_gap = unit(0, "mm"),
     row_title_rot = 0,
     row_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
     row_dend_gp = gpar(lwd = 0.5),
-    
+
     cluster_columns = FALSE,
     column_split = col_split,
     cluster_column_slices = FALSE,
     column_gap = unit(0, "mm"),
     column_title_side = "bottom",
     column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT),
-    
+
     border = TRUE,
     border_gp = gpar(lwd = 0.5),
-    
+
     width = unit(145, "mm"),
     height = unit(65, "mm"),
-    
+
     left_annotation = rowAnnotation(
       group = cell_metadata$group,
       patient = cell_metadata$sample,
@@ -1104,7 +1105,7 @@ plot_resexp_marrow <- function(cells_per_type = 50L) {
         )
       )
     ),
-    
+
     use_raster = FALSE,
   ) %>%
     draw(
@@ -1113,7 +1114,7 @@ plot_resexp_marrow <- function(cells_per_type = 50L) {
       column_title = "chromosome",
       column_title_side = "bottom",
       column_title_gp = gpar(fontsize = BASE_TEXT_SIZE_PT)
-    ) 
+    )
 }
 
 (p <- plot_resexp_marrow())
@@ -1139,18 +1140,18 @@ rename_sample <- function(bsf_id, sample_name) {
 
 list(
   "scRNA-seq" =
-    dir_ls("data_raw/", recurse = TRUE, regex = "metrics_summary.csv$") %>% 
+    dir_ls("data_raw/", recurse = TRUE, regex = "metrics_summary.csv$") %>%
     map_dfr(read_csv, .id = "file") %>%
-    rename_with(~str_glue("{.x} (%)"), !file & where(is.character)) %>% 
+    rename_with(~str_glue("{.x} (%)"), !file & where(is.character)) %>%
     mutate(across(!file & where(is.character), parse_number)) %>%
-    extract(file, into = "sample", regex = "([\\w\\d_]*)_trans") %>% 
+    extract(file, into = "sample", regex = "([\\w\\d_]*)_trans") %>%
     left_join(
-      read_csv("metadata/sample_groups.csv", comment = "#") %>% 
+      read_csv("metadata/sample_groups.csv", comment = "#") %>%
         select(bsf_id, sample, group) %>%
         mutate(sample = rename_patients(sample), group = rename_groups(group)),
       by = c(sample = "bsf_id")
-    ) %>% 
-    mutate(sample.y = rename_sample(sample, sample.y)) %>% 
+    ) %>%
+    mutate(sample.y = rename_sample(sample, sample.y)) %>%
     select(
       Sample = sample.y,
       `Estimated Number of Cells`,
@@ -1162,15 +1163,15 @@ list(
       `Median UMI Counts per Cell`,
       `Sequencing Saturation (%)`
     ) %>%
-    filter(!is.na(Sample)) %>% 
+    filter(!is.na(Sample)) %>%
     mutate(
       Sample = factor(Sample, levels = PATIENT_ORDER_DETAILED),
       Group = GROUP_NAMES_LONG[str_sub(Sample, 1, 1)],
       .after = Sample
-    ) %>% 
+    ) %>%
     arrange(Sample),
   "scATAC-seq" =
-    dir_ls("data_raw/", recurse = TRUE, regex = "/summary.json") %>% 
+    dir_ls("data_raw/", recurse = TRUE, regex = "/summary.json") %>%
     map_dfr(~read_json(.) %>% compact, .id = "file") %>%
     extract(file, into = "sample", regex = "([\\w\\d_]*)_ATAC") %>%
     left_join(
@@ -1179,44 +1180,44 @@ list(
         mutate(sample = rename_patients(sample), group = rename_groups(group)),
       by = c(sample = "bsf_id_atac")
     ) %>%
-    mutate(sample.y = rename_sample(sample, sample.y)) %>% 
+    mutate(sample.y = rename_sample(sample, sample.y)) %>%
     transmute(
       Sample = sample.y,
       "Estimated number of cells" =
-        annotated_cells %>% 
+        annotated_cells %>%
         as.integer(),
       "Median fragments per cell" =
         median_fragments_per_cell %>%
-        as.numeric() %>% 
+        as.numeric() %>%
         as.integer,
       "Fraction of fragments overlapping any targeted region (%)" =
-        frac_fragments_overlapping_targets %>% 
-        as.numeric() %>% 
-        to_percent() %>% 
+        frac_fragments_overlapping_targets %>%
+        as.numeric() %>%
+        to_percent() %>%
         round(1),
       "Fraction of transposition events in peaks in cell barcodes (%)" =
-        frac_cut_fragments_in_peaks %>% 
-        as.numeric() %>% 
-        to_percent() %>% 
+        frac_cut_fragments_in_peaks %>%
+        as.numeric() %>%
+        to_percent() %>%
         round(1),
       "Number of reads" =
-        num_reads %>% 
+        num_reads %>%
         as.integer(),
       "Fraction of read pairs with a valid barcode (%)" =
-        frac_valid_barcode %>% 
-        as.numeric() %>% 
+        frac_valid_barcode %>%
+        as.numeric() %>%
         to_percent(),
       "Fraction of total read pairs mapped confidently to genome (%)" =
-        frac_mapped_confidently %>% 
-        as.numeric() %>% 
-        to_percent() %>% 
+        frac_mapped_confidently %>%
+        as.numeric() %>%
+        to_percent() %>%
         round(1)
-    ) %>% 
+    ) %>%
     mutate(
       Sample = factor(Sample, levels = PATIENT_ORDER_DETAILED),
       Group = GROUP_NAMES_LONG[str_sub(Sample, 1, 1)],
       .after = Sample
-    ) %>% 
+    ) %>%
     arrange(Sample)
 ) %>%
   save_table("S2_sequencing_statistics")
@@ -1225,14 +1226,14 @@ list(
 
 ## S3 ----
 
-infercnv_data$regions_data %>% 
+infercnv_data$regions_data %>%
   filter(near(prob, 0.5)) %>%
   extract(
     cell_group_name,
     into = c("sample", "group"),
     regex = "malignant_(.*?)_([IV]+)"
   ) %>%
-  filter(!is.na(sample)) %>% 
+  filter(!is.na(sample)) %>%
   transmute(
     sample = sample,
     type = "scRNA-seq",
