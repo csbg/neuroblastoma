@@ -62,7 +62,6 @@ plot_n_interactions <- function() {
         ylim = bar_ylim,
         border = FALSE, 
         axis = FALSE,
-        height = unit(5, "mm"),
         gp = gpar(fill = "gray70", col = "gray70")
       ),
       count_text = anno_text(
@@ -83,7 +82,6 @@ plot_n_interactions <- function() {
         ylim = bar_ylim,
         border = FALSE, 
         axis = FALSE,
-        width = unit(5, "mm"),
         gp = gpar(fill = "gray70", col = "gray70")
       ),
       simple_anno_size_adjust = TRUE,
@@ -103,7 +101,7 @@ plot_n_interactions <- function() {
 }
 
 (p <- plot_n_interactions())
-ggsave_publication("3a_n_interactions", plot = p, width = 5, height = 4)
+ggsave_publication("3a_n_interactions", plot = p, width = 6, height = 5)
 
 
 
@@ -158,15 +156,15 @@ ggsave_publication("3b_outgoing_comm_score", width = 5.5, height = 5)
 
 ## 3c ----
 
-plot_selected_dots <- function(interactions, source_type = "NB") {
+plot_selected_dots <- function(pathways, source_type = "NB") {
   vis_data <- 
     sig_data %>% 
     filter(
-      interaction_name %in% {{interactions}}, 
+      pathway_name %in% {{pathways}}, 
       source == {{source_type}}
     ) %>%
     mutate(
-      pathway_name = factor(pathway_name),
+      pathway_name = factor(pathway_name, levels = pathways),
       source = fct_recode(source, "from NB (source) to" = "NB"),
       target = factor(target, levels = names(CELL_TYPE_ABBREVIATIONS))
     )
@@ -194,7 +192,7 @@ plot_selected_dots <- function(interactions, source_type = "NB") {
       )
     ) +
     xlab("cell type (target)") +
-    ylab("ligand-receptor pair\nand pathway") +
+    ylab("ligand-receptor pair and pathway") +
     facet_grid(
       vars(pathway_name), 
       vars(source),
@@ -245,8 +243,8 @@ plot_selected_dots <- function(interactions, source_type = "NB") {
     )
 }
 
-plot_selected_dots(c("MDK_NCL", "MDK_LRP1", "MIF_CD74_CXCR4", "MIF_CD74_CD44"))
-ggsave_publication("3c_dots", height = 3.4, width = 7)
+plot_selected_dots(c("MK", "MIF", "COLLAGEN", "PTN", "APP", "ALCAM", "THY1"))
+ggsave_publication("3c_dots", height = 5, width = 7)
 
 
 
