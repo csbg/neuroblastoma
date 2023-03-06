@@ -421,6 +421,15 @@ plot_netvisual <- function(layout = "hierarchy", width = 16, height = 16) {
     layout = layout
   )
   
+  netVisual_individual(
+    cellchat,
+    signaling = "MK",
+    pairLR.use = "MDK_LRP1",
+    vertex.receiver = target_cells,
+    color.use = colors_ccc_network,
+    layout = layout
+  )
+  
   dev.off()
 }
 
