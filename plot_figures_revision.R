@@ -1,3 +1,6 @@
+# @DEPI metadata.rds
+# @DEPI rna_decontaminated.rds
+
 library(monocle3)
 library(scuttle)
 library(scran)
