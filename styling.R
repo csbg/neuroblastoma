@@ -289,30 +289,6 @@ scale_color_gsea <- function(...) {
   )
 }
 
-# color scale for enrichment analyses (only positive odds ratios):
-# ColorBrewer's Reds
-scale_color_gsea_2 <- function(...) {
-  scale_color_distiller(
-    palette = "Reds",
-    direction = 1,
-    oob = scales::oob_squish_any,  # make sure that value capping
-    ...                            # yields colored dots
-  )
-}
-
-# color scale for CytoTRACE scores:
-# ColorBrewer's PiYG with yellow as midpoint
-scale_color_cytotrace <- function(...) {
-  scale_color_gradient2(
-    low = "#1b7837",
-    mid = "#fee090",
-    high = "#af186f",
-    midpoint = 0.5,
-    oob = scales::oob_squish_any,
-    ...
-  )
-}
-
 
 
 # Renaming functions ------------------------------------------------------
@@ -396,19 +372,24 @@ rename_contrast <- partial(
   )
 )
 
-rename_contrast_long <- partial(
-  rename_str_or_fct,
-  nm = tribble(
+rename_contrast_long <- function(s, with_format = FALSE) {
+  long_contrast_names <- tribble(
     ~old,       ~new,
-    "II_vs_I",  "MYCN amplified vs control",
-    "III_vs_I", "ATRXmut vs control",
+    "II_vs_I",  "<i>MYCN</i> amplified vs control",
+    "III_vs_I", "<i>ATRX<sup>mut</sup></i> vs control",
     "IV_vs_I",  "sporadic vs control",
-    "II_vs_IV", "MYCN amplified vs sporadic",
-    "III_vs_IV", "ATRXmut vs sporadic",
-    "II_vs_III", "MYCN amplified vs ATRXmut",
-    "MNA_vs_other", "MYCN amplified vs MYCN wildtype"
+    "II_vs_IV", "<i>MYCN</i> amplified vs sporadic",
+    "III_vs_IV", "<i>ATRX<sup>mut</sup></i> vs sporadic",
+    "II_vs_III", "<i>MYCN</i> amplified vs <i>ATRX<sup>mut</sup></i>",
+    "MNA_vs_other", "<i>MYCN</i> amplified vs <i>MYCN</i> wildtype"
   )
-)
+  if (!with_format)
+    long_contrast_names <-
+      long_contrast_names %>% 
+      mutate(new = str_replace_all(new, "<.+?>", ""))
+  rename_str_or_fct(s, long_contrast_names)
+}
+
 
 rename_contrast_long_alt <- partial(
   rename_str_or_fct,
