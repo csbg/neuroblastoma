@@ -1,6 +1,8 @@
+# @DEPI rna_decontaminated.rds
 # @DEPI rna_myeloid.rds
 # @DEPI metadata.rds
 # @DEPI metadata_myeloid.rds
+# @DEPI dge_results.rds
 # @DEPI dge_results_myeloid.rds
 
 library(monocle3)
@@ -12,6 +14,7 @@ library(CellChat)
 library(scico)
 library(RColorBrewer)
 library(patchwork)
+library(ggtext)
 source("common_functions.R")
 source("styling.R")
 
@@ -32,14 +35,17 @@ cds_nb <-
   readRDS("data_generated/rna_decontaminated.rds") %>% 
   logNormCounts(assay.type = "soupx_counts")
 cds_my <- readRDS("data_generated/rna_myeloid.rds")
+
 my_metadata <- readRDS("data_generated/metadata_myeloid.rds")
 nb_metadata <- readRDS("data_generated/metadata.rds")
-dge <- readRDS("data_generated/dge_results_myeloid.rds")
+
+dge_nb <- readRDS("data_generated/dge_results.rds")
+dge_my <- readRDS("data_generated/dge_results_myeloid.rds")
 
 # are there problematic genes with convergence <= -20 ?
 stopifnot(
-  all(dge$results_vs_C$convergence > -20),
-  all(dge$results_MNA_vs_other$convergence > -20)
+  all(dge_my$results_vs_C$convergence > -20),
+  all(dge_my$results_MNA_vs_other$convergence > -20)
 )
 
 markers <- read_csv("metadata/myeloid_markers.csv")
@@ -246,7 +252,7 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
                       max_p_adj = 0.05,
                       min_abs_NES = 1) {
   data <- 
-    dge$gsea %>%
+    dge_my$gsea %>%
     filter(comparison != "Mas") %>% 
     mutate(comparison = factor(comparison)) %>% 
     filter(db == {{db}})
@@ -309,7 +315,7 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
     horizontal_grid <- NULL  
   }
   
-  color_limit <- max(abs(dge$gsea$NES), na.rm = TRUE)
+  color_limit <- max(abs(dge_my$gsea$NES), na.rm = TRUE)
   
   ggplot(data_vis, aes(comparison, pathway, size = -log10(padj))) +
     scale_y_discrete() +
@@ -407,9 +413,6 @@ plot_genes <- function(...,
       "scaled\nexpression",
       palette = "acton",
       direction = -1,
-      # palette = "bilbao",
-      # direction = 1,
-      # begin = 0.1,
       limits = colorbar_limits,
       breaks = colorbar_limits,
       labels = c("low", "high"),
@@ -438,9 +441,74 @@ plot_genes <- function(...,
     )
 }
 
-plot_genes("CD163", "CXCL2", "VEGFA", "EREG")
+plot_genes("CD163", "CXCL2", "TIMP1", "EREG")
 ggsave_publication("S5d_genes", type = "png",
                    width = 10, height = 8, bg = "transparent")
+
+
+## S5e ----
+
+plot_significance <- function(...) {
+  selected_genes <- factor(c(...))
+  selected_comparisons <- c("II_vs_I", "III_vs_I", "IV_vs_I")
+  
+  plot_data <- 
+    dge_nb$results_wide %>% 
+    filter(
+      cell_type == "M",
+      gene %in% selected_genes,
+      comparison %in% selected_comparisons
+    ) %>% 
+    mutate(
+      logFC = logFC / log(2),
+      comparison =
+        comparison %>%
+        factor(levels = selected_comparisons) %>%
+        fct_rev() %>% 
+        rename_contrast_long(with_format = TRUE),
+      gene = factor(gene, levels = selected_genes)
+    )
+  
+  color_limit <- max(abs(plot_data$logFC))
+  
+  ggplot(plot_data, aes(gene, comparison, size = -log10(p_adj))) +
+    geom_point(aes(color = logFC)) +
+    geom_point(data = plot_data %>% filter(frq >= 0.05), shape = 1) +
+    scale_color_distiller(
+      palette = "RdBu",
+      direction = -1,
+      limits = c(-color_limit, color_limit),
+      labels = function(x) round(x, 2),
+      breaks = c(-color_limit, 0, color_limit),
+      guide = guide_colorbar(
+        title = "log fold change",
+        barheight = unit(10, "mm"),
+        barwidth = unit(2, "mm"),
+        ticks = FALSE
+      )
+    ) +
+    scale_size_area(
+      name = TeX("-log_{10} p_{adj}"),
+      max_size = 3,
+      limits = c(0, 4),
+      breaks = c(0, 2, 4),
+      labels = c("0", "2", "4 or higher"),
+      oob = scales::oob_squish
+    ) +
+    coord_fixed() +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      axis.text.y = element_markdown(),
+      legend.box = "horizontal",
+      legend.box.just = "bottom",
+      legend.key.height = unit(3, "mm"),
+      legend.key.width = unit(3, "mm")
+    )
+}
+
+plot_significance("CD163", "CXCL2", "TIMP1", "EREG")
+ggsave_publication("S5e_significance", width = 8, height = 2.5)
 
 
 
@@ -498,7 +566,7 @@ rename_columns <- function(s) {
   )
 }
 
-dge$results_wide_filtered %>% 
+dge_my$results_wide_filtered %>% 
   arrange(comparison, cell_type, desc(logFC)) %>%
   mutate(
     logFC = logFC / log(2),  # nebula returns natural log fold changes
@@ -517,7 +585,7 @@ dge$results_wide_filtered %>%
 
 ## S8 ----
 
-dge$gsea %>% 
+dge_my$gsea %>% 
   arrange(db, comparison, cell_type, desc(NES)) %>%
   mutate(
     comparison = rename_contrast_long_alt(comparison),
