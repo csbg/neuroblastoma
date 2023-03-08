@@ -1121,90 +1121,29 @@ rename_sample <- function(bsf_id, sample_name) {
   )
 }
 
-list(
-  "scRNA-seq" =
-    dir_ls("data_raw/", recurse = TRUE, regex = "metrics_summary.csv$") %>%
-    map_dfr(read_csv, .id = "file") %>%
-    rename_with(~str_glue("{.x} (%)"), !file & where(is.character)) %>%
-    mutate(across(!file & where(is.character), parse_number)) %>%
-    extract(file, into = "sample", regex = "([\\w\\d_]*)_trans") %>%
-    left_join(
-      read_csv("metadata/sample_groups.csv", comment = "#") %>%
-        select(bsf_id, sample, group) %>%
-        mutate(sample = rename_patients(sample), group = rename_groups(group)),
-      by = c(sample = "bsf_id")
-    ) %>%
-    mutate(sample.y = rename_sample(sample, sample.y)) %>%
-    select(
-      Sample = sample.y,
-      `Estimated Number of Cells`,
-      `Mean Reads per Cell`,
-      `Median Genes per Cell`,
-      `Number of Reads`,
-      `Valid Barcodes (%)`,
-      `Total Genes Detected`,
-      `Median UMI Counts per Cell`,
-      `Sequencing Saturation (%)`
-    ) %>%
-    filter(!is.na(Sample)) %>%
-    mutate(
-      Sample = factor(Sample, levels = PATIENT_ORDER_DETAILED),
-      Group = GROUP_NAMES_LONG[str_sub(Sample, 1, 1)],
-      .after = Sample
-    ) %>%
-    arrange(Sample),
-  "scATAC-seq" =
-    dir_ls("data_raw/", recurse = TRUE, regex = "/summary.json") %>%
-    map_dfr(~read_json(.) %>% compact, .id = "file") %>%
-    extract(file, into = "sample", regex = "([\\w\\d_]*)_ATAC") %>%
-    left_join(
-      read_csv("metadata/sample_groups.csv", comment = "#") %>%
-        select(bsf_id_atac, sample, group) %>%
-        mutate(sample = rename_patients(sample), group = rename_groups(group)),
-      by = c(sample = "bsf_id_atac")
-    ) %>%
-    mutate(sample.y = rename_sample(sample, sample.y)) %>%
-    transmute(
-      Sample = sample.y,
-      "Estimated number of cells" =
-        annotated_cells %>%
-        as.integer(),
-      "Median fragments per cell" =
-        median_fragments_per_cell %>%
-        as.numeric() %>%
-        as.integer,
-      "Fraction of fragments overlapping any targeted region (%)" =
-        frac_fragments_overlapping_targets %>%
-        as.numeric() %>%
-        to_percent() %>%
-        round(1),
-      "Fraction of transposition events in peaks in cell barcodes (%)" =
-        frac_cut_fragments_in_peaks %>%
-        as.numeric() %>%
-        to_percent() %>%
-        round(1),
-      "Number of reads" =
-        num_reads %>%
-        as.integer(),
-      "Fraction of read pairs with a valid barcode (%)" =
-        frac_valid_barcode %>%
-        as.numeric() %>%
-        to_percent(),
-      "Fraction of total read pairs mapped confidently to genome (%)" =
-        frac_mapped_confidently %>%
-        as.numeric() %>%
-        to_percent() %>%
-        round(1)
-    ) %>%
-    mutate(
-      Sample = factor(Sample, levels = PATIENT_ORDER_DETAILED),
-      Group = GROUP_NAMES_LONG[str_sub(Sample, 1, 1)],
-      .after = Sample
-    ) %>%
-    arrange(Sample)
-) %>%
-  save_table("S2_sequencing_statistics")
-
+dir_ls("data_raw/rna_seq", regex = "metrics_summary.csv.gz") %>%
+  map_dfr(read_csv, .id = "file") %>%
+  rename_with(~str_glue("{.x} (%)"), !file & where(is.character)) %>%
+  mutate(across(!file & where(is.character), parse_number)) %>%
+  extract(file, into = "Sample", regex = "\\d_(.*)_metrics") %>%
+  select(
+    Sample,
+    `Estimated Number of Cells`,
+    `Mean Reads per Cell`,
+    `Median Genes per Cell`,
+    `Number of Reads`,
+    `Valid Barcodes (%)`,
+    `Total Genes Detected`,
+    `Median UMI Counts per Cell`,
+    `Sequencing Saturation (%)`
+  ) %>%
+  mutate(
+    Sample = factor(Sample, levels = PATIENT_ORDER_DETAILED),
+    Group = GROUP_NAMES_LONG[str_sub(Sample, 1, 1)],
+    .after = Sample
+  ) %>%
+  arrange(Sample) %>%
+  save_table("S2_scRNAseq_statistics")
 
 
 ## S3 ----
@@ -1247,3 +1186,49 @@ infercnv_data$regions_data %>%
   ) %>%
   arrange(Patient, Type, Chromosome, Start) %>%
   save_table("S3_cnv", "CNV")
+
+
+## S10 ----
+
+dir_ls("data_raw/atac_seq/", regex = "summary.json") %>%
+  map_dfr(~read_json(.) %>% compact, .id = "file") %>%
+  extract(file, into = "Sample", regex = "\\d_(.*)_summary") %>%
+  transmute(
+    Sample,
+    "Estimated number of cells" =
+      annotated_cells %>%
+      as.integer(),
+    "Median fragments per cell" =
+      median_fragments_per_cell %>%
+      as.numeric() %>%
+      as.integer,
+    "Fraction of fragments overlapping any targeted region (%)" =
+      frac_fragments_overlapping_targets %>%
+      as.numeric() %>%
+      to_percent() %>%
+      round(1),
+    "Fraction of transposition events in peaks in cell barcodes (%)" =
+      frac_cut_fragments_in_peaks %>%
+      as.numeric() %>%
+      to_percent() %>%
+      round(1),
+    "Number of reads" =
+      num_reads %>%
+      as.integer(),
+    "Fraction of read pairs with a valid barcode (%)" =
+      frac_valid_barcode %>%
+      as.numeric() %>%
+      to_percent(),
+    "Fraction of total read pairs mapped confidently to genome (%)" =
+      frac_mapped_confidently %>%
+      as.numeric() %>%
+      to_percent() %>%
+      round(1)
+  ) %>%
+  mutate(
+    Sample = factor(Sample, levels = PATIENT_ORDER_DETAILED),
+    Group = GROUP_NAMES_LONG[str_sub(Sample, 1, 1)],
+    .after = Sample
+  ) %>%
+  arrange(Sample) %>% 
+  save_table("S10_scATACseq_statistics")
