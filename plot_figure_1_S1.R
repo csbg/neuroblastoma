@@ -55,8 +55,6 @@ read_infercnv_data <- function(folder) {
 #'
 #' @param folder Folder with SNP array data, i.e., BEDGRAPH and BED files with
 #'   matching names.
-#' @param new_sample_names Optional named vector of new sample names, passed to
-#'   `dplyr::recode()`.
 #'
 #' @return A list with elements `logrr_data`, `cnv_regions`, and
 #'   `chromosome_size`. `logrr_data` is a data frame with columns sample,
@@ -64,7 +62,7 @@ read_infercnv_data <- function(folder) {
 #'   ratio). `cnv_regions` is a data frame with columns sample, chr, start, end,
 #'   type, and copy_number. `chromosome_size` is a dataframe with columns chr
 #'   and end.
-read_snparray_data <- function(folder, new_sample_names = NULL) {
+read_snparray_data <- function(folder) {
   # chromosome sizes from GenomeInfoDb
   chromosome_size <-
     Seqinfo(genome = "GRCh38.p13") %>%
@@ -111,16 +109,6 @@ read_snparray_data <- function(folder, new_sample_names = NULL) {
       chr = factor(chr, levels = chromosome_size$chr)
     )
 
-  # recode sample names
-  if (!is.null(new_sample_names)) {
-    cnv_regions <-
-      cnv_regions %>%
-      mutate(sample = recode(sample, !!!new_sample_names))
-    logrr_data <-
-      logrr_data %>%
-      mutate(sample = recode(sample, !!!new_sample_names))
-  }
-
   # check for missing data
   samples1 <- unique(cnv_regions$sample)
   samples2 <- unique(logrr_data$sample)
@@ -157,12 +145,7 @@ selected_markers <- read_csv("metadata/cell_markers.csv", comment = "#")
 
 infercnv_data <- read_infercnv_data("data_generated/infercnv_output")
 
-snparray_sample_names <-
-  read_csv("metadata/sample_groups.csv", comment = "#") %>%
-  select(snp_array_id, sample) %>%
-  filter(!is.na(snp_array_id)) %>%
-  deframe()
-snparray_data <- read_snparray_data("data_raw/snp_array", snparray_sample_names)
+snparray_data <- read_snparray_data("data_raw/snp_array")
 
 
 
@@ -604,7 +587,7 @@ ggsave_publication("1d_markers", height = 12, width = 9)
 
 
 ## 1e ----
-# TODO: figure caption should state that only tumor cells were used
+
 plot_cnv_data_comparison <- function(selected_samples,
                                      probability = 0.5,
                                      logrr_prop = 0.01) {
@@ -636,7 +619,7 @@ plot_cnv_data_comparison <- function(selected_samples,
       regex = "malignant_(.*?)_([IV]+)"
     ) %>%
     transmute(
-      sample = sample,
+      sample = rename_patients(sample),
       type = "sc",
       chr = str_sub(chr, 4) %>% factor(levels = snparray_data$chromosome_size$chr),
       start = as.integer(start),
@@ -753,7 +736,7 @@ plot_cnv_data_comparison <- function(selected_samples,
   p
 }
 
-plot_cnv_data_comparison(c("2016_4503", "2005_1702", "2006_2684"))
+plot_cnv_data_comparison(c("M1", "A1", "S1"))
 ggsave_publication("1e_cnv_comparison", width = 11, height = 6)
 
 
