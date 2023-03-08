@@ -26,29 +26,16 @@ source("common_functions.R")
 # Parameters --------------------------------------------------------------
 
 # folder that contains cellranger results
-data_dir <- "data_raw/COUNT"
+data_dir <- "data_raw/rna_seq"
 
 # path where the merged dataset is saved
 out_file <- "data_generated/rna_qcpassed.rds"
 
 # data frame with columns 'bsf_order', 'sample_file', 'sample_name', and 'group'
 samples <-
-  tibble(
-    sample_file = dir_ls(
-      data_dir,
-      type = "directory",
-      recurse = TRUE,
-      regexp = "filtered_feature_bc_matrix"
-    ),
-    bsf_id = str_match(sample_file, "([\\w\\d_]*)_trans")[, 2]
-  ) %>%
-  left_join(
-    read_csv("metadata/sample_groups.csv", comment = "#"),
-    by = "bsf_id"
-  ) %>% 
-  arrange(bsf_order) %>% 
-  select(bsf_order, sample_file, sample_name = sample, group) %>%
-  drop_na()
+  read_csv("metadata/sample_groups.csv", comment = "#") %>% 
+  arrange(bsf_order) %>%
+  select(bsf_order, sample_file = geo_rna_filtered, sample_name = sample, group)
 
 
 
@@ -117,7 +104,7 @@ datasets <-
     function(bsf_order, sample_file, sample_name, group) {
       info("Loading ", sample_file)
       data <- 
-        Read10X(sample_file) %>% 
+        Read10X_h5(path_join(c(data_dir, sample_file))) %>% 
         magrittr::set_colnames(
           str_replace(colnames(.), "\\d+$", as.character(bsf_order))
         ) %>% 
@@ -127,7 +114,7 @@ datasets <-
       data@meta.data <-
         data@meta.data %>%
         select(!orig.ident) %>%
-        rename(library_size = nCount_RNA, n_features = nFeature_RNA) %>%
+        dplyr::rename(library_size = nCount_RNA, n_features = nFeature_RNA) %>%
         mutate(sample = {{sample_name}}, group = {{group}})
       
       info("Calculating QC measures")

@@ -20,7 +20,7 @@ source("common_functions.R")
 # Parameters --------------------------------------------------------------
 
 # folder that contains cellranger results
-data_dir <- "data_raw/COUNT"
+data_dir <- "data_raw/rna_seq"
 
 # integrated dataset
 in_file <- "data_generated/rna_integrated_monocle.rds"
@@ -30,22 +30,9 @@ out_file <- "data_generated/rna_decontaminated.rds"
 
 # data frame with three columns 'order', 'sample_name', and 'sample_file'
 samples <-
-  tibble(
-    sample_file = dir_ls(
-      data_dir,
-      type = "directory",
-      recurse = TRUE,
-      regexp = "raw_feature_bc_matrix"
-    ),
-    bsf_id = str_match(sample_file, "([\\w\\d_]*)_trans")[, 2]
-  ) %>%
-  left_join(
-    read_csv("metadata/sample_groups.csv", comment = "#"),
-    by = "bsf_id"
-  ) %>% 
+  read_csv("metadata/sample_groups.csv", comment = "#") %>% 
   arrange(bsf_order) %>% 
-  select(order = bsf_order, sample_file, sample_name = sample) %>% 
-  drop_na()
+  select(order = bsf_order, sample_file = geo_rna_raw, sample_name = sample)
 
 
 
@@ -70,12 +57,11 @@ remove_soup <- function(bsf_order) {
     samples %>%
     filter(order == {{bsf_order}}) %>% 
     pull(sample_file)
-  sce_droplets <- read10xCounts(raw_file)
-  rownames(sce_droplets) <- make.unique(rowData(sce_droplets)$Symbol)
+  raw_counts <- Seurat::Read10X_h5(path_join(c(data_dir, raw_file)))
 
   # calculate contamination fraction
   soup_channel <-
-    SoupChannel(tod = counts(sce_droplets), toc = counts(sce_cells)) %>%
+    SoupChannel(tod = raw_counts, toc = counts(sce_cells)) %>%
     setClusters(
       nb_metadata %>%
         select(cell, cluster_50) %>%
