@@ -14,8 +14,7 @@ library(fs)
 # Parameters --------------------------------------------------------------
 
 # folder with input files
-# root_dir <- "data_generated"
-root_dir <- "/media/AGFORTELNY/PROJECTS/Neuroblastoma/analysis/wolfgang/data_generated"
+root_dir <- "data_generated"
 
 # folder where infercnv results are saved
 out_dir <- path_join(c(root_dir, "infercnv_output"))
