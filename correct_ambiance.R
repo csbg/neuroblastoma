@@ -1,7 +1,7 @@
 # Creates a cell_data_set with an additional assay `soupx_counts`, containing
 # decontaminated counts as determined by SoupX.
 #
-# @DEPI raw data
+# @DEPI data_raw/rna_seq
 # @DEPI rna_integrated_monocle.rds
 # @DEPO rna_decontaminated.rds
 

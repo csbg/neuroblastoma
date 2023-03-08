@@ -8,7 +8,7 @@
 # Generates the file rna_qcpassed.rds, which contains a list of Seurat objects
 # representing the QC-filtered datasets.
 #
-# @DEPI raw data
+# @DEPI data_raw/rna_seq
 # @DEPO rna_qcpassed.rds
 
 library(Seurat)

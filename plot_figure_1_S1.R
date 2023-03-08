@@ -1,3 +1,5 @@
+# @DEPI data_raw/rna_seq
+# @DEPI data_raw/snp_array
 # @DEPI metadata.rds
 # @DEPI rna_decontaminated.rds
 # @DEPI infercnv_output

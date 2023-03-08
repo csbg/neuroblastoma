@@ -1,5 +1,6 @@
 # @DEPI rna_decontaminated.rds
 # @DEPI tumor_data_dong.rds
+# @DEPI data_raw/adrmed
 # @DEPO adrmed_class_*.csv
 
 library(Seurat)
@@ -23,7 +24,7 @@ nb <- nb[, colData(nb)$cellont_abbr == "NB"]
 
 tumor_dong <- readRDS("data_generated/tumor_data_dong.rds")
 
-ref <- readRDS("data_raw/adrmed/reference_adrenal_medulla.rds")
+ref <- readRDS("data_raw/adrmed/adrenal_medulla_Seurat.RDS")
 
 
 
