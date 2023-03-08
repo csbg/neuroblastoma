@@ -1,11 +1,25 @@
 TODO
 
-- rename figures
-- see how to load GEO data
-- remove unnecessary plots?
-- create Zenodo repository with R data and SNP data
-- add CITATION.cff
-- adjust folders
+- rename figures:
+  - 3c use new version
+  - 3f/g use old versions
+  - 4b -> S4b
+  - 4c -> 4b
+  - 4d -> 4c
+  - 4e -> 4d
+  - S1b -> S1c
+  - S1c -> S1d
+  - S1d -> S1e
+  - S4b -> S4c
+  - S5d+e -> S5d
+- rename tables
+  - S4 -> S5
+  - S5 -> S6
+  - S6 -> S4
+  - S7 -> S8
+  - S8 -> S7
+- upload R objects to Zenodo
+- add CITATION.cff (after manuscript has been published)
 
 
 
@@ -33,24 +47,25 @@ Create a folder `data_raw` that will contain raw data in the following subfolder
 
 - `adrmed`:
   - `adrenal_medulla_Seurat.RDS`: reference expression data for adrenal medullary cells; download from https://adrenal.kitz-heidelberg.de/developmental_programs_NB_viz/ (Download data -> Download Adrenal medulla data -> Seurat object (RDS))
-- `COUNT`: TBD
+- `rna_seq`: Download `GSE216155_RAW.tar` from GEO Series GSE216155 and extract all files.
+- `atac_seq`: Download all files from GEO Series GSE216175 (`GSE216175_barcodes.tsv.gz`, `GSE216175_barcodes_samples.csv.gz`, `GSE216175_filtered_peak_bc_matrix.h5`, `GSE216175_matrix.mtx.gz`, `GSE216175_peaks.bed.gz`, and `GSE216175_RAW.tar`). Extract all files from the tarball.
 - `GSE137804`: download the following files from GEO series GSE137804:
   - `GSE137804_tumor_dataset_annotation.csv.gz`
-  - eleven files extracted from `GSE137804_RAW.tar`:
-    `GSM4088774_T10_gene_cell_exprs_table.xls.gz`
-    `GSM4088776_T27_gene_cell_exprs_table.xls.gz`
-    `GSM4088777_T34_gene_cell_exprs_table.xls.gz`
-    `GSM4088780_T69_gene_cell_exprs_table.xls.gz`
-    `GSM4088781_T71_gene_cell_exprs_table.xls.gz`
-    `GSM4088782_T75_gene_cell_exprs_table.xls.gz`
-    `GSM4088783_T92_gene_cell_exprs_table.xls.gz`
-    `GSM4654669_T162_gene_cell_exprs_table.xls.gz`
-    `GSM4654672_T200_gene_cell_exprs_table.xls.gz`
-    `GSM4654673_T214_gene_cell_exprs_table.xls.gz`
-    `GSM4654674_T230_gene_cell_exprs_table.xls.gz`
-- `snp_array`: Extract the contents of `snp_array.tgz` provided in Zenodo repository XXX
+  - `GSE137804_RAW.tar`, from which the following eleven files must be extracted:
+    - `GSM4088774_T10_gene_cell_exprs_table.xls.gz`
+    - `GSM4088776_T27_gene_cell_exprs_table.xls.gz`
+    - `GSM4088777_T34_gene_cell_exprs_table.xls.gz`
+    - `GSM4088780_T69_gene_cell_exprs_table.xls.gz`
+    - `GSM4088781_T71_gene_cell_exprs_table.xls.gz`
+    - `GSM4088782_T75_gene_cell_exprs_table.xls.gz`
+    - `GSM4088783_T92_gene_cell_exprs_table.xls.gz`
+    - `GSM4654669_T162_gene_cell_exprs_table.xls.gz`
+    - `GSM4654672_T200_gene_cell_exprs_table.xls.gz`
+    - `GSM4654673_T214_gene_cell_exprs_table.xls.gz`
+    - `GSM4654674_T230_gene_cell_exprs_table.xls.gz`
+- `snp_array`: Extract the contents of `snp_array.tgz` provided in Zenodo repository [https://doi.org/10.5281/zenodo.7707614]
 
-Optionally, obtain intermediary data: Extract the contents of `data_generated.tgz` from Zenodo repository XXX to folder `data_generated`.
+Optionally, obtain intermediary data: Extract the contents of `R_data_generated.tgz` from Zenodo repository [https://doi.org/10.5281/zenodo.7707614] to folder `data_generated`.
 
 
 
@@ -91,7 +106,7 @@ required by figures and tables.
 
 Run these R scripts in arbitrary order to generate publication figures and tables:
 
-- [plot_figure_1_S1.R](plot_figure_1_S1.R) - includes Tables S2 and S3
+- [plot_figure_1_S1.R](plot_figure_1_S1.R) - includes Tables S2, S3, and S10
 - [plot_figure_2_S2.R](plot_figure_2_S2.R)
 - [plot_figure_3_S3.R](plot_figure_3_S3.R) - includes Table S6
 - [plot_figure_4_S4_S7b.R](plot_figure_4_S4_S7b.R) - includes Tables S4 and S5
