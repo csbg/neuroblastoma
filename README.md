@@ -12,6 +12,7 @@
 - `misc`: miscellaneous scripts
 - `plots`: generated plots
 - `renv`: R environment data
+- `scatac`: scripts for scATAC-seq analysis
 - `tables`: exported tables
 
 
@@ -44,29 +45,31 @@ Optionally, obtain intermediary data: Extract the contents of `R_data_generated.
 
 
 
-## Main workflow
+## scRNA-seq analysis
+
+### Main workflow
 
 Run these R scripts in the given order to generate all files
 required by figures and tables.
 
-- [perform_qc.R](perform_qc.R) -
+- [perform_qc.R](perform_qc.R) –
   perform QC filtering, ensure unique cell names
-- [integrate_rna.R](integrate_rna.R) -
+- [integrate_rna.R](integrate_rna.R) –
   integrate scRNA-seq samples with monocle, perform basic analyses
   and extract resulting metadata
 - [correct_ambiance.R](correct_ambiance.R) –
   remove cell-free RNA contamination
-- [classify_cell_types.R](classify_cell_types.R) -
+- [classify_cell_types.R](classify_cell_types.R) –
   perform cell type classification via SingleR
-- [assemble_metadata.R](assemble_metadata.R) -
+- [assemble_metadata.R](assemble_metadata.R) –
   generate one CSV and RDS file with all metadata
-- [analyse_dge.R](analyse_dge.R) -
+- [analyse_dge.R](analyse_dge.R) –
   analyse differential gene expression using mixed models
-- [analyse_cnv.R](analyse_cnv.R) -
+- [analyse_cnv.R](analyse_cnv.R) –
   analyse copy number variations
-- [analyse_ccc.R](analyse_ccc.R) -
+- [analyse_ccc.R](analyse_ccc.R) –
   analyse cell-cell communication
-- [analyse_myeloid.R](analyse_myeloid.R) -
+- [analyse_myeloid.R](analyse_myeloid.R) –
   analyse myeloid subpopulation
 - [prepare_data_dong.R](prepare_data_dong.R) –
   prepare dataset by Dong et al for analysis
@@ -76,25 +79,66 @@ required by figures and tables.
   comparison of tumor samples via pseudobulk correlation
 
 
-
-## Plotting functions
+### Plotting functions
 
 Run these R scripts in arbitrary order to generate publication figures and tables:
 
-- [plot_figure_1_S1.R](plot_figure_1_S1.R) - includes Tables S2, S3, and S10
+- [plot_figure_1_S1.R](plot_figure_1_S1.R) – includes Tables S2, S3, and S10
 - [plot_figure_2_S2.R](plot_figure_2_S2.R)
-- [plot_figure_3_S3.R](plot_figure_3_S3.R) - includes Table S4
-- [plot_figure_4_S4_S7b.R](plot_figure_4_S4_S7b.R) - includes Tables S5 and S6
-- [plot_figure_S5_S7c.R](plot_figure_S5_S7c.R) - includes Table S7 and S8
+- [plot_figure_3_S3.R](plot_figure_3_S3.R) – includes Table S4
+- [plot_figure_4_S4_S7b.R](plot_figure_4_S4_S7b.R) – includes Tables S5 and S6
+- [plot_figure_S5_S7c.R](plot_figure_S5_S7c.R) – includes Table S7 and S8
 - [plot_figures_revision.R](plot_figures_revision.R) – plots for the reply to reviewers
 
 
+### Other scripts
 
-## Other scripts
-
-- [common_functions.R](common_functions.R) -
+- [common_functions.R](common_functions.R) –
   functions used throughout the project
 - [plot_dependencies.R](plot_dependencies.R) –
   plot the dependency graph
 - [styling.R](styling.R) –
   functions for generating publication-quality figures and tables
+
+
+
+## scATAC-seq analysis
+
+All required scripts are in subfolder `scatac`.
+
+### scATAC-seq workflow
+
+- [R0_scopen.R](scatac/R0_scopen.R) –
+  quality control, normalization, clustering 
+- [R1_annotation.R](scatac/R1_annotation.R) –
+  annotation of clusters formed and markers used
+- [R2_foot_printing_cell_type.R](scatac/R2_foot_printing_cell_type.R) –
+  cell-type specific footprinting
+- [R3_nebula_run.R](scatac/R3_nebula_run.R) –
+  identify differentially accessible OCRs in patient groups
+- [R4_nebula_results.R](scatac/R4_nebula_results.R) –
+  analyze nebula results
+- [R5_nebula_microenvironment.R](scatac/R5_nebula_microenvironment.R) –
+  enrichment in microenvironment cells
+- [R6_nebula_nbcells.R](scatac/R6_nebula_nbcells.R) –
+  enrichment in NB cells
+- [R7_create_bed_run_homer.R](scatac/R7_create_bed_run_homer.R) –
+  create cell specific bed files and motif analysis
+- [R8_homer_results.R](scatac/R8_homer_results.R) –
+  analyze motif analysis results
+
+
+### scATAC-seq scRNA-seq integration workflow
+
+For data integration we used scGLUE (Graph Linked Unified Embedding) model for unpaired single-cell multi-omics data integration (https://scglue.readthedocs.io/en/latest/). We followed the detailed tutorial at https://scglue.readthedocs.io/en/latest/tutorials.html. Before the tutorial we needed to convert the objects in anndata format from SingleCellExperiment and Seurat for scRNA-seq and scATAC-seq respectively. There are many tools available to do this and we are sharing our approach for format conversion, namely [monocle_to_anndata.R](scatac/monocle_to_anndata.R) and [Seurat_to_anndata.R](scatac/Seurat_to_anndata.R).
+
+The following Jupyter notebooks follow the notebooks of the scGLUE integration pipeline. 
+
+- [G1_nb_glue_preprocessing_myeloid.ipynb]() –
+  preprocess scRNA-seq and scATAC-seq anndata objects
+- [G2_glue_model_myeloid.ipynb]() –
+  create glue model 
+- [G3_regulatory_inference_myeloid.ipynb]() 
+- [G4_regulatory_network_plots_myeloid.ipynb]()
+
+Finally, [Figures.R](scatac/Figures.R) generates publication figures.
