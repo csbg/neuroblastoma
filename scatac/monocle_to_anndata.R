@@ -1,10 +1,10 @@
 
 nb_rna <- 
   readRDS(
-    file = "/media/AGFORTELNY/PROJECTS/Neuroblastoma/analysis/wolfgang/data_generated/rna_decontaminated.rds")
+    file = "data_generated/rna_decontaminated.rds")
 nb_rna_meta <- 
   readRDS(
-    file = "/media/AGFORTELNY/PROJECTS/Neuroblastoma/analysis/wolfgang/data_generated/metadata.rds")
+    file = "data_generated/metadata.rds")
 
 # rna_integrated_monocle.rds
 # sce <- SingleCellExperiment(list(counts=counts))
