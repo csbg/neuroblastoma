@@ -540,8 +540,6 @@ ggsave_publication("S7c_IL10", type = "png",
 
 # Tables ------------------------------------------------------------------
 
-## S7 ----
-
 gene_pathways <- 
   CellChatDB.human$interaction %>% 
   as_tibble() %>% 
@@ -566,24 +564,9 @@ rename_columns <- function(s) {
   )
 }
 
-dge_my$results_wide_filtered %>% 
-  arrange(comparison, cell_type, desc(logFC)) %>%
-  mutate(
-    logFC = logFC / log(2),  # nebula returns natural log fold changes
-    comparison = rename_contrast_long_alt(comparison),
-  ) %>%
-  select(!c(p, frq, frq_ref, direction)) %>%
-  pivot_wider(names_from = comparison, values_from = c(logFC, p_adj)) %>%
-  relocate(1, 2, 3, 7, 4, 8, 5, 9, 6, 10) %>%
-  rename_with(rename_columns) %>%
-  left_join(gene_pathways, by = c(gene = "Gene")) %>%
-  split(.$cell_type) %>%
-  map(select, !cell_type) %>%
-  save_table("S7_dge_myeloid")
 
 
-
-## S8 ----
+## S7 ----
 
 dge_my$gsea %>% 
   arrange(db, comparison, cell_type, desc(NES)) %>%
@@ -606,4 +589,23 @@ dge_my$gsea %>%
   ) %>%
   split(.$`Cell type`) %>%
   map(select, !`Cell type`) %>%
-  save_table("S8_gsea_myeloid")
+  save_table("S7_gsea_myeloid")
+
+
+
+## S8 ----
+
+dge_my$results_wide_filtered %>% 
+  arrange(comparison, cell_type, desc(logFC)) %>%
+  mutate(
+    logFC = logFC / log(2),  # nebula returns natural log fold changes
+    comparison = rename_contrast_long_alt(comparison),
+  ) %>%
+  select(!c(p, frq, frq_ref, direction)) %>%
+  pivot_wider(names_from = comparison, values_from = c(logFC, p_adj)) %>%
+  relocate(1, 2, 3, 7, 4, 8, 5, 9, 6, 10) %>%
+  rename_with(rename_columns) %>%
+  left_join(gene_pathways, by = c(gene = "Gene")) %>%
+  split(.$cell_type) %>%
+  map(select, !cell_type) %>%
+  save_table("S8_dge_myeloid")

@@ -1,28 +1,3 @@
-TODO
-
-- rename figures:
-  - 3c use new version
-  - 3f/g use old versions
-  - 4b -> S4b
-  - 4c -> 4b
-  - 4d -> 4c
-  - 4e -> 4d
-  - S1b -> S1c
-  - S1c -> S1d
-  - S1d -> S1e
-  - S4b -> S4c
-  - S5d+e -> S5d
-- rename tables
-  - S4 -> S5
-  - S5 -> S6
-  - S6 -> S4
-  - S7 -> S8
-  - S8 -> S7
-- upload R objects to Zenodo
-- add CITATION.cff (after manuscript has been published)
-
-
-
 # Dissecting the cellular architecture of neuroblastoma bone marrow metastasis using single-cell transcriptomics and epigenomics unravels the role of monocytes at the metastatic niche
 
 ## Folders
@@ -63,9 +38,9 @@ Create a folder `data_raw` that will contain raw data in the following subfolder
     - `GSM4654672_T200_gene_cell_exprs_table.xls.gz`
     - `GSM4654673_T214_gene_cell_exprs_table.xls.gz`
     - `GSM4654674_T230_gene_cell_exprs_table.xls.gz`
-- `snp_array`: Extract the contents of `snp_array.tgz` provided in Zenodo repository [https://doi.org/10.5281/zenodo.7707614]
+- `snp_array`: Extract the contents of `snp_array.tgz` provided in Zenodo repository https://doi.org/10.5281/zenodo.7707614
 
-Optionally, obtain intermediary data: Extract the contents of `R_data_generated.tgz` from Zenodo repository [https://doi.org/10.5281/zenodo.7707614] to folder `data_generated`.
+Optionally, obtain intermediary data: Extract the contents of `R_data_generated.tgz` from Zenodo repository https://doi.org/10.5281/zenodo.7707614 to folder `data_generated`.
 
 
 
@@ -108,8 +83,8 @@ Run these R scripts in arbitrary order to generate publication figures and table
 
 - [plot_figure_1_S1.R](plot_figure_1_S1.R) - includes Tables S2, S3, and S10
 - [plot_figure_2_S2.R](plot_figure_2_S2.R)
-- [plot_figure_3_S3.R](plot_figure_3_S3.R) - includes Table S6
-- [plot_figure_4_S4_S7b.R](plot_figure_4_S4_S7b.R) - includes Tables S4 and S5
+- [plot_figure_3_S3.R](plot_figure_3_S3.R) - includes Table S4
+- [plot_figure_4_S4_S7b.R](plot_figure_4_S4_S7b.R) - includes Tables S5 and S6
 - [plot_figure_S5_S7c.R](plot_figure_S5_S7c.R) - includes Table S7 and S8
 - [plot_figures_revision.R](plot_figures_revision.R) – plots for the reply to reviewers
 

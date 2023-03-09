@@ -755,7 +755,7 @@ ggsave_publication("S7b_gsea", width = 8, height = 10.8)
 
 # Tables ------------------------------------------------------------------
 
-## S4 ----
+## S5 ----
 
 gene_pathways <- 
   CellChatDB.human$interaction %>% 
@@ -803,11 +803,11 @@ dge$results_wide_filtered %>%
   left_join(gene_pathways, by = c(gene = "Gene")) %>%
   split(.$cell_type) %>%
   map(select, !cell_type) %>%
-  save_table("S4_dge")
+  save_table("S5_dge")
 
 
 
-## S5 ----
+## S6 ----
 
 dge$gsea %>% 
   arrange(db, comparison, cell_type, desc(NES)) %>%
@@ -831,4 +831,4 @@ dge$gsea %>%
   ) %>%
   split(.$`Cell type`) %>%
   map(select, !`Cell type`) %>%
-  save_table("S5_gsea")
+  save_table("S6_gsea")
