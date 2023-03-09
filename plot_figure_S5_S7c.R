@@ -359,7 +359,7 @@ ggsave_publication("S5c_gsea", width = 8, height = 7.8)
 
 
 
-## S5d ----
+## S5d (UMAP) ----
 
 plot_genes <- function(...,
                        dataset = c("myeloid", "all"),
@@ -446,7 +446,7 @@ ggsave_publication("S5d_genes", type = "png",
                    width = 10, height = 8, bg = "transparent")
 
 
-## S5e ----
+## S5d (Dotplot) ----
 
 plot_significance <- function(...) {
   selected_genes <- factor(c(...))
@@ -508,7 +508,7 @@ plot_significance <- function(...) {
 }
 
 plot_significance("CD163", "CXCL2", "TIMP1", "EREG")
-ggsave_publication("S5e_significance", width = 8, height = 2.5)
+ggsave_publication("S5d_significance", width = 8, height = 2.5)
 
 
 

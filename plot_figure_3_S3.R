@@ -156,15 +156,15 @@ ggsave_publication("3b_outgoing_comm_score", width = 5.5, height = 5)
 
 ## 3c ----
 
-plot_selected_dots <- function(pathways, source_type = "NB") {
+plot_selected_dots <- function(interactions, source_type = "NB") {
   vis_data <- 
     sig_data %>% 
     filter(
-      pathway_name %in% {{pathways}}, 
+      interaction_name %in% {{interactions}}, 
       source == {{source_type}}
     ) %>%
     mutate(
-      pathway_name = factor(pathway_name, levels = pathways),
+      pathway_name = factor(pathway_name),
       source = fct_recode(source, "from NB (source) to" = "NB"),
       target = factor(target, levels = names(CELL_TYPE_ABBREVIATIONS))
     )
@@ -192,7 +192,7 @@ plot_selected_dots <- function(pathways, source_type = "NB") {
       )
     ) +
     xlab("cell type (target)") +
-    ylab("ligand-receptor pair and pathway") +
+    ylab("ligand-receptor pair\nand pathway") +
     facet_grid(
       vars(pathway_name), 
       vars(source),
@@ -243,8 +243,8 @@ plot_selected_dots <- function(pathways, source_type = "NB") {
     )
 }
 
-plot_selected_dots(c("MK", "MIF", "COLLAGEN", "PTN", "APP", "ALCAM", "THY1"))
-ggsave_publication("3c_dots", height = 5, width = 7)
+plot_selected_dots(c("MDK_NCL", "MDK_LRP1", "MIF_CD74_CXCR4", "MIF_CD74_CD44"))
+ggsave_publication("3c_dots", height = 3.4, width = 7)
 
 
 
@@ -341,29 +341,44 @@ make_matrix <- function(gene, cell_type) {
     )
 }
 
-plot_violin <- function(genes, cell_types) {
+plot_violin <- function(genes, cell_types, y_axis_pos = "left") {
   plot_data <-
     list(gene = genes, cell_type = cell_types) %>%
     cross_df() %>% 
     pmap_dfr(make_matrix) %>% 
     mutate(gene = as_factor(gene), cell_type = as_factor(cell_type))
   
-  ggplot(plot_data, aes(cell_type, logexp)) +
+  if (y_axis_pos == "left") {
+    switch <- "y"
+    position <- "left"
+  } else {
+    switch <- NULL
+    position <- "right"
+  }
+  
+  ggplot(plot_data, aes(sample, logexp)) +
     geom_violin(
-      aes(color = cell_type, fill = cell_type),
+      aes(color = group, fill = group),
       size = BASE_LINE_SIZE,
       scale = "width",
       width = 0.8,
       show.legend = FALSE
     ) +
     stat_summary(geom = "point", fun = mean, size = .2) +
-    xlab("cell type") +
+    xlab("patient") +
     scale_y_continuous(
-      "log-normalized expression",
-      limits = c(0, 1)
+      "log-normalized expression of gene",
+      limits = c(0, 1),
+      position = position
     ) +
-    scale_fill_manual(values = CELL_TYPE_COLORS, aesthetics = c("color", "fill")) +
-    facet_wrap(vars(gene), nrow = 1) +
+    scale_fill_manual(values = GROUP_COLORS, aesthetics = c("color", "fill")) +
+    facet_grid(
+      vars(gene),
+      vars(cell_type),
+      scales = "free_x",
+      space = "free_x",
+      switch = switch
+    ) +
     theme_nb(grid = FALSE) +
     theme(
       axis.text.y = element_blank(),
@@ -375,10 +390,21 @@ plot_violin <- function(genes, cell_types) {
 }
 
 plot_violin(
-  genes = c("MIF", "CD74", "CXCR4", "CD44", "MDK", "NCL", "LRP1"),
+  genes = c("MIF", "CD74", "CXCR4", "CD44"),
   cell_types = c("NB", "M")
 )
-ggsave_publication("3f_violins", width = 8, height = 3)
+ggsave_publication("3f_violins_MIF", width = 8.5, height = 9)
+
+
+
+## 3g ----
+
+plot_violin(
+  genes = c("MDK", "NCL", "LRP1"),
+  cell_types = c("NB", "M"),
+  y_axis_pos = "right"
+)
+ggsave_publication("3g_violins_MK", width = 8.5, height = 6.97)
 
 
 

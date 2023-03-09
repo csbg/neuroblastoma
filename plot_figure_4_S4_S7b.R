@@ -82,80 +82,6 @@ ggsave_publication("4a_cell_type_abundances", width = 6, height = 4)
 
 ## 4b ----
 
-plot_consistent_genes <- function() {
-  consistent_genes <- 
-    dge$results_wide_filtered %>%
-    mutate(comparison = rename_contrast(comparison)) %>%
-    filter(
-      abs(logFC) > log(2),
-      comparison %>% str_ends("C")
-    ) %>%
-    group_by(cell_type, direction, comparison) %>%
-    summarise(genes = list(unique(gene))) %>%
-    ungroup() %>% 
-    pivot_wider(names_from = comparison, values_from = genes) %>% 
-    rowwise() %>%
-    mutate(
-      shared_AM = `A vs C` %>% intersect(`M vs C`) %>% length(),
-      shared_AS = `A vs C` %>% intersect(`S vs C`) %>% length(),
-      shared_MS = `M vs C` %>% intersect(`S vs C`) %>% length(),
-      shared_AMS = `A vs C` %>% intersect(`M vs C`) %>%
-        intersect(`S vs C`) %>% length()
-    ) %>%
-    ungroup() %>%
-    mutate(
-      across(
-        starts_with("shared"),
-        ~if_else(direction == "up", ., -.)
-      )
-    ) %>% 
-    pivot_longer(
-      starts_with("shared"),
-      names_to = "shared",
-      names_prefix = "shared_",
-      values_to = "n"
-    ) %>% 
-    mutate(
-      shared =
-        shared %>% 
-        fct_relevel("AM", "AS", "MS") %>% 
-        fct_recode("A and M" = "AM", "A and S" = "AS",
-                   "M and S" = "MS", "A, M, and S" = "AMS"),
-      cell_type = factor(cell_type, levels = names(CELL_TYPE_ABBREVIATIONS))
-    )
-  
-  consistent_genes %>% 
-    ggplot(aes(cell_type, n, fill = shared)) +
-    geom_col() +
-    geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
-    scale_fill_manual(
-      "shared\nbetween",
-      values = CONSISTENT_GENES_COLORS,
-      guide = guide_legend(reverse = TRUE)
-    ) +
-    xlab("cell type") +
-    ylab("number of consistently\ndown- and upregulated genes") +
-    theme_nb(grid = FALSE) +
-    theme(
-      axis.ticks.length.x = unit(0, "mm"),
-      legend.key.height = unit(2, "mm"),
-      legend.key.width = unit(2, "mm"),
-      legend.margin = margin(0, 0, 0, -2, "mm"),
-      panel.border = element_blank(),
-      panel.grid.major.y = element_line(
-        color = "grey92",
-        size = BASE_LINE_SIZE
-      )
-    )
-}
-
-plot_consistent_genes()
-ggsave_publication("4b_number_of_consistent_genes", width = 5, height = 4)
-
-
-
-## 4c ----
-
 plot_logfc_correlation_heatmap <- function() {
   corr_mat <- 
     dge$results_wide %>% 
@@ -233,12 +159,12 @@ plot_logfc_correlation_heatmap <- function() {
 }
 
 (p <- plot_logfc_correlation_heatmap())
-ggsave_publication("4c_logfc_correlation_heatmap",
+ggsave_publication("4b_logfc_correlation_heatmap",
                    plot = p, width = 8, height = 5)
 
 
 
-## 4d ----
+## 4c ----
 
 plot_gsea <- function(db = "MSigDB_Hallmark_2020",
                       comparisons = NULL,
@@ -373,11 +299,11 @@ plot_gsea(
     "E2F Targets"
   )
 )
-ggsave_publication("4d_gsea", width = 11, height = 6)
+ggsave_publication("4c_gsea", width = 11, height = 6)
 
 
 
-## 4e ----
+## 4d ----
 
 selected_genes <- list(
   "TNF-alpha Signaling via NF-kB" = c("IL1B", "FOS", "NFKB1", "MYC", "IFNGR2",
@@ -516,7 +442,7 @@ plot_pathway_genes <- function(db = "MSigDB_Hallmark_2020",
 }
 
 (p <- plot_pathway_genes())
-ggsave_publication("4e_pathway_genes",
+ggsave_publication("4d_pathway_genes",
                    plot = p, width = 9, height = 7)
 
 
@@ -625,6 +551,80 @@ ggsave_publication("S4a_cell_type_enrichment", width = 5, height = 4)
 
 
 ## S4b ----
+
+plot_consistent_genes <- function() {
+  consistent_genes <- 
+    dge$results_wide_filtered %>%
+    mutate(comparison = rename_contrast(comparison)) %>%
+    filter(
+      abs(logFC) > log(2),
+      comparison %>% str_ends("C")
+    ) %>%
+    group_by(cell_type, direction, comparison) %>%
+    summarise(genes = list(unique(gene))) %>%
+    ungroup() %>% 
+    pivot_wider(names_from = comparison, values_from = genes) %>% 
+    rowwise() %>%
+    mutate(
+      shared_AM = `A vs C` %>% intersect(`M vs C`) %>% length(),
+      shared_AS = `A vs C` %>% intersect(`S vs C`) %>% length(),
+      shared_MS = `M vs C` %>% intersect(`S vs C`) %>% length(),
+      shared_AMS = `A vs C` %>% intersect(`M vs C`) %>%
+        intersect(`S vs C`) %>% length()
+    ) %>%
+    ungroup() %>%
+    mutate(
+      across(
+        starts_with("shared"),
+        ~if_else(direction == "up", ., -.)
+      )
+    ) %>% 
+    pivot_longer(
+      starts_with("shared"),
+      names_to = "shared",
+      names_prefix = "shared_",
+      values_to = "n"
+    ) %>% 
+    mutate(
+      shared =
+        shared %>% 
+        fct_relevel("AM", "AS", "MS") %>% 
+        fct_recode("A and M" = "AM", "A and S" = "AS",
+                   "M and S" = "MS", "A, M, and S" = "AMS"),
+      cell_type = factor(cell_type, levels = names(CELL_TYPE_ABBREVIATIONS))
+    )
+  
+  consistent_genes %>% 
+    ggplot(aes(cell_type, n, fill = shared)) +
+    geom_col() +
+    geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
+    scale_fill_manual(
+      "shared\nbetween",
+      values = CONSISTENT_GENES_COLORS,
+      guide = guide_legend(reverse = TRUE)
+    ) +
+    xlab("cell type") +
+    ylab("number of consistently\ndown- and upregulated genes") +
+    theme_nb(grid = FALSE) +
+    theme(
+      axis.ticks.length.x = unit(0, "mm"),
+      legend.key.height = unit(2, "mm"),
+      legend.key.width = unit(2, "mm"),
+      legend.margin = margin(0, 0, 0, -2, "mm"),
+      panel.border = element_blank(),
+      panel.grid.major.y = element_line(
+        color = "grey92",
+        size = BASE_LINE_SIZE
+      )
+    )
+}
+
+plot_consistent_genes()
+ggsave_publication("S4b_number_of_consistent_genes", width = 5, height = 4)
+
+
+
+## S4c ----
 
 plot_pathway_genes_sc <- function(db = "MSigDB_Hallmark_2020",
                                   pathways = c(
@@ -740,7 +740,7 @@ plot_pathway_genes_sc <- function(db = "MSigDB_Hallmark_2020",
 }
 
 (p <- plot_pathway_genes_sc())
-ggsave_publication("S4b_pathway_genes_sc", type = "png",
+ggsave_publication("S4c_pathway_genes_sc", type = "png",
                    plot = p, width = 10, height = 5)
 
 

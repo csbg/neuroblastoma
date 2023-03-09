@@ -802,7 +802,7 @@ ggsave_publication("S1a_umap_integration", type = "png",
 
 
 
-## S1b ----
+## S1c ----
 
 plot_infiltration_rate <- function() {
   tif_facs <-
@@ -875,11 +875,11 @@ plot_infiltration_rate <- function() {
 }
 
 plot_infiltration_rate()
-ggsave_publication("S1b_tif", width = 6, height = 5)
+ggsave_publication("S1c_tif", width = 6, height = 5)
 
 
 
-## S1c ----
+## S1d ----
 
 plot_resexp_tumor <- function(cells_per_sample = 50L) {
   # cell metadata
@@ -984,12 +984,12 @@ plot_resexp_tumor <- function(cells_per_sample = 50L) {
 }
 
 (p <- plot_resexp_tumor())
-ggsave_publication("S1c_resexp_tumor", plot = p,
+ggsave_publication("S1d_resexp_tumor", plot = p,
                    type = "png", width = 20, height = 8)
 
 
 
-## S1d ----
+## S1e ----
 
 plot_resexp_marrow <- function(cells_per_type = 50L) {
   # cell metadata
@@ -1103,7 +1103,7 @@ plot_resexp_marrow <- function(cells_per_type = 50L) {
 }
 
 (p <- plot_resexp_marrow())
-ggsave_publication("S1d_resexp_marrow", plot = p,
+ggsave_publication("S1e_resexp_marrow", plot = p,
                    type = "png", width = 20, height = 8)
 
 
