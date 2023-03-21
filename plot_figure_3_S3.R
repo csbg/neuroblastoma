@@ -470,7 +470,7 @@ plot_netvisual()
 sig_data %>% 
   select(
     "Cell type expressing ligand" = source,
-    "Cell type expressing receptor" = source,
+    "Cell type expressing receptor" = target,
     Ligand = ligand,
     Receptor = receptor,
     Score = prob,
