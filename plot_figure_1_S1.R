@@ -1145,52 +1145,11 @@ dir_ls("data_raw/rna_seq", regex = "metrics_summary.csv.gz") %>%
     .after = Sample
   ) %>%
   arrange(Sample) %>%
-  save_table("S2_scRNAseq_statistics")
+  save_table("table_S2_scRNAseq_statistics")
 
 
-## S3 ----
 
-infercnv_data$regions_data %>%
-  filter(near(prob, 0.5)) %>%
-  extract(
-    cell_group_name,
-    into = c("sample", "group"),
-    regex = "malignant_(.*?)_([IV]+)"
-  ) %>%
-  filter(!is.na(sample)) %>%
-  transmute(
-    sample = sample,
-    type = "scRNA-seq",
-    chr = str_sub(chr, 4) %>%
-      factor(levels = snparray_data$chromosome_size$chr),
-    start = as.integer(start),
-    end = as.integer(end),
-    delta_copy_number = as.numeric(state) - 3,
-  ) %>%
-  bind_rows(
-    snparray_data$cnv_regions %>%
-      select(!type:ploidy) %>%
-      mutate(type = "SNP array")
-  ) %>%
-  mutate(
-    sample = rename_patients(sample),
-    group = GROUP_NAMES_LONG[str_sub(sample, 1, 1)],
-    .after = sample
-  ) %>%
-  rename(
-    Patient = sample,
-    Group = group,
-    Type = type,
-    Chromosome = chr,
-    Start = start,
-    End = end,
-    "Copy Number Difference" = delta_copy_number
-  ) %>%
-  arrange(Patient, Type, Chromosome, Start) %>%
-  save_table("S3_cnv", "CNV")
-
-
-## S10 ----
+## S4 ----
 
 dir_ls("data_raw/atac_seq/", regex = "summary.json") %>%
   map_dfr(~read_json(.) %>% compact, .id = "file") %>%
@@ -1233,4 +1192,49 @@ dir_ls("data_raw/atac_seq/", regex = "summary.json") %>%
     .after = Sample
   ) %>%
   arrange(Sample) %>% 
-  save_table("S10_scATACseq_statistics")
+  save_table("table_S4_scATACseq_statistics")
+
+
+
+# Data --------------------------------------------------------------------
+
+## S1 ----
+
+infercnv_data$regions_data %>%
+  filter(near(prob, 0.5)) %>%
+  extract(
+    cell_group_name,
+    into = c("sample", "group"),
+    regex = "malignant_(.*?)_([IV]+)"
+  ) %>%
+  filter(!is.na(sample)) %>%
+  transmute(
+    sample = sample,
+    type = "scRNA-seq",
+    chr = str_sub(chr, 4) %>%
+      factor(levels = snparray_data$chromosome_size$chr),
+    start = as.integer(start),
+    end = as.integer(end),
+    delta_copy_number = as.numeric(state) - 3,
+  ) %>%
+  bind_rows(
+    snparray_data$cnv_regions %>%
+      select(!type:ploidy) %>%
+      mutate(type = "SNP array")
+  ) %>%
+  mutate(
+    sample = rename_patients(sample),
+    group = GROUP_NAMES_LONG[str_sub(sample, 1, 1)],
+    .after = sample
+  ) %>%
+  rename(
+    Patient = sample,
+    Group = group,
+    Type = type,
+    Chromosome = chr,
+    Start = start,
+    End = end,
+    "Copy Number Difference" = delta_copy_number
+  ) %>%
+  arrange(Patient, Type, Chromosome, Start) %>%
+  save_table("data_S1_cnv", "CNV")

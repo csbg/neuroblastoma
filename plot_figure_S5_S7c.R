@@ -538,7 +538,7 @@ ggsave_publication("S7c_IL10", type = "png",
 
 
 
-# Tables ------------------------------------------------------------------
+# Data --------------------------------------------------------------------
 
 gene_pathways <- 
   CellChatDB.human$interaction %>% 
@@ -566,7 +566,7 @@ rename_columns <- function(s) {
 
 
 
-## S7 ----
+## S5 ----
 
 dge_my$gsea %>% 
   arrange(db, comparison, cell_type, desc(NES)) %>%
@@ -589,11 +589,11 @@ dge_my$gsea %>%
   ) %>%
   split(.$`Cell type`) %>%
   map(select, !`Cell type`) %>%
-  save_table("S7_gsea_myeloid")
+  save_table("data_S5_gsea_myeloid")
 
 
 
-## S8 ----
+## S6 ----
 
 dge_my$results_wide_filtered %>% 
   arrange(comparison, cell_type, desc(logFC)) %>%
@@ -608,4 +608,4 @@ dge_my$results_wide_filtered %>%
   left_join(gene_pathways, by = c(gene = "Gene")) %>%
   split(.$cell_type) %>%
   map(select, !cell_type) %>%
-  save_table("S8_dge_myeloid")
+  save_table("data_S6_dge_myeloid")

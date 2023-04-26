@@ -463,9 +463,9 @@ plot_netvisual()
 
 
 
-# Tables ------------------------------------------------------------------
+# Data --------------------------------------------------------------------
 
-## S4 ----
+## S2 ----
 
 sig_data %>% 
   select(
@@ -479,4 +479,4 @@ sig_data %>%
     Pathway = pathway_name,
     "Type of interaction" = annotation
   ) %>%
-  save_table("S4_ccc", sheet_name = "Interactions")
+  save_table("data_S2_ccc", sheet_name = "Interactions")
