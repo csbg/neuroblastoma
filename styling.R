@@ -459,6 +459,10 @@ rename_myeloid_newline <- partial(
 #' @return Nothing.
 save_table <- function(tables, filename, sheet_name = "Sheet1") {
   filename <- str_glue("tables/{filename}.xlsx")
+  filename %>%
+    path_dir() %>%
+    dir_create()
+  
   wb <- createWorkbook()
   
   # ensure that tables is a named list
