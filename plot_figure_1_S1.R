@@ -162,6 +162,7 @@ snparray_data <- read_snparray_data("data_raw/snp_array")
 ## 1b ----
 
 plot_umap <- function() {
+  # prepare data
   adjust_positions <- tribble(
     ~label, ~dx, ~dy,
     "13", 1.5, -0.5,
@@ -188,9 +189,15 @@ plot_umap <- function() {
       umap_1_monocle = umap_1_monocle + replace_na(dx, 0),
       umap_2_monocle = umap_2_monocle + replace_na(dy, 0)
     )
+  
+  # export source data
+  nb_metadata %>% 
+    select(cell, umap_1 = umap_1_monocle, umap_2 = umap_2_monocle,
+           cluster = cluster_50, cell_type = cellont_abbr) %>% 
+    save_table("source_data/figure_1b", "Figure 1b")
 
-  p <-
-    nb_metadata %>%
+  # make plot
+  nb_metadata %>%
     ggplot(aes(umap_1_monocle, umap_2_monocle)) +
     geom_point(
       aes(color = cellont_abbr),
@@ -218,8 +225,6 @@ plot_umap <- function() {
       panel.border = element_blank(),
       plot.background = element_blank()
     )
-
-  p
 }
 
 plot_umap()
@@ -232,6 +237,7 @@ ggsave_publication("1b_umap_dataset", type = "png",
 
 plot_celltype_heatmap <- function(clusters = 1:20, cell_size = 2.2,
                                   collapse = TRUE) {
+  # prepare data
   # generate matrix of cell type abundances
   make_matrix <- function(ref) {
     cell_type_column <- rlang::sym(str_glue("cell_type_{ref}_broad"))
@@ -341,8 +347,19 @@ plot_celltype_heatmap <- function(clusters = 1:20, cell_size = 2.2,
     CELL_TYPE_COLORS,
     neurons = unname(CELL_TYPE_COLORS["NB"])
   )
+  
+  # export source data
+  mat %>% 
+    magrittr::set_colnames(
+      col_metadata %>% 
+        unite(ref, cell_type, col = "ref_type") %>% 
+        pull(ref_type)
+    ) %>% 
+    as_tibble(rownames = "cluster") %>% 
+    mutate(assigned_cell_type = row_metadata$cell_type, .after = cluster) %>% 
+    save_table("source_data/figure_1c", "Figure 1c")
 
-  # draw heatmap
+  # make plot
   set.seed(2)
   Heatmap(
     mat,
@@ -426,6 +443,7 @@ ggsave_publication("1c_cell_type_classification",
 plot_cm_dots <- function(counts, features, groups,
                          min_exp = -2.5, max_exp = 2.5,
                          panel_annotation = NULL) {
+  # prepare data
   scale_and_limit <- function(x) {
     scale(x)[,1] %>%
       pmax(min_exp) %>%
@@ -482,7 +500,12 @@ plot_cm_dots <- function(counts, features, groups,
   }
 
   color_limits <- c(min(vis_data$avg_exp), max(vis_data$avg_exp))
-
+  
+  # export source data
+  vis_data %>% 
+    save_table("source_data/figure_1d", "Figure 1d")
+  
+  # make plot
   ggplot(vis_data, aes(id, feature)) +
     panel_bg +
     geom_point(aes(size = pct_exp, color = avg_exp)) +
@@ -637,7 +660,6 @@ plot_cnv_data_comparison <- function(selected_samples,
     ) %>%
     mutate(fill = cn_color(delta_copy_number)) %>%
     filter(chr != "Y")
-  # return(plot_data_regions)
 
   set.seed(43)
   plot_data_logrr <-
@@ -645,7 +667,6 @@ plot_cnv_data_comparison <- function(selected_samples,
     filter(chr != "Y") %>%
     group_by(sample) %>%
     slice_sample(prop = logrr_prop)
-  # return(plot_data_logrr)
 
   # filter for selected or common samples
   plot_data_regions <-
@@ -661,9 +682,27 @@ plot_cnv_data_comparison <- function(selected_samples,
       sample = sample %>% factor(level = selected_samples) %>% rename_patients()
     )
 
+  # export source data
+  bind_rows(
+    plot_data_regions %>%
+      select(sample:delta_copy_number) %>%
+      mutate(
+        type = recode(
+          type,
+          sc = "CNV region (scRNA-seq)",
+          snp = "CNV region (SNP array)"
+        )
+      ),
+    plot_data_logrr %>%
+      select(sample:end, log_r_ratio = smoothed) %>%
+      mutate(type = "log R ratio", .after = sample) %>% 
+      mutate(end = NA_real_)
+  ) %>% 
+    arrange(sample, type, chr, start) %>% 
+    save_table("source_data/figure_1e", "Figure 1e")
+  
   # make plot
-  p <-
-    ggplot(NULL, aes(xmin = start, xmax = end, ymin = ymin, ymax = ymax)) +
+  ggplot(NULL, aes(xmin = start, xmax = end, ymin = ymin, ymax = ymax)) +
     geom_rect(
       data = snparray_data$chromosome_size %>% filter(chr != "Y"),
       aes(xmin = 0, ymin = -0.1, ymax = 0)
@@ -734,8 +773,6 @@ plot_cnv_data_comparison <- function(selected_samples,
       strip.text.x = element_text(margin = margin()),
       strip.text.y.left = element_text(angle = 0, margin = margin())
     )
-
-  p
 }
 
 plot_cnv_data_comparison(c("M1", "A1", "S1"))
@@ -746,8 +783,10 @@ ggsave_publication("1e_cnv_comparison", width = 11, height = 6)
 ## S1a ----
 
 plot_umap_unintegrated <- function() {
+  # prepare data
   set.seed(1L)
-  nb_metadata %>%
+  vis_data <- 
+    nb_metadata %>%
     select(
       cell, sample,
       umap_1_monocle, umap_2_monocle,
@@ -766,8 +805,16 @@ plot_umap_unintegrated <- function() {
         fct_rev(),
       sample = rename_patients(sample)
     ) %>%
-    slice_sample(prop = 1) %>%
-    ggplot(aes(umap_1, umap_2)) +
+    slice_sample(prop = 1)
+  
+  # export source data
+  vis_data %>% 
+    rename(dataset = aligned) %>% 
+    arrange(sample, cell, dataset) %>% 
+    save_table("source_data/figure_S1a", "Figure S1a")
+  
+  # make plot
+  ggplot(vis_data, aes(umap_1, umap_2)) +
     geom_point(
       aes(color = sample),
       size = .001,
@@ -805,6 +852,7 @@ ggsave_publication("S1a_umap_integration", type = "png",
 ## S1c ----
 
 plot_infiltration_rate <- function() {
+  # prepare data
   tif_facs <-
     read_csv("metadata/sample_groups.csv", comment = "#") %>%
     filter(!is.na(facs_alive)) %>%
@@ -827,7 +875,7 @@ plot_infiltration_rate <- function() {
       group_long = rename_groups_long(group)
     )
 
-  p <-
+  vis_data <- 
     infiltration_rates %>%
     pivot_longer(
       starts_with("tif"),
@@ -835,8 +883,17 @@ plot_infiltration_rate <- function() {
       names_prefix = "tif_",
       values_to = "tif"
     ) %>%
-    mutate(method = recode(method, facs = "FACS", sc = "scRNA-seq")) %>%
-    ggplot(aes(method, tif, color = group)) +
+    mutate(method = recode(method, facs = "FACS", sc = "scRNA-seq"))
+  
+  # export source data
+  vis_data %>% 
+    select(!group_long) %>% 
+    mutate(sample = rename_patients(sample)) %>% 
+    arrange(sample, method) %>% 
+    save_table("source_data/figure_S1c", "Figure S1c")
+  
+  # make plot  
+  ggplot(vis_data, aes(method, tif, color = group)) +
     geom_line(
       aes(group = sample),
       size = BASE_LINE_SIZE,
@@ -870,8 +927,6 @@ plot_infiltration_rate <- function() {
       strip.text.x = element_markdown(size = BASE_TEXT_SIZE_PT),
       plot.title = element_text(size = BASE_TEXT_SIZE_PT, hjust = 0.5,)
     )
-
-  p
 }
 
 plot_infiltration_rate()
@@ -882,6 +937,7 @@ ggsave_publication("S1c_tif", width = 6, height = 5)
 ## S1d ----
 
 plot_resexp_tumor <- function(cells_per_sample = 50L) {
+  # prepare data
   # cell metadata
   cell_metadata <-
     infercnv_data$final_obj@tumor_subclusters$subclusters %>%
@@ -916,6 +972,17 @@ plot_resexp_tumor <- function(cells_per_sample = 50L) {
     magrittr::extract(col_split != "Y", cell_metadata$cell_index) %>%
     t()
   col_split <- col_split[col_split != "Y"]
+  
+  # export source data
+  cnv_mat %>% 
+    magrittr::set_colnames(
+      str_c(colnames(cnv_mat), col_split, sep = "_chr")
+    ) %>% 
+    magrittr::set_rownames(
+      str_c(rownames(cnv_mat), cell_metadata$sample, sep = "_")
+    ) %>% 
+    as_tibble(rownames = "cell_sample") %>% 
+    save_table("source_data/figure_S1d", "Figure S1d")
 
   # draw heatmap
   Heatmap(
@@ -992,6 +1059,7 @@ ggsave_publication("S1d_resexp_tumor", plot = p,
 ## S1e ----
 
 plot_resexp_marrow <- function(cells_per_type = 50L) {
+  # prepare data
   # cell metadata
   cell_metadata <-
     infercnv_data$final_obj@tumor_subclusters$subclusters %>%
@@ -1032,7 +1100,23 @@ plot_resexp_marrow <- function(cells_per_type = 50L) {
     t()
   col_split <- col_split[col_split != "Y"]
 
-  # draw heatmap
+  # export source data
+  cnv_mat %>% 
+    magrittr::set_colnames(
+      str_c(colnames(cnv_mat), col_split, sep = "_chr")
+    ) %>%
+    magrittr::set_rownames(
+      str_c(
+        rownames(cnv_mat),
+        cell_metadata$sample,
+        cell_metadata$cellont_abbr,
+        sep = "_"
+      )
+    ) %>%
+    as_tibble(rownames = "cell_sample_celltype") %>%
+    save_table("source_data/figure_S1e", "Figure S1e")
+  
+  # make plot
   Heatmap(
     cnv_mat,
     name = "residual\nexpression",
