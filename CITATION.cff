@@ -1,0 +1,119 @@
+cff-version: 1.2.0
+message: If you use this software, please cite both the article from preferred-citation and the software itself.
+title: scRNA-seq and scATAC-seq analysis scripts
+authors:
+- family-names: Esser-Skala
+  given-names: Wolfgang
+  orcid: https://orcid.org/0000-0002-7350-4045
+- family-names: Dnyansagar
+  given-names: Rohit
+  orcid: https://orcid.org/0000-0002-2699-0087
+- family-names: Sindelar
+  given-names: Samuel
+- family-names: Lazic
+  given-names: Daria
+  orcid: https://orcid.org/0000-0002-8793-6885
+- family-names: Fortelny
+  given-names: Nikolaus
+  orcid: https://orcid.org/0000-0003-4025-9968
+version: 1.2.0
+type: software
+license: MIT
+doi: 10.5281/zenodo.7867892
+repository-code: https://github.com/csbg/neuroblastoma
+preferred-citation:
+  type: article
+  authors:
+    - family-names: Fetahu
+      given-names: Irfete S.
+      affiliation: St. Anna Children's Cancer Research Institute, Vienna, Austria
+      orcid: https://orcid.org/0000-0002-0468-7458
+      email: irfete.fetahu@ccri.at
+    - family-names: Esser-Skala
+      given-names: Wolfgang
+      affiliation: Department of Biosciences and Medical Biology, University of Salzburg, Salzburg, Austria
+      orcid: https://orcid.org/0000-0002-7350-4045
+    - family-names: Dnyansagar
+      given-names: Rohit
+      affiliation: Department of Biosciences and Medical Biology, University of Salzburg, Salzburg, Austria
+      orcid: https://orcid.org/0000-0002-2699-0087
+    - family-names: Sindelar
+      given-names: Samuel
+      affiliation: Department of Biosciences and Medical Biology, University of Salzburg, Salzburg, Austria
+    - family-names: Rifatbegovic
+      given-names: Fikret
+      affiliation: St. Anna Children's Cancer Research Institute, Vienna, Austria
+      orcid: https://orcid.org/0000-0002-9956-2382
+    - family-names: Bileck
+      given-names: Andrea
+      affiliation: Department of Analytical Chemistry, Faculty of Chemistry, University of Vienna, Vienna, Austria; and Joint Metabolomics Facility, University and Medical University of Vienna, Vienna, Austria
+      orcid: https://orcid.org/0000-0002-7053-8856
+    - family-names: Skos
+      given-names: Lukas
+      affiliation: Department of Analytical Chemistry, Faculty of Chemistry, University of Vienna, Vienna, Austria
+      orcid: https://orcid.org/0000-0003-3983-1736
+    - family-names: Bozsaky
+      given-names: Eva
+      affiliation: St. Anna Children's Cancer Research Institute, Vienna, Austria
+    - family-names: Lazic
+      given-names: Daria
+      affiliation: St. Anna Children's Cancer Research Institute, Vienna, Austria
+      orcid: https://orcid.org/0000-0002-8793-6885
+    - family-names: Shaw
+      given-names: Lisa
+      affiliation: Department of Dermatology, Medical University of Vienna, Vienna, Austria
+    - family-names: Tötzl
+      given-names: Marcus
+      affiliation: St. Anna Children's Cancer Research Institute, Vienna, Austria
+    - family-names: Tarlungeanu
+      given-names: Dora
+      affiliation: St. Anna Children's Cancer Research Institute, Vienna, Austria
+    - family-names: Bernkopf
+      given-names: Marie
+      affiliation: St. Anna Children's Cancer Research Institute, Vienna, Austria
+    - family-names: Rados
+      given-names: Magdalena
+      affiliation: St. Anna Children's Cancer Research Institute, Vienna, Austria
+    - family-names: Weninger
+      given-names: Wolfgang
+      affiliation: Department of Dermatology, Medical University of Vienna, Vienna, Austria
+    - family-names: Tomazou,
+      given-names: Eleni M.
+      affiliation: St. Anna Children's Cancer Research Institute, Vienna, Austria
+      orcid: https://orcid.org/0000-0002-7497-4567
+    - family-names: Bock
+      given-names: Christoph
+      affiliation: CeMM Research Center for Molecular Medicine of the Austrian Academy of Sciences, Vienna, Austria; and Center for Medical Statistics, Informatics and Intelligent Systems, Institute of Artificial Intelligence, Medical University of Vienna, Vienna, Austria
+      orcid: https://orcid.org/0000-0001-6091-3088
+    - family-names: Gerner
+      given-names: Christopher
+      affiliation: Department of Analytical Chemistry, Faculty of Chemistry, University of Vienna, Vienna, Austria; and Joint Metabolomics Facility, University and Medical University of Vienna, Vienna, Austria
+      orcid: https://orcid.org/0000-0003-4964-0642
+    - family-names: Ladenstein
+      given-names: Ruth
+      affiliation: St. Anna Children's Cancer Research Institute, Vienna, Austria
+      orcid: https://orcid.org/0000-0001-6548-3873
+    - family-names: Farlik
+      given-names: Matthias
+      affiliation: Department of Dermatology, Medical University of Vienna, Vienna, Austria
+      orcid: https://orcid.org/0000-0003-0698-2992
+    - family-names: Fortelny
+      given-names: Nikolaus
+      affiliation: Department of Biosciences and Medical Biology, University of Salzburg, Salzburg, Austria
+      orcid: https://orcid.org/0000-0003-4025-9968
+      email: nikolaus.fortelny@plus.ac.at
+    - family-names: Taschner-Mandl
+      given-names: Sabine
+      affiliation: St. Anna Children's Cancer Research Institute, Vienna, Austria
+      orcid: https://orcid.org/0000-0002-1439-5301
+      email: sabine.taschner@ccri.at
+  title: Dissecting the cellular architecture of neuroblastoma bone marrow metastasis using single-cell transcriptomics and epigenomics unravels the role of monocytes at the metastatic niche
+#  journal:
+  status: in-preparation
+#  volume:
+#  issue:
+#  pages: 
+#  year: 
+#  doi: 
+#  license: 
+#  pmcid: 
