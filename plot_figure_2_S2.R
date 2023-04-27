@@ -99,6 +99,7 @@ singler_results <-
 ## 2a ----
 
 plot_patient_dots <- function(min_exp = -2.5, max_exp = 2.5) {
+  # prepare data
   scale_and_limit <- function(x) {
     scale(x)[,1] %>% 
       pmax(min_exp) %>% 
@@ -155,6 +156,11 @@ plot_patient_dots <- function(min_exp = -2.5, max_exp = 2.5) {
       )
     )
   
+  # export source data
+  vis_data %>% 
+    save_table("source_data/figure_2a", "Figure 2a")
+  
+  # make plot
   ggplot(vis_data, aes(id, feature)) +
     geom_point(aes(size = pct_exp, color = avg_exp)) +
     scale_x_discrete("patient or cell type") +
@@ -202,7 +208,9 @@ ggsave_publication("2a_nb_markers_patients", width = 8, height = 5.5)
 ## 2b ----
 
 plot_adrmed_profile <- function() {
-  singler_results %>% 
+  # prepare data
+  vis_data <- 
+    singler_results %>% 
     group_by(tumor, mycn_status) %>% 
     mutate(
       cell_type = 
@@ -218,8 +226,15 @@ plot_adrmed_profile <- function() {
     mutate(
       mycn_status = fct_relevel(mycn_status, "wildtype"),
       tumor = fct_recode(tumor, "metastatic" = "DTC")
-    ) %>% 
-    ggplot(aes(cell_type, n_rel)) +
+    )
+  
+  # export source data
+  vis_data %>% 
+    select(!n) %>% 
+    save_table("source_data/figure_2b", "Figure 2b")
+  
+  # make plot
+  ggplot(vis_data, aes(cell_type, n_rel)) +
     geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
     geom_col(aes(fill = cell_type), show.legend = FALSE) +
     scale_x_discrete("adrenal medullary cell type") +
@@ -248,7 +263,12 @@ ggsave_publication("2b_adrmed_profile", width = 8, height = 3)
 
 ## 2c ----
 
-plot_corr_mat <- function(size, samples = NULL, annotate_mycn = FALSE) {
+plot_corr_mat <- function(size,
+                          samples = NULL,
+                          annotate_mycn = FALSE,
+                          source_data_filename = NULL,
+                          source_data_sheet = NULL) {
+  # prepare data
   if (is.null(samples)) {
     corr_mat <-
       tumor_data$pseudobulk_counts %>%
@@ -319,6 +339,12 @@ plot_corr_mat <- function(size, samples = NULL, annotate_mycn = FALSE) {
     )
   }
   
+  # export source data
+  corr_mat %>% 
+    as_tibble(rownames = "(rownames)") %>% 
+    save_table(source_data_filename, source_data_sheet)
+  
+  # make plot
   Heatmap(
     corr_mat,
     col = circlize::colorRamp2(
@@ -355,7 +381,12 @@ plot_corr_mat <- function(size, samples = NULL, annotate_mycn = FALSE) {
   )
 }
 
-(p <- plot_corr_mat(25, PATIENT_ORDER %>% discard(str_starts, "C")))
+(p <- plot_corr_mat(
+  size = 25, 
+  samples = PATIENT_ORDER %>% discard(str_starts, "C"),
+  source_data_filename =  "source_data/figure_2c",
+  source_data_sheet = "Figure 2c"
+))
 ggsave_publication("2c_pseudobulk_cor", plot = p, height = 3, width = 7)
 
 
@@ -363,6 +394,7 @@ ggsave_publication("2c_pseudobulk_cor", plot = p, height = 3, width = 7)
 ## S2a ----
 
 plot_gene_signature <- function() {
+  # prepare data
   vis_data <- 
     nb_metadata %>% 
     mutate(
@@ -381,6 +413,13 @@ plot_gene_signature <- function() {
         fct_relevel("adrenergic", "noradrenergic")
     )
   
+  # export source data
+  vis_data %>%
+    select(cell, cell_type = cells, value, signature) %>% 
+    pivot_wider(names_from = "signature", names_prefix = "signature_") %>% 
+    save_table("source_data/figure_S2a", "Figure S2a")
+  
+  # make plot
   ggplot(vis_data, aes(cells, value)) +
     geom_violin(
       aes(fill = cells, color = cells),
@@ -421,6 +460,7 @@ ggsave_publication("S2a_gene_signatures", width = 6, height = 5)
 ## S2b ----
 
 plot_mesenchymal <- function(top_prop = 0.05) {
+  # prepare data
   data_highlight <-
     bind_rows(
       mesenchymal =
@@ -449,6 +489,19 @@ plot_mesenchymal <- function(top_prop = 0.05) {
     2
   )
   
+  # export source data
+  left_join(
+    nb_metadata %>% 
+      select(cell, umap_1 = umap_1_monocle, umap_2 = umap_2_monocle),
+    data_highlight %>%
+      select(!starts_with("umap")) %>% 
+      extract(signature, into = "signature", regex = ">(.*)<") %>% 
+      pivot_wider(names_from = signature, names_prefix = "high_score_"),
+    by = "cell"
+  ) %>% 
+    save_table("source_data/figure_S2b", "Figure S2b")
+  
+  # make plot
   nb_metadata %>%
     ggplot(aes(umap_1_monocle, umap_2_monocle)) +
     geom_point(color = "gray90", size = 0.001, shape = 16) +
@@ -495,6 +548,7 @@ ggsave_publication("S2b_signature_umap", type = "png",
 ## S2c ----
 
 plot_nb_dots <- function(top_prop = 0.05, min_exp = -2.5, max_exp = 2.5) {
+  #prepare data
   scale_and_limit <- function(x) {
     scale(x)[,1] %>% 
       pmax(min_exp) %>% 
@@ -570,6 +624,14 @@ plot_nb_dots <- function(top_prop = 0.05, min_exp = -2.5, max_exp = 2.5) {
       cluster = fct_inseq(cluster)
     )
   
+  # export source data
+  vis_data %>% 
+    extract(type, into = "cell_type", regex = ">(.*)<", remove = FALSE) %>%
+    mutate(cell_type = coalesce(cell_type, type)) %>% 
+    select(!type) %>% 
+    save_table("source_data/figure_S2c", "Figure S2c")
+  
+  # make plot
   ggplot(vis_data, aes(cluster, feature)) +
     geom_point(aes(size = pct_exp, color = avg_exp)) +
     scale_x_discrete(
@@ -624,6 +686,7 @@ ggsave_publication("S2c_signature_dots", width = 9, height = 4)
 ## S2d ----
 
 plot_adrmed_heatmap <- function() {
+  # prepare data
   mat <- 
     singler_results %>% 
     filter(dataset != "jansky") %>%
@@ -658,6 +721,12 @@ plot_adrmed_heatmap <- function() {
         fct_relevel(names(GROUP_COLORS))
     )
   
+  # export source data
+  mat %>% 
+    as_tibble(rownames = "adrenal medullary cell type") %>% 
+    save_table("source_data/figure_S2d", "Figure S2d")
+  
+  # make plot
   Heatmap(
     mat,
     col = RColorBrewer::brewer.pal(9, "YlOrBr"),
@@ -736,6 +805,11 @@ ggsave_publication("S2d_adrmed_heatmap", plot = p, height = 6, width = 9)
 
 ## S2e ----
 
-(p <- plot_corr_mat(45, annotate_mycn = TRUE))
-ggsave_publication("S2e_pseudobulk_cor_all", plot = p, height = 5, width = 9)
+(p <- plot_corr_mat(
+  size = 45, 
+  annotate_mycn = TRUE,
+  source_data_filename =  "source_data/figure_S2e",
+  source_data_sheet = "Figure S2e"
+))
 
+ggsave_publication("S2e_pseudobulk_cor_all", plot = p, height = 5, width = 9)
