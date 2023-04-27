@@ -1,5 +1,7 @@
 # Dissecting the cellular architecture of neuroblastoma bone marrow metastasis using single-cell transcriptomics and epigenomics unravels the role of monocytes at the metastatic niche
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7867892.svg)](https://doi.org/10.5281/zenodo.7867892)
+
 ## Folders
 
 (Not all of these folders appear in the git repository.)
