@@ -36,46 +36,58 @@ dge <- readRDS("data_generated/dge_results.rds")
 
 ## 4a ----
 
-nb_metadata %>%
-  group_by(group, sample) %>% 
-  count(cell_type = cellont_abbr) %>% 
-  mutate(
-    n = n / sum(n) * 100,
-    sample = rename_patients(sample),
-    group = rename_groups(group),
-  ) %>%
-  complete(nesting(group, sample), cell_type, fill = list(n = 0)) %>% 
-  ungroup() %>% 
-  filter(!cell_type %in% c("NB", "other")) %>% 
-  ggplot(aes(cell_type, n)) +
-  geom_boxplot(
-    aes(fill = group),
-    width = .75,
-    outlier.shape = NA,
-    size = .25,
-    key_glyph = "rect"
-  ) +
-  geom_point(
-    aes(fill = group),
-    position = position_jitterdodge(seed = 1, dodge.width = .5),
-    size = .25,
-    alpha = .5,
-    shape = 16,
-    show.legend = FALSE
-  ) +
-  xlab("cell type") +
-  ylab("relative abundance (%)") +
-  scale_fill_manual(
-    values = GROUP_COLORS,
-    labels = partial(rename_groups_long, with_newline = FALSE)
-  ) +
-  theme_nb(grid = FALSE) +
-  theme(
-    legend.text = element_markdown(),
-    legend.key.height = unit(2, "mm"),
-    legend.key.width = unit(2, "mm"),
-    legend.position = c(.8, .8),
-  )
+plot_abundances <- function() {
+  # prepare data
+  vis_data <- 
+    nb_metadata %>%
+    group_by(group, sample) %>% 
+    count(cell_type = cellont_abbr) %>% 
+    mutate(
+      n = n / sum(n) * 100,
+      sample = rename_patients(sample),
+      group = rename_groups(group),
+    ) %>%
+    complete(nesting(group, sample), cell_type, fill = list(n = 0)) %>% 
+    ungroup() %>% 
+    filter(!cell_type %in% c("NB", "other"))
+  
+  # export source data
+  vis_data %>% 
+    save_table("source_data/figure_4a", "Figure 4a")
+  
+  # make plot
+  ggplot(vis_data, aes(cell_type, n)) +
+    geom_boxplot(
+      aes(fill = group),
+      width = .75,
+      outlier.shape = NA,
+      size = .25,
+      key_glyph = "rect"
+    ) +
+    geom_point(
+      aes(fill = group),
+      position = position_jitterdodge(seed = 1, dodge.width = .5),
+      size = .25,
+      alpha = .5,
+      shape = 16,
+      show.legend = FALSE
+    ) +
+    xlab("cell type") +
+    ylab("relative abundance (%)") +
+    scale_fill_manual(
+      values = GROUP_COLORS,
+      labels = partial(rename_groups_long, with_newline = FALSE)
+    ) +
+    theme_nb(grid = FALSE) +
+    theme(
+      legend.text = element_markdown(),
+      legend.key.height = unit(2, "mm"),
+      legend.key.width = unit(2, "mm"),
+      legend.position = c(.8, .8),
+    )
+}
+
+plot_abundances()
 ggsave_publication("4a_cell_type_abundances", width = 6, height = 4)
 
 
@@ -83,6 +95,7 @@ ggsave_publication("4a_cell_type_abundances", width = 6, height = 4)
 ## 4b ----
 
 plot_logfc_correlation_heatmap <- function() {
+  # prepare data
   corr_mat <- 
     dge$results_wide %>% 
     filter(abs(logFC) < 8, comparison  %>% str_ends("vs_I")) %>%
@@ -109,6 +122,15 @@ plot_logfc_correlation_heatmap <- function() {
   
   color_max <- round(max(corr_mat[lower.tri(corr_mat)]), 2)
   
+  # export source data
+  long_matrix_names <- str_c(group_names, colnames(corr_mat), sep = "_")
+  corr_mat %>% 
+    magrittr::set_colnames(long_matrix_names) %>% 
+    magrittr::set_rownames(long_matrix_names) %>% 
+    as_tibble(rownames = "(rownames)") %>% 
+    save_table("source_data/figure_4b", "Figure 4b")
+  
+  # make plot
   Heatmap(
     corr_mat,
     col = circlize::colorRamp2(
@@ -173,7 +195,10 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
                       top_n_negative = 5L,
                       terms = NULL,
                       max_p_adj = 0.05,
-                      min_abs_NES = 1) {
+                      min_abs_NES = 1,
+                      source_data_filename = NULL,
+                      source_data_sheet = NULL) {
+  # prepare data
   data <- 
     dge$gsea %>%
     mutate(comparison = factor(comparison) %>% rename_contrast()) %>% 
@@ -238,6 +263,12 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
   
   color_limit <- max(abs(dge$gsea$NES), na.rm = TRUE)
   
+  # export source data
+  data_vis %>% 
+    select(cell_type, comparison, pathway, padj, NES) %>% 
+    save_table(source_data_filename, source_data_sheet)
+  
+  # make plot  
   ggplot(data_vis, aes(comparison, pathway, size = -log10(padj))) +
     scale_y_discrete() +
     horizontal_grid +    
@@ -297,7 +328,9 @@ plot_gsea(
     "Myc Targets V2",
     "Myc Targets V1",
     "E2F Targets"
-  )
+  ),
+  source_data_filename = "source_data/figure_4c",
+  source_data_sheet = "Figure 4c"
 )
 ggsave_publication("4c_gsea", width = 11, height = 6)
 
@@ -320,6 +353,7 @@ plot_pathway_genes <- function(db = "MSigDB_Hallmark_2020",
                                pathways = selected_genes,
                                level = c("group", "sample"),
                                cell_types = c("B", "M")) {
+  # prepare data
   level <- match.arg(level)
   
   row_metadata <-
@@ -381,7 +415,16 @@ plot_pathway_genes <- function(db = "MSigDB_Hallmark_2020",
     )
   }
   
-  # plot heatmap
+  # export source data
+  mat %>% 
+    magrittr::set_colnames(
+      str_c(col_metadata$cell_type, col_metadata$group, sep = "_")
+    ) %>% 
+    as_tibble(rownames = "gene") %>% 
+    mutate(pathway = row_metadata$pathway, .before = gene) %>% 
+    save_table("source_data/figure_4d", "Figure 4d")
+  
+  # make plot
   Heatmap(
     mat,
     name = "expression",
@@ -450,6 +493,7 @@ ggsave_publication("4d_pathway_genes",
 ## S4a ----
 
 plot_celltype_enrichment <- function(p_lim = 20, or_lim = 3) {
+  # prepare data
   do_fisher_test <- function(sample, cellont_abbr) {
     res <- 
       nb_metadata %>%
@@ -478,7 +522,8 @@ plot_celltype_enrichment <- function(p_lim = 20, or_lim = 3) {
     )
   }
   
-  nb_metadata %>%
+  vis_data <- 
+    nb_metadata %>%
     distinct(
       group,
       sample = as.character(sample),
@@ -511,8 +556,14 @@ plot_celltype_enrichment <- function(p_lim = 20, or_lim = 3) {
         rename_patients() %>% 
         fct_rev(),
       group = rename_groups(group)
-    ) %>% 
-    ggplot(aes(cell_type, sample)) + 
+    )
+  
+  # export source data
+  vis_data %>% 
+    save_table("source_data/figure_S4a", "Figure S4a")
+  
+  # make plot
+  ggplot(vis_data, aes(cell_type, sample)) + 
     geom_point(aes(color = log_odds_ratio, size = log_p_adj), shape = 16) + 
     xlab("cell type") +
     ylab("patient") +
@@ -553,6 +604,7 @@ ggsave_publication("S4a_cell_type_enrichment", width = 5, height = 4)
 ## S4b ----
 
 plot_consistent_genes <- function() {
+  # prepare data
   consistent_genes <- 
     dge$results_wide_filtered %>%
     mutate(comparison = rename_contrast(comparison)) %>%
@@ -594,6 +646,14 @@ plot_consistent_genes <- function() {
       cell_type = factor(cell_type, levels = names(CELL_TYPE_ABBREVIATIONS))
     )
   
+  # export source data
+  consistent_genes %>% 
+    select(cell_type, n, shared) %>% 
+    mutate(regulated = if_else(n > 0, "up", "down"), .before = n) %>% 
+    mutate(n = abs(n)) %>% 
+    save_table("source_data/figure_S4b", "Figure S4b")
+  
+  # make plot
   consistent_genes %>% 
     ggplot(aes(cell_type, n, fill = shared)) +
     geom_col() +
@@ -633,6 +693,7 @@ plot_pathway_genes_sc <- function(db = "MSigDB_Hallmark_2020",
                                     "Myc Targets V1" = "down",
                                     "E2F Targets" = "down"
                                   )) {
+  # prepare data
   log_fold_changes <- 
     dge$results_wide_filtered %>% 
     filter(
@@ -683,6 +744,17 @@ plot_pathway_genes_sc <- function(db = "MSigDB_Hallmark_2020",
     t() %>% scale() %>% t() %>%
     replace_na(min(., na.rm = TRUE))
   
+  # export source data
+  mat %>% 
+    magrittr::set_colnames(
+      str_c(col_metadata$cell, col_metadata$cell_type, col_metadata$group,
+            sep = "_")
+    ) %>% 
+    as_tibble(rownames = "gene") %>% 
+    mutate(pathway = row_metadata$pathway, .before = gene) %>% 
+    save_table("source_data/figure_S4c", "Figure S4c")
+  
+  # make plot
   Heatmap(
     mat,
     name = "expression",
@@ -747,8 +819,12 @@ ggsave_publication("S4c_pathway_genes_sc", type = "png",
 
 ## S7b ----
 
-plot_gsea(db = "TRRUST_Transcription_Factors_2019",
-          comparisons = c("M vs C", "A vs C", "S vs C"))
+plot_gsea(
+  db = "TRRUST_Transcription_Factors_2019",
+  comparisons = c("M vs C", "A vs C", "S vs C"),
+  source_data_filename = "source_data/figure_S7b",
+  source_data_sheet = "Figure S7b"
+)
 ggsave_publication("S7b_gsea", width = 8, height = 10.8)
 
 
