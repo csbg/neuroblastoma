@@ -473,12 +473,11 @@ ggsave_publication("3g_violins_MK", width = 8.5, height = 6.97)
 
 # modifies CellChat:::netVisual_hierarchy1, which is called by
 # netVisual_individual, so that it exports node and edge weights
-# as source data for figure S3;
-# the resulting tables must be combined manually into a single sheet
+# as source data for figure S3
 save_source_data <- function(prob, vertex_weight, interaction) {
   list(
     edges = as_tibble(prob, rownames = "source"),
-    vertices = tibble(cell_type = colnames(prob), weight = vertex_weight)
+    nodes = tibble(cell_type = colnames(prob), weight = vertex_weight)
   ) %>% 
     save_table(str_glue("source_data/figure_S3_{interaction}"))
 }
@@ -541,6 +540,61 @@ plot_netvisual <- function(layout = "hierarchy", width = 16, height = 16) {
 }
 
 plot_netvisual()
+
+
+# combine the resulting source data tables into a single sheet
+merge_source_data <- function() {
+  write_data <- function(data, i, start_row) {
+    
+    writeData(
+      wb,
+      "Figure S3",
+      data,
+      startRow = start_row + (i - 1) * 26,
+      headerStyle = createStyle(textDecoration = "bold")
+    )
+  }
+  
+  files <- c(
+    "tables/source_data/figure_S3_MIF - (CD74+CXCR4).xlsx",
+    "tables/source_data/figure_S3_MIF - (CD74+CD44).xlsx",
+    "tables/source_data/figure_S3_MDK - NCL.xlsx",
+    "tables/source_data/figure_S3_MDK - LRP1.xlsx"
+  )
+  
+  wb <- createWorkbook()
+  addWorksheet(wb, "Figure S3")
+  
+  iwalk(
+    files,
+    function(file, i) {
+      interaction_name <- str_match(file, "S3_(.+?)\\.xlsx")[,2]
+      str_glue("{i}: {interaction_name}") %>% 
+        as.character() %>% 
+        write_data(i, 1)
+      
+      str_glue("{i}.1: edge weights") %>% 
+        as.character() %>% 
+        write_data(i, 3)
+      
+      data_edges <- read.xlsx(file, sheet = "edges")
+      write_data(data_edges, i, 5)
+      
+      str_glue("{i}.2: node weights") %>% 
+        as.character() %>% 
+        write_data(i, 15)
+      
+      data_nodes <- read.xlsx(file, sheet = "nodes")
+      write_data(data_nodes, i, 17)
+      
+      file_delete(file)
+    }
+  )
+  
+  saveWorkbook(wb, "tables/source_data/figure_S3.xlsx", overwrite = TRUE)
+}
+
+merge_source_data()
 
 
 
