@@ -60,6 +60,7 @@ plot_celltype_heatmap <- function(cluster_col = collcluster,
                                   clusters = NULL,
                                   label = c("fine", "broad"),
                                   lump_prop = 0.01) {
+  # prepare data
   label <- match.arg(label)
   
   # generate matrix of cell type abundances
@@ -133,7 +134,17 @@ plot_celltype_heatmap <- function(cluster_col = collcluster,
   mat <- mat[, col_metadata$colname]
   colnames(mat) <- col_metadata$cell_type
   
-  # draw heatmap  
+  # export source data
+  mat %>% 
+    magrittr::set_colnames(
+      col_metadata %>% 
+        unite(ref, cell_type, col = "ref_type") %>% 
+        pull(ref_type)
+    ) %>% 
+    as_tibble(rownames = "cluster") %>% 
+    save_table("source_data/figure_S5a", "Figure S5a")
+  
+  # make plot
   set.seed(2)
   Heatmap(
     mat %>% magrittr::set_rownames(rename_myeloid(rownames(.))),
@@ -189,6 +200,7 @@ ggsave_publication("S5a_myeloid_types", plot = p, width = 14, height = 6)
 ## S5b ----
 
 plot_umap <- function() {
+  # prepare data
   adjust_positions <- tribble(
     ~label, ~dx, ~dy,
     "classical mono", 0, 0,
@@ -208,6 +220,12 @@ plot_umap <- function() {
       UMAP2 = UMAP2 + replace_na(dy, 0)
     )
   
+  # export source data
+  my_metadata %>% 
+    select(cell, umap_1 = UMAP1, umap_2 = UMAP2, cell_type = collcluster) %>% 
+    save_table("source_data/figure_S5b", "Figure S5b")
+  
+  # make plot
   ggplot(my_metadata, aes(UMAP1, UMAP2)) +
     geom_point(
       aes(color = collcluster),
@@ -251,6 +269,7 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
                       top_n_negative = 5L,
                       max_p_adj = 0.05,
                       min_abs_NES = 1) {
+  # prepare data
   data <- 
     dge_my$gsea %>%
     filter(comparison != "Mas") %>% 
@@ -317,6 +336,12 @@ plot_gsea <- function(db = "MSigDB_Hallmark_2020",
   
   color_limit <- max(abs(dge_my$gsea$NES), na.rm = TRUE)
   
+  # export source data
+  data_vis %>% 
+    select(cell_type, comparison, pathway, padj, NES) %>% 
+    save_table("source_data/figure_S5c", "Figure S5c")
+  
+  # make plot  
   ggplot(data_vis, aes(comparison, pathway, size = -log10(padj))) +
     scale_y_discrete() +
     horizontal_grid +    
@@ -363,7 +388,10 @@ ggsave_publication("S5c_gsea", width = 8, height = 7.8)
 
 plot_genes <- function(...,
                        dataset = c("myeloid", "all"),
-                       colorbar_quantiles = c(0, .99)) {
+                       colorbar_quantiles = c(0, .99),
+                       source_data_filename = NULL,
+                       source_data_sheet = NULL) {
+  # prepare data
   dataset <- match.arg(dataset)
   if (dataset == "myeloid") {
     metadata <- my_metadata
@@ -373,6 +401,7 @@ plot_genes <- function(...,
       nb_metadata %>% 
       transmute(
         cell,
+        sample,
         UMAP1 = umap_1_monocle,
         UMAP2 = umap_2_monocle,
         group = rename_groups(group)
@@ -403,6 +432,14 @@ plot_genes <- function(...,
   
   colorbar_limits <- quantile(plot_data$expression, colorbar_quantiles)
   
+  # export source data
+  plot_data %>% 
+    select(cell, group, UMAP1, UMAP2, gene, expression) %>% 
+    mutate(group = if_else(group == "C", "control group", "NB patients")) %>% 
+    pivot_wider(names_from = gene, values_from = expression) %>% 
+    save_table(source_data_filename, source_data_sheet)
+  
+  # make plot
   ggplot(plot_data, aes(UMAP1, UMAP2)) +
     geom_point(
       aes(color = expression),
@@ -428,7 +465,10 @@ plot_genes <- function(...,
     ) +
     scale_x_continuous("gene", position = "top") +
     coord_fixed() +
-    facet_grid(vars(if_else(group == "C", "control group", "NB patients")), vars(gene)) +
+    facet_grid(
+      vars(if_else(group == "C", "control group", "NB patients")),
+      vars(gene)
+    ) +
     theme_nb(grid = FALSE) +
     theme(
       axis.text = element_blank(),
@@ -441,7 +481,12 @@ plot_genes <- function(...,
     )
 }
 
-plot_genes("CD163", "CXCL2", "TIMP1", "EREG")
+plot_genes(
+  "CD163", "CXCL2", "TIMP1", "EREG",
+  dataset = "myeloid",
+  source_data_filename = "source_data/figure_S5d_UMAP",
+  source_data_sheet = "Figure S5d (UMAP)"
+)
 ggsave_publication("S5d_genes", type = "png",
                    width = 10, height = 8, bg = "transparent")
 
@@ -449,6 +494,7 @@ ggsave_publication("S5d_genes", type = "png",
 ## S5d (Dotplot) ----
 
 plot_significance <- function(...) {
+  # prepare data
   selected_genes <- factor(c(...))
   selected_comparisons <- c("II_vs_I", "III_vs_I", "IV_vs_I")
   
@@ -471,6 +517,13 @@ plot_significance <- function(...) {
   
   color_limit <- max(abs(plot_data$logFC))
   
+  # export source data
+  plot_data %>% 
+    select(cell_type:logFC, p_adj) %>% 
+    mutate(comparison = str_replace_all(comparison, "<.+?>", "")) %>% 
+    save_table("source_data/figure_S5d_dotplot", "Figure S5d (Dotplot)")
+  
+  # make plot
   ggplot(plot_data, aes(gene, comparison, size = -log10(p_adj))) +
     geom_point(aes(color = logFC)) +
     geom_point(data = plot_data %>% filter(frq >= 0.05), shape = 1) +
@@ -515,10 +568,21 @@ ggsave_publication("S5d_significance", width = 8, height = 2.5)
 ## S7c ----
 
 wrap_plots(
-  plot_genes("IL10", dataset = "all", colorbar_quantiles = c(0, 0.995)) +
+  plot_genes(
+    "IL10",
+    dataset = "all",
+    colorbar_quantiles = c(0, 0.995),
+    source_data_filename = "source_data/figure_S7c_left",
+    source_data_sheet = "Figure S7c"
+  ) +
     ggtitle("all cells") +
     theme(strip.text.y = element_blank()),
-  plot_genes("IL10") +
+  plot_genes(
+    "IL10",
+    dataset = "myeloid",
+    source_data_filename = "source_data/figure_S7c_right",
+    source_data_sheet = "Figure S7c"
+  ) +
     ggtitle("myeloid cells"),
   nrow = 1,
   guides = "collect"
@@ -535,6 +599,16 @@ wrap_plots(
   )
 ggsave_publication("S7c_IL10", type = "png",
                    width = 11, height = 11, bg = "transparent")
+
+# combine the two exported source data tables
+bind_rows(
+  all = read.xlsx("tables/source_data/figure_S7c_left.xlsx"),
+  myeloid = read.xlsx("tables/source_data/figure_S7c_right.xlsx"),
+  .id = "cells"
+) %>% 
+  save_table("source_data/figure_S7c", "Figure S7c")
+file_delete("tables/source_data/figure_S7c_left.xlsx")
+file_delete("tables/source_data/figure_S7c_right.xlsx")
 
 
 
