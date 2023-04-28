@@ -30,12 +30,19 @@ sig_data <- readRDS("data_generated/ccc_signaling_data.rds")
 ## 3a ----
 
 plot_n_interactions <- function() {
+  # prepare data
   rc_order <- names(CELL_TYPE_ABBREVIATIONS)
   mat <- cellchat@net$count[rc_order, rc_order]
   total_target <- colSums(mat)
   total_source <- rowSums(mat)
   bar_ylim <- c(0, max(total_source, total_target))
   
+  # export source data
+  mat %>% 
+    as_tibble(rownames = "source") %>% 
+    save_table("source_data/figure_3a", "Figure 3a")
+  
+  # make plot
   Heatmap(
     mat,
     col = RColorBrewer::brewer.pal(9, "YlOrBr"),
@@ -108,7 +115,9 @@ ggsave_publication("3a_n_interactions", plot = p, width = 6, height = 5)
 ## 3b ----
 
 plot_contribution_celltype <- function(cell_type = "NB", signif = 0.05) {
-   sig_data %>%
+  # prepare data
+  vis_data <- 
+    sig_data %>%
     filter(
       pathway_name %in% cellchat@netP$pathways, 
       source == {{cell_type}}, 
@@ -123,8 +132,16 @@ plot_contribution_celltype <- function(cell_type = "NB", signif = 0.05) {
     ) %>%
     ungroup() %>%
     mutate(prob.avg = prob.norm / count) %>% 
-    mutate(interaction = fct_reorder(interaction, prob.norm)) %>% 
-    ggplot(aes(interaction, prob.norm)) +
+    mutate(interaction = fct_reorder(interaction, prob.norm))
+  
+  # export source data
+  vis_data %>% 
+    select(interaction, pathway_name, total_outgoing_comm_score = prob.norm) %>% 
+    arrange(desc(total_outgoing_comm_score)) %>% 
+    save_table("source_data/figure_3b", "Figure 3b")
+  
+  # make plot
+  ggplot(vis_data, aes(interaction, prob.norm)) +
     geom_col(fill = "#ffb03e", width = 0.85) +
     geom_hline(yintercept = 0, size = BASE_LINE_SIZE) +
     geom_text(
@@ -157,6 +174,7 @@ ggsave_publication("3b_outgoing_comm_score", width = 5.5, height = 5)
 ## 3c ----
 
 plot_selected_dots <- function(interactions, source_type = "NB") {
+  #prepare data
   vis_data <- 
     sig_data %>% 
     filter(
@@ -169,6 +187,14 @@ plot_selected_dots <- function(interactions, source_type = "NB") {
       target = factor(target, levels = names(CELL_TYPE_ABBREVIATIONS))
     )
   
+  # export source data
+  vis_data %>% 
+    select(source, target, pathway = pathway_name,
+           ligand_receptor_pair = interaction_name_2,
+           relative_comm_score = prob.norm) %>% 
+    save_table("source_data/figure_3c", "Figure 3c")
+  
+  # make plot  
   ggplot(vis_data, aes(target, interaction_name_2)) +
     geom_point(
       aes(color = prob.norm, size = pmin(5, -log10(pval)))
@@ -250,7 +276,11 @@ ggsave_publication("3c_dots", height = 3.4, width = 7)
 
 ## 3d ----
 
-plot_centrality <- function(pathway, row_names_side = "left") {
+plot_centrality <- function(pathway,
+                            row_names_side = "left",
+                            source_data_filename = NULL,
+                            source_data_sheet = NULL) {
+  #prepare data
   centralities <- cellchat@netP$centr[[pathway]]
   
   mat <- 
@@ -272,6 +302,12 @@ plot_centrality <- function(pathway, row_names_side = "left") {
     as.matrix() %>% 
     t()
   
+  # export source data
+  mat %>% 
+    as_tibble(rownames = "centrality_measure") %>% 
+    save_table(source_data_filename, source_data_sheet)
+  
+  # make plot
   Heatmap(
     mat, 
     col = RColorBrewer::brewer.pal(9, "PuBu"),
@@ -303,13 +339,23 @@ plot_centrality <- function(pathway, row_names_side = "left") {
   )
 }
 
-(p <- plot_centrality("MIF"))
+(p <- plot_centrality(
+  "MIF",
+  source_data_filename = "source_data/figure_3d",
+  source_data_sheet = "Figure 3d"
+))
 ggsave_publication("3d_importance_MIF", plot = p, width = 5, height = 3)
+
 
 
 ## 3e ----
 
-(p <- plot_centrality("MK", row_names_side = "right"))
+(p <- plot_centrality(
+  "MK",
+  row_names_side = "right",
+  source_data_filename = "source_data/figure_3e",
+  source_data_sheet = "Figure 3e"
+))
 ggsave_publication("3e_importance_MK", plot = p, width = 6, height = 3.5)
 
 
@@ -333,15 +379,21 @@ make_matrix <- function(gene, cell_type) {
     as_tibble(rownames = "cell") %>%
     left_join(metadata, by = "cell") %>%
     transmute(
-      gene = gene,
-      cell_type = cell_type,
+      cell,
+      gene,
+      cell_type,
       sample = rename_patients(sample),
       group = rename_groups(group),
       logexp = logexp / max(logexp)
     )
 }
 
-plot_violin <- function(genes, cell_types, y_axis_pos = "left") {
+plot_violin <- function(genes,
+                        cell_types,
+                        y_axis_pos = "left",
+                        source_data_filename = NULL,
+                        source_data_sheet = NULL) {
+  # prepare data
   plot_data <-
     list(gene = genes, cell_type = cell_types) %>%
     cross_df() %>% 
@@ -356,6 +408,11 @@ plot_violin <- function(genes, cell_types, y_axis_pos = "left") {
     position <- "right"
   }
   
+  # export source data
+  plot_data %>% 
+    save_table(source_data_filename, source_data_sheet)
+  
+  # make plot
   ggplot(plot_data, aes(sample, logexp)) +
     geom_violin(
       aes(color = group, fill = group),
@@ -391,7 +448,9 @@ plot_violin <- function(genes, cell_types, y_axis_pos = "left") {
 
 plot_violin(
   genes = c("MIF", "CD74", "CXCR4", "CD44"),
-  cell_types = c("NB", "M")
+  cell_types = c("NB", "M"),
+  source_data_filename = "source_data/figure_3f",
+  source_data_sheet = "Figure 3f"
 )
 ggsave_publication("3f_violins_MIF", width = 8.5, height = 9)
 
@@ -402,13 +461,35 @@ ggsave_publication("3f_violins_MIF", width = 8.5, height = 9)
 plot_violin(
   genes = c("MDK", "NCL", "LRP1"),
   cell_types = c("NB", "M"),
-  y_axis_pos = "right"
+  y_axis_pos = "right",
+  source_data_filename = "source_data/figure_3g",
+  source_data_sheet = "Figure 3g"
 )
 ggsave_publication("3g_violins_MK", width = 8.5, height = 6.97)
 
 
 
 ## S3 ----
+
+# modifies CellChat:::netVisual_hierarchy1, which is called by
+# netVisual_individual, so that it exports node and edge weights
+# as source data for figure S3;
+# the resulting tables must be combined manually into a single sheet
+save_source_data <- function(prob, vertex_weight, interaction) {
+  list(
+    edges = as_tibble(prob, rownames = "source"),
+    vertices = tibble(cell_type = colnames(prob), weight = vertex_weight)
+  ) %>% 
+    save_table(str_glue("source_data/figure_S3_{interaction}"))
+}
+
+trace(
+  netVisual_hierarchy1,
+  tracer = substitute(save_source_data(net, vertex.weight, title.name)),
+  where = netVisual_individual
+)
+# untrace(netVisual_hierarchy1, where = netVisual_individual)
+
 
 plot_netvisual <- function(layout = "hierarchy", width = 16, height = 16) {
   colors_ccc_network <-
