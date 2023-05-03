@@ -15,7 +15,7 @@
 - `plots`: generated plots
 - `renv`: R environment data
 - `scatac`: scripts for scATAC-seq analysis
-- `tables`: exported tables
+- `tables`: exported supplementary tables and data; the subfolder `source_data` contains source data for figures
 
 
 
