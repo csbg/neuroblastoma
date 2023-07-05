@@ -77,7 +77,7 @@ preferred-citation:
     - family-names: Weninger
       given-names: Wolfgang
       affiliation: Department of Dermatology, Medical University of Vienna, Vienna, Austria
-    - family-names: Tomazou,
+    - family-names: Tomazou
       given-names: Eleni M.
       affiliation: St. Anna Children's Cancer Research Institute, Vienna, Austria
       orcid: https://orcid.org/0000-0002-7497-4567
@@ -107,13 +107,11 @@ preferred-citation:
       affiliation: St. Anna Children's Cancer Research Institute, Vienna, Austria
       orcid: https://orcid.org/0000-0002-1439-5301
       email: sabine.taschner@ccri.at
-  title: Dissecting the cellular architecture of neuroblastoma bone marrow metastasis using single-cell transcriptomics and epigenomics unravels the role of monocytes at the metastatic niche
-#  journal:
-  status: in-preparation
-#  volume:
-#  issue:
-#  pages: 
-#  year: 
-#  doi: 
-#  license: 
-#  pmcid: 
+  title: Single-cell transcriptomics and epigenomics unravel the role of monocytes in neuroblastoma bone marrow metastasis
+  journal: Nature Communications
+  volume: 14
+  pages: 3620 
+  year: 2023
+  doi: 10.1038/s41467-023-39210-0
+  license: CC-BY-4.0
+  pmcid: PMC10293285
