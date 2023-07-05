@@ -1,6 +1,10 @@
-# Dissecting the cellular architecture of neuroblastoma bone marrow metastasis using single-cell transcriptomics and epigenomics unravels the role of monocytes at the metastatic niche
+# Single-cell transcriptomics and epigenomics unravel the role of monocytes in neuroblastoma bone marrow metastasis
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7867892.svg)](https://doi.org/10.5281/zenodo.7867892)
+
+This code supplements the [publication](https://doi.org/10.1038/s41467-023-39210-0) by Fetahu, Esser-Skala, Dnyansagar et al (2023).
+
+
 
 ## Folders
 
@@ -111,7 +115,7 @@ All required scripts are in subfolder `scatac`.
 ### scATAC-seq workflow
 
 - [R0_scopen.R](scatac/R0_scopen.R) –
-  quality control, normalization, clustering 
+  quality control, normalization, clustering
 - [R1_annotation.R](scatac/R1_annotation.R) –
   annotation of clusters formed and markers used
 - [R2_foot_printing_cell_type.R](scatac/R2_foot_printing_cell_type.R) –
@@ -134,13 +138,13 @@ All required scripts are in subfolder `scatac`.
 
 For data integration we used scGLUE (Graph Linked Unified Embedding) model for unpaired single-cell multi-omics data integration (https://scglue.readthedocs.io/en/latest/). We followed the detailed tutorial at https://scglue.readthedocs.io/en/latest/tutorials.html. Before the tutorial we needed to convert the objects in anndata format from SingleCellExperiment and Seurat for scRNA-seq and scATAC-seq respectively. There are many tools available to do this and we are sharing our approach for format conversion, namely [monocle_to_anndata.R](scatac/monocle_to_anndata.R) and [Seurat_to_anndata.R](scatac/Seurat_to_anndata.R).
 
-The following Jupyter notebooks follow the notebooks of the scGLUE integration pipeline. 
+The following Jupyter notebooks follow the notebooks of the scGLUE integration pipeline.
 
 - [G1_nb_glue_preprocessing_myeloid.ipynb]() –
   preprocess scRNA-seq and scATAC-seq anndata objects
 - [G2_glue_model_myeloid.ipynb]() –
-  create glue model 
-- [G3_regulatory_inference_myeloid.ipynb]() 
+  create glue model
+- [G3_regulatory_inference_myeloid.ipynb]()
 - [G4_regulatory_network_plots_myeloid.ipynb]()
 
 Finally, [Figures.R](scatac/Figures.R) generates publication figures.
